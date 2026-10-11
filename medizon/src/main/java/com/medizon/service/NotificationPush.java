@@ -62,7 +62,11 @@ public class NotificationPush {
         try {
             emitter.send(event);
         } catch (Exception e) {
-            emitter.completeWithError(e);       // the tab was closed; onError removes it
+            try {
+                emitter.completeWithError(e);   // the tab was closed; onError removes it
+            } catch (IllegalStateException alreadyClosed) {
+                // the container already ended this connection (e.g. the proxy dropped it)
+            }
         }
     }
 }

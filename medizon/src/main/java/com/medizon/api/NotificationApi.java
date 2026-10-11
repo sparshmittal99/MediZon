@@ -6,12 +6,14 @@ import com.medizon.service.NotificationPush;
 import com.medizon.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 
@@ -24,11 +26,17 @@ public class NotificationApi {
     private final NotificationService notificationService;
     private final CurrentUser currentUser;
     private final NotificationPush push;
+    private final JdbcTemplate jdbc;
 
-    /** Live connection: a "notify" event arrives the moment a notification is created. */
+    /**
+     * Live connection: a "notify" event arrives the moment a notification is created.
+     * The id is read with plain JDBC so the connection goes straight back to the pool; a JPA lookup would
+     * keep it pinned (open-in-view) for as long as this request stays open.
+     */
     @GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream() {
-        return push.subscribe(currentUser.get().getId());
+    public SseEmitter stream(Principal principal) {
+        Long userId = jdbc.queryForObject("select id from users where lower(email) = lower(?)", Long.class, principal.getName());
+        return push.subscribe(userId);
     }
 
     /** {@code after} is the newest notification id this browser has already shown. */
