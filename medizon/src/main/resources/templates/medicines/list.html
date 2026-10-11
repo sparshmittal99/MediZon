@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Shop medicines')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <div class="mb-4">
+        <h1 class="mz-page-title" th:text="${q != ''} ? ('Results for “' + ${q} + '”') : (${category != ''} ? ${category} : 'All medicines')">All medicines</h1>
+        <p class="text-muted mb-0" th:text="${results.totalElements} + ' medicine(s)'">0</p>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <a class="mz-chip" th:classappend="${category == ''} ? 'active'" th:href="@{/medicines(q=${q})}">All</a>
+        <a th:each="c : ${categories}" class="mz-chip" th:classappend="${c == category} ? 'active'"
+           th:href="@{/medicines(q=${q},category=${c})}" th:text="${c}">Category</a>
+    </div>
+
+    <div th:if="${results.empty}" class="mz-panel mz-empty">
+        <i class="bi bi-search"></i>
+        <p class="mb-3">Nothing matches that search. Try the salt name, like "paracetamol" instead of a brand.</p>
+        <a th:href="@{/medicines}" class="btn btn-outline-primary btn-sm">Show all medicines</a>
+    </div>
+
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
+        <div class="col" th:each="m : ${results.content}">
+            <div th:replace="~{fragments/layout :: medCard(${m})}"></div>
+        </div>
+    </div>
+
+    <nav th:if="${results.totalPages > 1}" class="mt-4" aria-label="Pages">
+        <ul class="pagination justify-content-center">
+            <li class="page-item" th:classappend="${results.first} ? 'disabled'">
+                <a class="page-link" th:href="@{/medicines(q=${q},category=${category},page=${results.number - 1})}">Previous</a>
+            </li>
+            <li class="page-item" th:each="i : ${#numbers.sequence(0, results.totalPages - 1)}" th:classappend="${i == results.number} ? 'active'">
+                <a class="page-link" th:href="@{/medicines(q=${q},category=${category},page=${i})}" th:text="${i + 1}">1</a>
+            </li>
+            <li class="page-item" th:classappend="${results.last} ? 'disabled'">
+                <a class="page-link" th:href="@{/medicines(q=${q},category=${category},page=${results.number + 1})}">Next</a>
+            </li>
+        </ul>
+    </nav>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

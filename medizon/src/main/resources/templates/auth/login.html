@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Sign in')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container">
+    <div class="mz-auth mz-panel">
+        <h1 class="h3 mb-1">Sign in</h1>
+        <p class="text-muted mb-4">Welcome back to MediZon.</p>
+        <div th:if="${param.error}" class="alert alert-danger">That email and password don't match. Try again.</div>
+        <div th:if="${param.disabled}" class="alert alert-danger">This account has been disabled. Contact MediZon support for help.</div>
+        <div th:if="${param.expired}" class="alert alert-warning">You were signed out. Please sign in again.</div>
+        <form th:action="@{/login}" method="post">
+            <div class="mb-3">
+                <label class="form-label" for="email">Email</label>
+                <input class="form-control" id="email" name="email" type="email" autocomplete="username" required autofocus>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="password">Password</label>
+                <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required>
+            </div>
+            <div class="form-check mb-4">
+                <input class="form-check-input" type="checkbox" id="remember" name="remember-me">
+                <label class="form-check-label" for="remember">Keep me signed in</label>
+            </div>
+            <button class="btn btn-primary w-100" type="submit">Sign in</button>
+        </form>
+        <p class="small text-center mt-4 mb-0">New to MediZon? <a th:href="@{/register}">Create an account</a></p>
+    </div>
+</main>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

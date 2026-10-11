@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Prescriptions')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <h1 class="mz-page-title">Prescriptions</h1>
+    <p class="text-muted mb-4">Needed for Rx medicines and for automatic refills of them. A pharmacist reviews each upload.</p>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <form th:action="@{/prescriptions}" method="post" enctype="multipart/form-data" class="mz-panel">
+                <h2 class="h5 mb-3">Upload a prescription</h2>
+                <div class="mb-3">
+                    <label class="form-label" for="file">Photo or PDF</label>
+                    <input class="form-control" id="file" type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" required>
+                    <div class="form-text">JPG, PNG or PDF, up to 5 MB. Doctor's name, date and signature must be visible.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="doctorName">Doctor's name</label>
+                    <input class="form-control" id="doctorName" name="doctorName">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="notes">Notes for the pharmacist</label>
+                    <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+                </div>
+                <button class="btn btn-primary w-100" type="submit">Upload</button>
+            </form>
+        </div>
+        <div class="col-lg-8">
+            <div th:if="${#lists.isEmpty(prescriptions)}" class="mz-panel mz-empty">
+                <i class="bi bi-file-earmark-medical"></i>
+                <p class="mb-0">No prescriptions uploaded yet.</p>
+            </div>
+            <div th:unless="${#lists.isEmpty(prescriptions)}" class="mz-panel-flush">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Prescription</th><th>Status</th><th>Valid until</th><th></th></tr></thead>
+                    <tbody>
+                    <tr th:each="p : ${prescriptions}">
+                        <td>
+                            <div class="fw-semibold" th:text="${p.doctorName != null and p.doctorName != ''} ? ('Dr. ' + ${p.doctorName}) : 'Prescription'"></div>
+                            <div class="small text-muted" th:text="'Uploaded ' + ${#temporals.format(p.uploadedAt, 'd MMM yyyy')}"></div>
+                            <div th:if="${p.reviewerNote}" class="small" th:text="'Pharmacist: ' + ${p.reviewerNote}"></div>
+                        </td>
+                        <td><span class="badge" th:classappend="${p.status.badge}" th:text="${p.status.label}"></span>
+                            <span th:if="${p.status.name() == 'APPROVED' and !p.valid}" class="badge text-bg-secondary">Expired</span></td>
+                        <td th:text="${p.validUntil != null} ? ${#temporals.format(p.validUntil, 'd MMM yyyy')} : '-'"></td>
+                        <td class="text-end"><a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">View</a></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

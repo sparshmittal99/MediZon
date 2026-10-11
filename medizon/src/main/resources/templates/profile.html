@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Profile')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" style="max-width: 760px">
+    <h1 class="mz-page-title">Profile and address</h1>
+    <p class="text-muted mb-4">Orders, including automatic refills, are delivered to this address.</p>
+
+    <form th:action="@{/profile}" th:object="${form}" method="post" class="mz-panel" novalidate>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="fullName">Full name</label>
+                <input class="form-control" th:field="*{fullName}" th:errorclass="is-invalid" autocomplete="name">
+                <div class="invalid-feedback" th:errors="*{fullName}"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="phone">Mobile number</label>
+                <input class="form-control" type="tel" th:field="*{phone}" th:errorclass="is-invalid" autocomplete="tel">
+                <div class="invalid-feedback" th:errors="*{phone}"></div>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="addressLine">Address</label>
+                <input class="form-control" th:field="*{addressLine}" placeholder="Flat, building, street, area" autocomplete="street-address">
+            </div>
+            <div class="col-md-5">
+                <label class="form-label" for="city">City</label>
+                <input class="form-control" th:field="*{city}" autocomplete="address-level2">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="state">State</label>
+                <input class="form-control" th:field="*{state}" autocomplete="address-level1">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="pincode">PIN code</label>
+                <input class="form-control" th:field="*{pincode}" th:errorclass="is-invalid" inputmode="numeric" autocomplete="postal-code">
+                <div class="invalid-feedback" th:errors="*{pincode}"></div>
+            </div>
+        </div>
+        <button class="btn btn-primary mt-4" type="submit">Save profile</button>
+    </form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

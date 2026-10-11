@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('Online pharmacy')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<section class="mz-hero">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <h1 class="mz-display mb-3">Your medicines, delivered and remembered.</h1>
+                <p class="lead mb-4">Order from a licensed pharmacy, get a reminder when each dose is due,
+                    and refill before you run out, by yourself or automatically.</p>
+                <form class="mz-hero-search" th:action="@{/medicines}" method="get" role="search">
+                    <input class="form-control" name="q" type="search" placeholder="Try paracetamol, metformin or vitamin D" aria-label="Search medicines">
+                    <button class="btn btn-primary" type="submit">Search</button>
+                </form>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <a th:each="c, s : ${categories}" th:if="${s.index < 6}" class="mz-chip"
+                       th:href="@{/medicines(category=${c})}" th:text="${c}">Category</a>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <!-- Signed in: today's real schedule -->
+                <div class="mz-pack" sec:authorize="isAuthenticated()">
+                    <div class="mz-pack-head">
+                        <h2>Today's doses</h2>
+                        <a th:href="@{/plans}" class="small">Manage medicines</a>
+                    </div>
+                    <div th:if="${#lists.isEmpty(doses)}" class="mz-empty py-4">
+                        <i class="bi bi-alarm"></i>
+                        <p class="mb-3">No doses scheduled today.</p>
+                        <a th:href="@{/plans/new}" class="btn btn-primary btn-sm">Add a medicine</a>
+                    </div>
+                    <ol class="mz-strip" th:unless="${#lists.isEmpty(doses)}">
+                        <li th:each="d : ${doses}" class="mz-slot" th:classappend="'is-' + ${d.state}">
+                            <span class="mz-bubble" aria-hidden="true">
+                                <i class="bi" th:classappend="${d.state == 'taken'} ? 'bi-check-lg' : (${d.state == 'skipped'} ? 'bi-dash-lg' : ${d.plan.medicine.icon})"></i>
+                            </span>
+                            <span class="mz-slot-time" th:text="${#temporals.format(d.time, 'h:mm a')}">8:00 AM</span>
+                            <span class="mz-slot-name" th:text="${d.plan.medicine.name}">Medicine</span>
+                            <form th:if="${d.answerable}" th:action="@{/plans/{id}/dose(id=${d.plan.id})}" method="post">
+                                <input type="hidden" name="time" th:value="${#temporals.format(d.time, 'HH:mm')}">
+                                <input type="hidden" name="returnTo" value="/">
+                                <button class="btn btn-primary" name="status" value="TAKEN">Taken</button>
+                                <button class="btn btn-outline-secondary" name="status" value="SKIPPED">Skip</button>
+                            </form>
+                        </li>
+                    </ol>
+                    <div th:unless="${#lists.isEmpty(lowPlans)}" class="mz-low-banner mt-3 d-flex align-items-center justify-content-between gap-3">
+                        <span><i class="bi bi-exclamation-triangle me-1"></i>
+                            <strong th:text="${#lists.size(lowPlans)}">1</strong> medicine(s) running low.</span>
+                        <a th:href="@{/plans}" class="btn btn-amber btn-sm">Refill</a>
+                    </div>
+                </div>
+
+                <!-- Signed out: what the schedule looks like -->
+                <div class="mz-pack" sec:authorize="!isAuthenticated()">
+                    <div class="mz-pack-head">
+                        <h2>A day of reminders</h2>
+                        <span class="small text-muted">Example</span>
+                    </div>
+                    <ol class="mz-strip">
+                        <li class="mz-slot is-taken"><span class="mz-bubble"><i class="bi bi-check-lg"></i></span>
+                            <span class="mz-slot-time">8:30 AM</span><span class="mz-slot-name">Metformin 500 mg</span></li>
+                        <li class="mz-slot is-taken"><span class="mz-bubble"><i class="bi bi-check-lg"></i></span>
+                            <span class="mz-slot-time">9:00 AM</span><span class="mz-slot-name">Telmisartan 40 mg</span></li>
+                        <li class="mz-slot is-pending"><span class="mz-bubble"><i class="bi bi-capsule-pill"></i></span>
+                            <span class="mz-slot-time">2:00 PM</span><span class="mz-slot-name">Vitamin D3</span></li>
+                        <li class="mz-slot is-upcoming"><span class="mz-bubble"><i class="bi bi-capsule-pill"></i></span>
+                            <span class="mz-slot-time">8:30 PM</span><span class="mz-slot-name">Metformin 500 mg</span></li>
+                    </ol>
+                    <p class="small text-muted mt-3 mb-0">MediZon counts what's left after each dose and tells you, or orders for you,
+                        a few days before you run out.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="container mz-page">
+    <h2 class="h4 mb-4">How refills work</h2>
+    <div class="row g-4 mz-steps mb-5">
+        <div class="col-md-4 mz-step">
+            <h3>Order once</h3>
+            <p>Upload your prescription for Rx medicines. A pharmacist checks it before we dispatch.</p>
+        </div>
+        <div class="col-md-4 mz-step">
+            <h3>Set your schedule</h3>
+            <p>Add dose times. Delivered packs are added to your supply at home automatically.</p>
+        </div>
+        <div class="col-md-4 mz-step">
+            <h3>Never run out</h3>
+            <p>When supply drops to your limit, we alert you to reorder, or place the order for you.</p>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-baseline mb-3">
+        <h2 class="h4 mb-0">Recently added</h2>
+        <a th:href="@{/medicines}">Browse all medicines</a>
+    </div>
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
+        <div class="col" th:each="m : ${featured}">
+            <div th:replace="~{fragments/layout :: medCard(${m})}"></div>
+        </div>
+    </div>
+</section>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

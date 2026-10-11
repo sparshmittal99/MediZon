@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Notifications')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" style="max-width: 820px">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mz-page-title mb-0">Notifications</h1>
+    </div>
+
+    <div th:if="${#lists.isEmpty(notifications)}" class="mz-panel mz-empty">
+        <i class="bi bi-bell"></i>
+        <p class="mb-0">Dose reminders, refill alerts and order updates will show up here.</p>
+    </div>
+
+    <div th:unless="${#lists.isEmpty(notifications)}" class="mz-panel-flush">
+        <a th:each="n : ${notifications}" th:href="@{/notifications/{id}/open(id=${n.id})}"
+           class="mz-note" th:classappend="'mz-note-' + ${n.type} + (${fresh.contains(n.id)} ? ' is-unread' : '')">
+            <span class="mz-note-icon"><i class="bi" th:classappend="${n.type.icon}"></i></span>
+            <span class="flex-grow-1">
+                <span class="d-flex justify-content-between gap-3">
+                    <strong th:text="${n.title}">Title</strong>
+                    <span class="small text-muted text-nowrap" th:text="${#temporals.format(n.createdAt, 'd MMM, h:mm a')}"></span>
+                </span>
+                <span class="d-block small" th:text="${n.message}">Message</span>
+            </span>
+        </a>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

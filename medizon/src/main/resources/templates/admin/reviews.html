@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Customer reviews')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <h1 class="mz-page-title mb-0">Customer reviews</h1>
+        <button type="button" class="btn btn-primary" data-mz-ask-payload='{"intent":"review_insights"}'>
+            <i class="bi bi-lightbulb me-1"></i>Get improvement ideas</button>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="mz-stat text-center">
+                <div class="mz-stat-value" th:text="${avgRating != null} ? ${#numbers.formatDecimal(avgRating, 1, 1)} : '–'">0</div>
+                <div class="mz-stars justify-content-center my-1" aria-hidden="true">
+                    <i th:each="n : ${#numbers.sequence(1, 5)}" class="bi"
+                       th:classappend="${avgRating != null and n <= avgRating + 0.5} ? 'bi-star-fill' : 'bi-star'"></i>
+                </div>
+                <div class="mz-stat-label" th:text="${reviewCount} + ' review' + (${reviewCount} == 1 ? '' : 's')">0 reviews</div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="mz-stat">
+                <a th:each="e : ${distribution}" th:href="@{/admin/reviews(rating=${e.key})}"
+                   class="mz-dist text-decoration-none text-reset">
+                    <span class="mz-dist-label" th:text="${e.key} + ' ★'">5 ★</span>
+                    <span class="mz-meter flex-grow-1 my-0"><span class="mz-meter-fill"
+                          th:style="'width:' + (${reviewCount} > 0 ? ${e.value * 100 / reviewCount} : 0) + '%'"></span></span>
+                    <span class="mz-dist-count" th:text="${e.value}">0</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <a class="mz-chip" th:classappend="${selected == null} ? 'active'" th:href="@{/admin/reviews}">All</a>
+        <a th:each="n : ${#numbers.sequence(5, 1, -1)}" class="mz-chip" th:classappend="${n == selected} ? 'active'"
+           th:href="@{/admin/reviews(rating=${n})}" th:text="${n} + ' star' + (${n} > 1 ? 's' : '')"></a>
+    </div>
+
+    <div th:if="${#lists.isEmpty(reviews)}" class="mz-panel mz-empty"><i class="bi bi-chat-square-heart"></i>
+        <p class="mb-0">No reviews here yet. Customers can review an order after it's delivered.</p></div>
+
+    <div class="row g-3">
+        <div class="col-lg-6" th:each="r : ${reviews}">
+            <article class="mz-panel h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                    <div>
+                        <div class="fw-semibold" th:text="${r.user.fullName}">Name</div>
+                        <div class="small text-muted" th:text="${r.user.email}"></div>
+                    </div>
+                    <div class="text-end small text-muted">
+                        <a th:href="@{/admin/orders/{id}(id=${r.order.id})}" th:text="${r.order.orderNumber}"></a>
+                        <div th:text="${#temporals.format(r.createdAt, 'd MMM yyyy, h:mm a')}"></div>
+                    </div>
+                </div>
+                <div class="mz-stars" th:attr="aria-label=${r.rating} + ' out of 5 stars'">
+                    <i th:each="n : ${#numbers.sequence(1, 5)}" class="bi"
+                       th:classappend="${n <= r.rating} ? 'bi-star-fill' : 'bi-star'" aria-hidden="true"></i>
+                    <span class="ms-2 small fw-semibold" th:text="${r.ratingLabel}"></span>
+                </div>
+                <p th:if="${r.comment}" class="mt-2 mb-0 mz-review-text" th:text="${r.comment}"></p>
+                <p th:unless="${r.comment}" class="mt-2 mb-0 small text-muted fst-italic">No comment left.</p>
+            </article>
+        </div>
+    </div>
+
+    <section id="feedback" class="mt-5">
+        <div class="d-flex align-items-baseline gap-2 mb-3">
+            <h2 class="h4 mb-0">Feedback from the assistant</h2>
+            <span class="text-muted small" th:text="${#lists.size(feedback)} + ' message(s)'"></span>
+        </div>
+        <div th:if="${#lists.isEmpty(feedback)}" class="mz-panel mz-empty"><i class="bi bi-chat-left-text"></i>
+            <p class="mb-0">Customers can send complaints, suggestions and pharmacist questions through the chat assistant. They'll show up here.</p></div>
+        <div th:unless="${#lists.isEmpty(feedback)}" class="mz-panel-flush">
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Customer</th><th>Topic</th><th>Message</th><th class="text-nowrap">Received</th></tr></thead>
+                    <tbody>
+                    <tr th:each="f : ${feedback}">
+                        <td><div class="fw-semibold" th:text="${f.user.fullName}"></div>
+                            <div class="small text-muted" th:text="${f.user.email}"></div></td>
+                        <td><span class="badge text-bg-light" th:text="${f.category}"></span>
+                            <div th:if="${f.rating}" class="small text-muted" th:text="${f.rating} + ' ★'"></div></td>
+                        <td class="mz-review-text" th:text="${f.message}"></td>
+                        <td class="small text-nowrap" th:text="${#temporals.format(f.createdAt, 'd MMM, h:mm a')}"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</main>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

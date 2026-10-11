@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Order ' + ${o.orderNumber})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<th:block th:if="${adminView}"><div th:replace="~{fragments/layout :: adminNav}"></div></th:block>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <a th:href="${adminView} ? @{/admin/orders} : @{/orders}" class="small"><i class="bi bi-arrow-left"></i> All orders</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mt-2 mb-4">
+        <div>
+            <h1 class="mz-page-title" th:text="'Order ' + ${o.orderNumber}">Order</h1>
+            <p class="text-muted mb-0">
+                <span th:text="'Placed ' + ${#temporals.format(o.createdAt, 'd MMM yyyy, h:mm a')}"></span>
+                <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Placed by auto refill</span>
+            </p>
+        </div>
+        <span class="badge fs-6" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
+    </div>
+
+    <div class="mz-panel mb-4" th:if="${o.status.name() != 'CANCELLED'}">
+        <ol class="mz-track">
+            <li th:each="s : ${o.trackSteps}"
+                th:classappend="${s.ordinal() <= o.status.ordinal()} ? 'done'" th:text="${s.label}">Step</li>
+        </ol>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="mz-panel-flush">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Medicine</th><th>Price</th><th>Packs</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                    <tr th:each="i : ${o.items}">
+                        <td th:text="${i.medicineName}"></td>
+                        <td th:text="'₹' + ${i.unitPrice}"></td>
+                        <td th:text="${i.quantity}"></td>
+                        <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></td>
+                    </tr>
+                    </tbody>
+                    <tfoot>
+                    <tr><td colspan="3" class="text-end text-muted">Delivery</td><td class="text-end" th:text="'₹' + ${o.deliveryFee}"></td></tr>
+                    <tr><td colspan="3" class="text-end fw-bold">Total</td>
+                        <td class="text-end fw-bold" th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Review: shown once delivered -->
+            <div th:if="${review != null}" class="mz-panel mt-4">
+                <h2 class="h6 mb-2" th:text="${adminView} ? 'Customer review' : 'Your review'">Your review</h2>
+                <div class="mz-stars" th:attr="aria-label=${review.rating} + ' out of 5 stars'">
+                    <i th:each="n : ${#numbers.sequence(1, 5)}" class="bi"
+                       th:classappend="${n <= review.rating} ? 'bi-star-fill' : 'bi-star'" aria-hidden="true"></i>
+                    <span class="ms-2 fw-semibold" th:text="${review.ratingLabel}"></span>
+                </div>
+                <p th:if="${review.comment}" class="mt-2 mb-1 mz-review-text" th:text="${review.comment}"></p>
+                <p class="small text-muted mb-0" th:text="'Reviewed ' + ${#temporals.format(review.createdAt, 'd MMM yyyy')}"></p>
+            </div>
+
+            <form th:if="${!adminView and review == null and o.status.name() == 'DELIVERED'}"
+                  th:action="@{/orders/{id}/review(id=${o.id})}" method="post" class="mz-panel mt-4">
+                <h2 class="h5 mb-1">How was your order?</h2>
+                <p class="text-muted small mb-3">Your rating helps us improve delivery and service.</p>
+                <fieldset class="mb-3">
+                    <legend class="form-label fs-6">Rating</legend>
+                    <div class="mz-star-input">
+                        <th:block th:each="n : ${#numbers.sequence(5, 1, -1)}">
+                            <input type="radio" name="rating" th:id="'star' + ${n}" th:value="${n}" required>
+                            <label th:for="'star' + ${n}" th:title="${n} + ' star' + (${n} > 1 ? 's' : '')">
+                                <i class="bi bi-star-fill" aria-hidden="true"></i>
+                                <span class="visually-hidden" th:text="${n} + ' star' + (${n} > 1 ? 's' : '')"></span>
+                            </label>
+                        </th:block>
+                    </div>
+                </fieldset>
+                <div class="mb-3">
+                    <label class="form-label" for="comment">Comments <span class="text-muted">(optional)</span></label>
+                    <textarea class="form-control" id="comment" name="comment" rows="3" maxlength="1000"
+                              placeholder="Packaging, delivery time, anything we should know"></textarea>
+                </div>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Submit review</button>
+            </form>
+        </div>
+        <div class="col-lg-4">
+            <div class="mz-panel mb-3">
+                <h2 class="h6">Delivery to</h2>
+                <p class="mb-1" th:text="${o.user.fullName}"></p>
+                <p class="small text-muted mb-3" th:text="${o.shippingAddress}"></p>
+                <h2 class="h6">Payment</h2>
+                <p class="small mb-0" th:text="${o.paymentMethod.label} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></p>
+                <p th:if="${o.prescription != null}" class="small mt-3 mb-0">
+                    <i class="bi bi-file-earmark-medical"></i>
+                    <a th:href="@{/prescriptions/{id}/file(id=${o.prescription.id})}" target="_blank" rel="noopener">View prescription</a>
+                </p>
+            </div>
+
+            <!-- Customer actions -->
+            <div th:unless="${adminView}" class="d-grid gap-2">
+                <form th:action="@{/orders/{id}/buy-again(id=${o.id})}" method="post" class="d-grid">
+                    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-arrow-repeat me-1"></i>Buy again</button>
+                </form>
+                <form th:if="${o.cancellable}" th:action="@{/orders/{id}/cancel(id=${o.id})}" method="post" class="d-grid"
+                      data-mz-confirm="Cancel this order? Any amount you've paid will be refunded."
+                      data-mz-confirm-title="Cancel order" data-mz-confirm-ok="Yes, cancel order">
+                    <button class="btn btn-outline-danger" type="submit">Cancel order</button>
+                </form>
+            </div>
+
+            <!-- Admin actions -->
+            <form th:if="${adminView and !#lists.isEmpty(o.status.nextStatuses)}"
+                  th:action="@{/admin/orders/{id}/status(id=${o.id})}" method="post" class="mz-panel">
+                <label class="form-label" for="status">Update status</label>
+                <div class="d-flex gap-2">
+                    <select class="form-select" id="status" name="status">
+                        <option th:each="s : ${o.status.nextStatuses}" th:value="${s}" th:text="${s.label}"></option>
+                    </select>
+                    <button class="btn btn-primary" type="submit">Save</button>
+                </div>
+                <p class="small text-muted mt-2 mb-0">Marking delivered adds these packs to the customer's supply at home.</p>
+            </form>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

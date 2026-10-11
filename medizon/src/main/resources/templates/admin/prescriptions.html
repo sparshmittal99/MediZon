@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Review prescriptions')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <h1 class="mz-page-title mb-4">Prescriptions to review</h1>
+
+    <div th:if="${#lists.isEmpty(pending)}" class="mz-panel mz-empty mb-5">
+        <i class="bi bi-check2-circle"></i><p class="mb-0">All caught up. No prescriptions are waiting.</p>
+    </div>
+
+    <div class="row g-3 mb-5">
+        <div class="col-lg-6" th:each="p : ${pending}">
+            <div class="mz-panel h-100">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="fw-semibold" th:text="${p.user.fullName}"></div>
+                        <div class="small text-muted" th:text="${p.user.email} + ', uploaded ' + ${#temporals.format(p.uploadedAt, 'd MMM, h:mm a')}"></div>
+                    </div>
+                    <a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Open file</a>
+                </div>
+                <p class="small mb-1" th:if="${p.doctorName}" th:text="'Doctor: ' + ${p.doctorName}"></p>
+                <p class="small mb-3" th:if="${p.notes}" th:text="'Customer note: ' + ${p.notes}"></p>
+                <form th:action="@{/admin/prescriptions/{id}/review(id=${p.id})}" method="post" class="row g-2 align-items-end">
+                    <div class="col-sm-5">
+                        <label class="form-label small" th:for="'v' + ${p.id}">Valid until</label>
+                        <input class="form-control form-control-sm" type="date" name="validUntil" th:id="'v' + ${p.id}" th:value="${defaultValidUntil}">
+                    </div>
+                    <div class="col-sm-7">
+                        <label class="form-label small" th:for="'n' + ${p.id}">Note to customer</label>
+                        <input class="form-control form-control-sm" name="note" th:id="'n' + ${p.id}" placeholder="Required if rejecting">
+                    </div>
+                    <div class="col-12 d-flex gap-2 mt-2">
+                        <button class="btn btn-sm btn-primary" name="approve" value="true" type="submit">Approve</button>
+                        <button class="btn btn-sm btn-outline-danger" name="approve" value="false" type="submit">Reject</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="h5 mb-2">Recently reviewed</h2>
+    <div class="mz-panel-flush">
+        <table class="table align-middle mb-0">
+            <thead><tr><th>Customer</th><th>Status</th><th>Valid until</th><th>Reviewed</th><th></th></tr></thead>
+            <tbody>
+            <tr th:if="${#lists.isEmpty(reviewed)}"><td colspan="5" class="text-muted">Nothing reviewed yet.</td></tr>
+            <tr th:each="p : ${reviewed}">
+                <td th:text="${p.user.fullName}"></td>
+                <td><span class="badge" th:classappend="${p.status.badge}" th:text="${p.status.label}"></span></td>
+                <td th:text="${p.validUntil != null} ? ${p.validUntil} : '-'"></td>
+                <td th:text="${p.reviewedAt != null} ? ${#temporals.format(p.reviewedAt, 'd MMM')} : '-'"></td>
+                <td class="text-end"><a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener">File</a></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

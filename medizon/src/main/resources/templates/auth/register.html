@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Create account')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <div class="mz-auth mz-panel">
+        <h1 class="h3 mb-1">Create your account</h1>
+        <p class="text-muted mb-4">Order medicines and set dose reminders.</p>
+        <form th:action="@{/register}" th:object="${form}" method="post" novalidate>
+            <div class="mb-3">
+                <label class="form-label" for="fullName">Full name</label>
+                <input class="form-control" th:field="*{fullName}" th:errorclass="is-invalid" autocomplete="name">
+                <div class="invalid-feedback" th:errors="*{fullName}"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="email">Email</label>
+                <input class="form-control" type="email" th:field="*{email}" th:errorclass="is-invalid" autocomplete="email">
+                <div class="invalid-feedback" th:errors="*{email}"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="phone">Mobile number <span class="text-muted fw-normal">(optional)</span></label>
+                <input class="form-control" type="tel" th:field="*{phone}" th:errorclass="is-invalid" autocomplete="tel">
+                <div class="invalid-feedback" th:errors="*{phone}"></div>
+            </div>
+            <div class="mb-4">
+                <label class="form-label" for="password">Password</label>
+                <input class="form-control" type="password" th:field="*{password}" th:errorclass="is-invalid" autocomplete="new-password">
+                <div class="invalid-feedback" th:errors="*{password}"></div>
+            </div>
+            <button class="btn btn-primary w-100" type="submit">Create account</button>
+        </form>
+        <p class="small text-center mt-4 mb-0">Already have an account? <a th:href="@{/login}">Sign in</a></p>
+    </div>
+</main>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

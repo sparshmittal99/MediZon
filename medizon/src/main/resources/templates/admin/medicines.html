@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Catalog')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mz-page-title mb-0">Catalog</h1>
+        <a th:href="@{/admin/medicines/new}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add medicine</a>
+    </div>
+    <div class="mz-panel-flush">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>Medicine</th><th>Category</th><th>Price</th><th>Stock</th><th>Rx</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                <tr th:each="m : ${medicines}" th:classappend="${!m.active} ? 'text-muted'">
+                    <td><span class="fw-semibold" th:text="${m.name}"></span><div class="small text-muted" th:text="${m.manufacturer}"></div></td>
+                    <td th:text="${m.category}"></td>
+                    <td th:text="'₹' + ${m.price}"></td>
+                    <td th:text="${m.stock}" th:classappend="${m.stock < 50} ? 'text-danger fw-semibold'"></td>
+                    <td th:text="${m.prescriptionRequired} ? 'Yes' : 'No'"></td>
+                    <td><span class="badge" th:classappend="${m.active} ? 'text-bg-success' : 'text-bg-secondary'" th:text="${m.active} ? 'Listed' : 'Hidden'"></span></td>
+                    <td class="text-end text-nowrap">
+                        <a th:href="@{/admin/medicines/{id}/edit(id=${m.id})}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        <form th:action="@{/admin/medicines/{id}/toggle(id=${m.id})}" method="post" class="d-inline">
+                            <button class="btn btn-sm btn-outline-secondary" type="submit" th:text="${m.active} ? 'Hide' : 'List'">Hide</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

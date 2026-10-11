@@ -1,0 +1,35 @@
+# ---------- Secrets ----------
+.env
+.env.*
+!.env.example
+
+# ---------- User uploads (prescriptions, medicine images) ----------
+uploads/
+**/uploads/
+
+# ---------- Java / Maven ----------
+target/
+*.class
+*.jar
+*.war
+hs_err_pid*.log
+replay_pid*.log
+
+# ---------- Python ----------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ---------- IDEs ----------
+.idea/
+*.iml
+.vscode/
+
+# ---------- OS / misc ----------
+.DS_Store
+Thumbs.db
+*.log

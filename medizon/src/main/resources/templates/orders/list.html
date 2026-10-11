@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Orders')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <h1 class="mz-page-title mb-4">Your orders</h1>
+    <div th:if="${#lists.isEmpty(orders)}" class="mz-panel mz-empty">
+        <i class="bi bi-box-seam"></i>
+        <p class="mb-3">You haven't placed an order yet.</p>
+        <a th:href="@{/medicines}" class="btn btn-primary">Browse medicines</a>
+    </div>
+    <div th:unless="${#lists.isEmpty(orders)}" class="mz-panel-flush">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>Order</th><th>Placed</th><th>Items</th><th>Total</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                <tr th:each="o : ${orders}">
+                    <td>
+                        <span class="fw-semibold" th:text="${o.orderNumber}"></span>
+                        <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Auto refill</span>
+                    </td>
+                    <td th:text="${#temporals.format(o.createdAt, 'd MMM yyyy')}"></td>
+                    <td th:text="${o.itemCount} + ' pack(s)'"></td>
+                    <td th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td>
+                    <td><span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span></td>
+                    <td class="text-end"><a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-sm btn-outline-primary">View</a></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

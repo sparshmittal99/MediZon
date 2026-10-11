@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Manage orders')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <h1 class="mz-page-title mb-1">Customer orders</h1>
+    <p class="text-muted small mb-3">Orders placed by customers, by status. Move each one along as it's confirmed, shipped and delivered.</p>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <a class="mz-chip" th:classappend="${selected == null} ? 'active'" th:href="@{/admin/orders}">All</a>
+        <a th:each="s : ${statuses}" class="mz-chip" th:classappend="${s == selected} ? 'active'"
+           th:href="@{/admin/orders(status=${s})}">
+            <span th:text="${s.label}"></span> <span class="opacity-75" th:text="'(' + ${counts.get(s)} + ')'"></span></a>
+    </div>
+
+    <div th:if="${#lists.isEmpty(orders)}" class="mz-panel mz-empty"><i class="bi bi-box-seam"></i><p class="mb-0">No orders here.</p></div>
+    <div th:unless="${#lists.isEmpty(orders)}" class="mz-panel-flush">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>Order</th><th>Customer</th><th>Placed</th><th>Total</th><th>Payment</th><th>Status</th><th>Move to</th></tr></thead>
+                <tbody>
+                <tr th:each="o : ${orders}">
+                    <td><a class="fw-semibold" th:href="@{/admin/orders/{id}(id=${o.id})}" th:text="${o.orderNumber}"></a>
+                        <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Auto</span>
+                        <span th:if="${o.prescription != null}" class="mz-rx position-static ms-1">Rx</span></td>
+                    <td><span th:text="${o.user.fullName}"></span><div class="small text-muted" th:text="${o.contactPhone}"></div></td>
+                    <td class="text-nowrap" th:text="${#temporals.format(o.createdAt, 'd MMM, h:mm a')}"></td>
+                    <td th:text="'₹' + ${o.total}"></td>
+                    <td class="small" th:text="${o.paymentMethod.name()} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></td>
+                    <td><span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span></td>
+                    <td>
+                        <form th:unless="${#lists.isEmpty(o.status.nextStatuses)}" th:action="@{/admin/orders/{id}/status(id=${o.id})}" method="post" class="d-flex gap-1">
+                            <select name="status" class="form-select form-select-sm" aria-label="New status">
+                                <option th:each="s : ${o.status.nextStatuses}" th:value="${s}" th:text="${s.label}"></option>
+                            </select>
+                            <button class="btn btn-sm btn-primary" type="submit">Save</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

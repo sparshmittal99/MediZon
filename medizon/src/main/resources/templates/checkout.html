@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Checkout')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <h1 class="mz-page-title mb-4">Checkout</h1>
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <section class="mz-panel mb-4">
+                <div class="d-flex justify-content-between align-items-baseline">
+                    <h2 class="h5">Delivery address</h2>
+                    <a th:href="@{/profile}" class="small">Edit</a>
+                </div>
+                <p th:if="${me.hasAddress()}" class="mb-0">
+                    <span class="fw-semibold" th:text="${me.fullName}"></span><br>
+                    <span th:text="${me.formattedAddress}"></span><br>
+                    <span class="text-muted" th:text="${me.phone}"></span>
+                </p>
+                <div th:unless="${me.hasAddress()}" class="alert alert-warning mb-0">
+                    Add a delivery address before placing the order.
+                    <a th:href="@{/profile}" class="alert-link">Add address</a>
+                </div>
+            </section>
+
+            <!-- Prescription upload lives outside the order form (forms can't nest) -->
+            <section th:if="${cart.prescriptionRequired}" class="mz-panel mb-4">
+                <h2 class="h5">Prescription</h2>
+                <p class="small text-muted">Your cart has prescription medicines. Choose an approved prescription below,
+                    or upload one now; a pharmacist approves it, usually within a few hours.</p>
+                <div th:if="${#lists.isEmpty(prescriptions)}" class="alert alert-warning small">
+                    You have no approved prescription yet. Upload one and come back once it's approved.
+                </div>
+                <form th:action="@{/prescriptions}" method="post" enctype="multipart/form-data" class="row g-2 align-items-end">
+                    <input type="hidden" name="returnTo" value="checkout">
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="rxFile">Upload prescription (JPG, PNG or PDF)</label>
+                        <input class="form-control form-control-sm" id="rxFile" type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" required>
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small" for="doc">Doctor's name</label>
+                        <input class="form-control form-control-sm" id="doc" name="doctorName">
+                    </div>
+                    <div class="col-sm-2"><button class="btn btn-sm btn-outline-primary w-100" type="submit">Upload</button></div>
+                </form>
+            </section>
+
+            <form id="placeOrder" th:action="@{/checkout}" method="post" class="mz-panel">
+                <div th:if="${cart.prescriptionRequired and !#lists.isEmpty(prescriptions)}" class="mb-4">
+                    <label class="form-label" for="prescriptionId">Use prescription</label>
+                    <select class="form-select" id="prescriptionId" name="prescriptionId" required>
+                        <option th:each="p : ${prescriptions}" th:value="${p.id}"
+                                th:text="${p.label} + ', valid until ' + ${p.validUntil}"></option>
+                    </select>
+                </div>
+
+                <h2 class="h5 mb-3">Payment</h2>
+                <div class="form-check mb-2" th:each="pm, s : ${paymentMethods}">
+                    <input class="form-check-input" type="radio" name="paymentMethod" th:id="'pm' + ${s.index}"
+                           th:value="${pm}" th:checked="${s.first}">
+                    <label class="form-check-label" th:for="'pm' + ${s.index}" th:text="${pm.label}">COD</label>
+                </div>
+            </form>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="mz-panel">
+                <h2 class="h5 mb-3">Order summary</h2>
+                <div th:each="i : ${cart.items}" class="d-flex justify-content-between small mb-2">
+                    <span th:text="${i.quantity} + ' × ' + ${i.medicine.name}"></span>
+                    <span th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between mb-1"><span>Subtotal</span><span th:text="'₹' + ${cart.subtotal}"></span></div>
+                <div class="d-flex justify-content-between mb-3"><span>Delivery</span>
+                    <span th:text="${cart.deliveryFee.signum() == 0} ? 'Free' : ('₹' + ${cart.deliveryFee})"></span></div>
+                <div class="d-flex justify-content-between fw-bold fs-5 mb-3"><span>Total</span>
+                    <span th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
+                <button form="placeOrder" class="btn btn-primary w-100" type="submit"
+                        th:disabled="${!me.hasAddress() or (cart.prescriptionRequired and #lists.isEmpty(prescriptions))}">Place order</button>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>
