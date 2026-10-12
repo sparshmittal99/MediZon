@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,6 +20,14 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     /** Unread notifications newer than the id a browser tab has already seen, within a recent window. */
     List<Notification> findByUserAndReadFalseAndIdGreaterThanAndCreatedAtAfterOrderByIdAsc(User user, Long afterId,
                                                                                          LocalDateTime since);
+
+    /** Unread count as one device sees it: alerts not about a member, plus those about the given members. */
+    @Query("select count(n) from Notification n left join n.member m where n.user = :user and n.read = false"
+            + " and (m is null or m.id in :memberIds)")
+    long countUnreadFor(@Param("user") User user, @Param("memberIds") Collection<Long> memberIds);
+
+    @Query("select count(n) from Notification n where n.user = :user and n.read = false and n.member is null")
+    long countUnreadWithoutMember(@Param("user") User user);
 
     @Query("select coalesce(max(n.id), 0) from Notification n where n.user = :user")
     long latestId(@Param("user") User user);

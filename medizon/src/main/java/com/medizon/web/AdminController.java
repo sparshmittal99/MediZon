@@ -3,11 +3,16 @@ package com.medizon.web;
 import com.medizon.domain.*;
 import com.medizon.dto.AdminForm;
 import com.medizon.dto.DayTraffic;
+import com.medizon.dto.ReportPeriod;
+import com.medizon.dto.SalesDay;
 import com.medizon.repository.*;
 import com.medizon.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -16,7 +21,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -37,6 +45,10 @@ public class AdminController {
     private final UserService userService;
     private final ReviewService reviewService;
     private final FeedbackService feedbackService;
+    private final InvoiceService invoiceService;
+    private final ReturnService returnService;
+    private final SalesReportService salesReport;
+    private final SalesExcelService salesExcel;
     private final CurrentUser currentUser;
 
     /** The image is chosen through upload / link fields, never posted directly. */
@@ -45,9 +57,11 @@ public class AdminController {
 
     @GetMapping
     public String dashboard(Model model) {
-        model.addAttribute("ordersToday", orderRepository.countByCreatedAtAfter(LocalDate.now().atStartOfDay()));
         model.addAttribute("toConfirm", orderRepository.countByUserRoleAndStatus(Role.CUSTOMER, OrderStatus.PLACED));
-        model.addAttribute("revenue", orderRepository.revenueExcluding(OrderStatus.CANCELLED));
+        model.addAttribute("revenue", orderRepository.revenueExcluding(OrderStatus.CANCELLED).subtract(returnService.totalRefunded()));
+        model.addAttribute("refunded", returnService.totalRefunded());
+        model.addAttribute("returnsToReview", returnService.countAwaitingReview());
+        model.addAttribute("today", salesReport.day(LocalDate.now()));
         model.addAttribute("pendingRx", prescriptionRepository.countByStatus(PrescriptionStatus.PENDING));
         model.addAttribute("autoOrders", orderRepository.countBySource(OrderSource.AUTO_REORDER));
         model.addAttribute("activePlans", planRepository.countByActiveTrue());
@@ -85,6 +99,97 @@ public class AdminController {
                     signups.getOrDefault(d, 0L)));
         }
         return rows;
+    }
+
+    // ---------------------------------------------------------------- sales report
+
+    /**
+     * Sales, orders and returns for a date range, a month or a financial year, shown day by day or month by month.
+     * Defaults to the last 30 days; financial years and long ranges default to month-wise.
+     */
+    @GetMapping("/sales")
+    public String sales(@RequestParam(defaultValue = "range") String period,
+                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+                        @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
+                        @RequestParam(required = false) String fy,
+                        @RequestParam(required = false) String group,
+                        @RequestParam(defaultValue = "false") boolean hideEmpty, Model model) {
+        ReportPeriod p = salesReport.resolve(period, from, to, month, fy);
+        boolean monthly = groupMonthly(p, group);
+        List<SalesDay> rows = new ArrayList<>(monthly ? salesReport.monthly(p.getFrom(), p.getTo()) : salesReport.daily(p.getFrom(), p.getTo()));
+        Collections.reverse(rows);   // newest first on screen
+        LocalDate today = LocalDate.now();
+        String thisFy = SalesReportService.financialYear(today);
+
+        model.addAttribute("p", p);
+        model.addAttribute("monthly", monthly);
+        model.addAttribute("dailyAllowed", p.getDays() <= SalesReportService.MAX_DAILY_DAYS);
+        model.addAttribute("hideEmpty", hideEmpty);
+        model.addAttribute("rows", hideEmpty ? rows.stream().filter(d -> !d.isEmpty()).toList() : rows);
+        model.addAttribute("period", SalesDay.total(rows));
+        model.addAttribute("today", salesReport.day(today));
+        model.addAttribute("allTime", salesReport.allTime());
+        model.addAttribute("fys", salesReport.financialYears());
+        model.addAttribute("thisFy", thisFy);
+        model.addAttribute("lastFy", SalesReportService.financialYear(today.minusYears(1)));
+        model.addAttribute("thisMonth", YearMonth.from(today));
+        model.addAttribute("lastMonth", YearMonth.from(today).minusMonths(1));
+        model.addAttribute("last7", today.minusDays(6));
+        model.addAttribute("last30", today.minusDays(29));
+        model.addAttribute("last90", today.minusDays(89));
+        model.addAttribute("sections", SalesExcelService.Section.values());
+        model.addAttribute("active", "sales");
+        return "admin/sales";
+    }
+
+    /** Excel workbook for the same period: a summary sheet plus the chosen sections (all of them if none are ticked). */
+    @GetMapping("/sales.xlsx")
+    public ResponseEntity<byte[]> salesExcel(
+            @RequestParam(defaultValue = "range") String period,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
+            @RequestParam(required = false) String fy,
+            @RequestParam(required = false) List<SalesExcelService.Section> sheets) {
+        ReportPeriod p = salesReport.resolve(period, from, to, month, fy);
+        Set<SalesExcelService.Section> chosen = sheets == null || sheets.isEmpty()
+                ? EnumSet.allOf(SalesExcelService.Section.class) : EnumSet.copyOf(sheets);
+        // Built in memory: even a busy financial year is a few MB
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try {
+            salesExcel.write(p, chosen, buffer);
+        } catch (IOException e) {
+            throw new BusinessException("The Excel file couldn't be created. Try again.");
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"medizon-sales-" + p.getFileSuffix() + ".xlsx\"")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(buffer.toByteArray());
+    }
+
+    @GetMapping(value = "/sales.csv", produces = "text/csv")
+    public ResponseEntity<String> salesCsv(
+            @RequestParam(defaultValue = "range") String period,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
+            @RequestParam(required = false) String fy,
+            @RequestParam(required = false) String group) {
+        ReportPeriod p = salesReport.resolve(period, from, to, month, fy);
+        List<SalesDay> rows = groupMonthly(p, group) ? salesReport.monthly(p.getFrom(), p.getTo()) : salesReport.daily(p.getFrom(), p.getTo());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"medizon-sales-" + p.getFileSuffix() + ".csv\"")
+                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .body(salesReport.csv(rows, SalesDay.total(rows)));
+    }
+
+    /** Month-wise when asked, for financial years and ranges over 3 months by default, and always past a year. */
+    private static boolean groupMonthly(ReportPeriod p, String group) {
+        if (p.getDays() > SalesReportService.MAX_DAILY_DAYS) return true;
+        if ("month".equals(group)) return true;
+        if ("day".equals(group)) return false;
+        return p.getKind() == ReportPeriod.Kind.FY || p.getDays() > 92;
     }
 
     // ---------------------------------------------------------------- users
@@ -235,8 +340,17 @@ public class AdminController {
         Order o = orderService.get(id);
         model.addAttribute("o", o);
         model.addAttribute("review", reviewService.forOrder(o).orElse(null));
+        model.addAttribute("returns", returnService.forOrder(o));
         model.addAttribute("adminView", true);
         return "orders/detail";
+    }
+
+    @GetMapping("/orders/{id}/invoice")
+    public String invoice(@PathVariable Long id, Model model) {
+        model.addAttribute("inv", invoiceService.forOrder(orderService.get(id)));
+        model.addAttribute("adminView", true);
+        model.addAttribute("active", "orders");
+        return "orders/invoice";
     }
 
     @PostMapping("/orders/{id}/status")

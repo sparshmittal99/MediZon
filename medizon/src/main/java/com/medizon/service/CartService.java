@@ -2,6 +2,7 @@ package com.medizon.service;
 
 import com.medizon.domain.CartItem;
 import com.medizon.domain.Medicine;
+import com.medizon.domain.Member;
 import com.medizon.domain.User;
 import com.medizon.dto.CartSummary;
 import com.medizon.repository.CartItemRepository;
@@ -11,10 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +23,7 @@ public class CartService {
 
     private final CartItemRepository cart;
     private final MedicineRepository medicines;
+    private final MemberService memberService;
 
     public static BigDecimal deliveryFeeFor(BigDecimal subtotal) {
         if (subtotal.signum() == 0 || subtotal.compareTo(FREE_DELIVERY_ABOVE) >= 0) return BigDecimal.ZERO;
@@ -33,10 +32,20 @@ public class CartService {
 
     @Transactional
     public void add(User user, Long medicineId, int quantity) {
+        add(user, medicineId, quantity, List.of());
+    }
+
+    /**
+     * Adds packs, tagging the line with who it's for. A new line with no members given is for the account holder;
+     * an existing line keeps its members and gains the given ones.
+     */
+    @Transactional
+    public void add(User user, Long medicineId, int quantity, Collection<Member> forMembers) {
         if (user.isAdmin()) throw new BusinessException("Admin accounts can't shop.");
         Medicine m = medicines.findById(medicineId)
                 .orElseThrow(() -> new BusinessException("That medicine doesn't exist."));
         if (!m.isActive()) throw new BusinessException(m.getName() + " is no longer sold.");
+        if (m.isExpired()) throw new BusinessException(m.getName() + " is past its expiry date and can't be sold right now.");
         int qty = Math.max(1, quantity);
         CartItem item = cart.findByUserAndMedicine(user, m).orElseGet(() -> {
             CartItem c = new CartItem();
@@ -51,6 +60,8 @@ public class CartService {
                     : "Only " + m.getStock() + " packs of " + m.getName() + " are in stock.");
         }
         item.setQuantity(newQty);
+        item.getMembers().addAll(forMembers);
+        if (item.getMembers().isEmpty()) item.getMembers().add(memberService.self(user));
         cart.save(item);
     }
 
@@ -66,6 +77,7 @@ public class CartService {
             return 0;
         }
         if (!m.isActive()) throw new BusinessException(m.getName() + " is no longer sold.");
+        if (m.isExpired()) throw new BusinessException(m.getName() + " is past its expiry date and can't be sold right now.");
         if (quantity > m.getStock()) {
             throw new BusinessException(m.getStock() == 0
                     ? m.getName() + " is out of stock."
@@ -78,8 +90,30 @@ public class CartService {
             return c;
         });
         item.setQuantity(quantity);
+        if (item.getMembers().isEmpty()) item.getMembers().add(memberService.self(user));
         cart.save(item);
         return quantity;
+    }
+
+    /**
+     * Sets who a cart line is for: any mix of family members, or the common (OTC) shelf. Prescription medicines are
+     * for a named patient, so they can't go on the common shelf.
+     */
+    @Transactional
+    public CartItem setMembers(User user, Long medicineId, Collection<Long> memberIds) {
+        Medicine m = medicines.findById(medicineId)
+                .orElseThrow(() -> new BusinessException("That medicine doesn't exist."));
+        CartItem item = cart.findByUserAndMedicine(user, m)
+                .orElseThrow(() -> new BusinessException(m.getName() + " isn't in your cart."));
+        Set<Member> chosen = new HashSet<>();
+        if (memberIds != null) memberIds.forEach(id -> chosen.add(memberService.get(id, user)));
+        if (chosen.isEmpty()) throw new BusinessException("Choose who " + m.getName() + " is for.");
+        if (m.isPrescriptionRequired() && chosen.stream().anyMatch(Member::isCommon)) {
+            throw new BusinessException(m.getName() + " needs a prescription, so it has to be for a named person, not the common shelf.");
+        }
+        item.getMembers().clear();
+        item.getMembers().addAll(chosen);
+        return item;
     }
 
     /** Packs in the cart per medicine id, for the quantity steppers on product cards and pages. */

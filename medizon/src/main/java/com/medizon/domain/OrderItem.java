@@ -6,6 +6,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Entity
 @Getter @Setter @NoArgsConstructor
@@ -30,4 +36,29 @@ public class OrderItem {
 
     @Column(precision = 10, scale = 2)
     private BigDecimal lineTotal;
+
+    /** Snapshot of the tax details at order time, for the invoice. Null on orders placed before invoices existed. */
+    @Column(length = 8)
+    private String hsnCode;
+
+    @Column(precision = 5, scale = 2)
+    private BigDecimal gstRate;
+
+    /** Expiry of the batch sold, snapshotted at order time; carried to the supply at home on delivery. */
+    private LocalDate expiryDate;
+
+    /** Who it's for. Customer-side only: admins see the medicines, not the family. */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "order_item_members",
+            joinColumns = @JoinColumn(name = "order_item_id"), inverseJoinColumns = @JoinColumn(name = "member_id"))
+    private Set<Member> members = new HashSet<>();
+
+    /** Members in a stable order (account holder first, common last). */
+    public List<Member> getSortedMembers() {
+        return members.stream().sorted(Comparator.comparing(Member::getKind).thenComparing(Member::getId)).toList();
+    }
+
+    public String getMembersLabel() {
+        return getSortedMembers().stream().map(Member::getLabel).collect(Collectors.joining(", "));
+    }
 }

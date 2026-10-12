@@ -1,10 +1,7 @@
 package com.medizon.web;
 
-import com.medizon.domain.DoseStatus;
-import com.medizon.domain.MedicationPlan;
-import com.medizon.domain.Medicine;
-import com.medizon.domain.ReorderMode;
-import com.medizon.domain.User;
+import com.medizon.domain.*;
+import com.medizon.dto.DoseSlot;
 import com.medizon.dto.PlanForm;
 import com.medizon.service.*;
 import jakarta.validation.Valid;
@@ -16,9 +13,12 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.time.DayOfWeek;
 import java.time.LocalTime;
+import java.util.*;
+import java.util.stream.Collectors;
 
-/** "My medicines": dose reminders, supply at home and refill settings. */
+/** "My medicines": dose reminders, supply at home and refill settings, grouped by family member. */
 @Controller
 @RequestMapping("/plans")
 @RequiredArgsConstructor
@@ -28,23 +28,52 @@ public class PlanController {
     private final ReorderService reorderService;
     private final MedicineService medicineService;
     private final CartService cartService;
+    private final MemberService memberService;
     private final CurrentUser currentUser;
 
+    /** {@code member} narrows the page to one person (or the common shelf); without it every member gets a section. */
     @GetMapping
-    public String list(Model model) {
+    public String list(@RequestParam(required = false) Long member, Model model) {
         User user = currentUser.get();
-        model.addAttribute("plans", planService.forUser(user));
-        model.addAttribute("doses", planService.todaysDoses(user));
+        List<Member> all = memberService.all(user);
+        Member selected = member == null ? null : memberService.get(member, user);
+
+        List<MedicationPlan> plans = planService.forUser(user);
+        Map<Long, List<MedicationPlan>> byMember = plans.stream().filter(p -> !p.isSetupRequired())
+                .collect(Collectors.groupingBy(p -> p.getMember().getId(), LinkedHashMap::new, Collectors.toList()));
+        List<MedicationPlan> needSetup = plans.stream().filter(MedicationPlan::isSetupRequired)
+                .filter(p -> selected == null || p.getMember().getId().equals(selected.getId())).toList();
+        List<DoseSlot> doses = planService.todaysDoses(user).stream()
+                .filter(d -> selected == null || d.getPlan().getMember().getId().equals(selected.getId())).toList();
+
+        // Sections to show: the chosen member, or everyone with medicines (the account holder always, as the empty state)
+        List<Member> sections = selected != null ? List.of(selected) : all.stream()
+                .filter(m -> m.isSelf() || byMember.containsKey(m.getId())).toList();
+
+        model.addAttribute("members", all);
+        model.addAttribute("selected", selected);
+        model.addAttribute("sections", sections);
+        model.addAttribute("plansByMember", byMember);
+        model.addAttribute("needSetup", needSetup);
+        model.addAttribute("doses", doses);
+        model.addAttribute("hasFamily", all.size() > 2);
+        model.addAttribute("planCount", plans.stream().collect(Collectors.groupingBy(p -> p.getMember().getId(), Collectors.counting())));
         return "plans/list";
     }
 
     @GetMapping("/new")
-    public String newPlan(@RequestParam(required = false) Long medicineId, Model model) {
+    public String newPlan(@RequestParam(required = false) Long medicineId, @RequestParam(required = false) Long memberId,
+                          Model model) {
+        User user = currentUser.get();
         PlanForm form = new PlanForm();
+        form.setMemberId(memberId != null ? memberService.get(memberId, user).getId() : memberService.self(user).getId());
         if (medicineId != null) {
             Medicine m = medicineService.get(medicineId);
             form.setMedicineId(m.getId());
-            form.setUnitsRemaining(m.getUnitsPerPack());
+            // Medicines already on the common shelf are moved across on save, so start from what the person has of their own
+            boolean onShelf = planService.shelfStock(user).getOrDefault(m.getId(), 0) > 0;
+            form.setUnitsRemaining(onShelf ? 0 : m.getUnitsPerPack());
+            if (!onShelf) form.setExpiryDate(m.getExpiryDate());
         }
         return showForm(form, model);
     }
@@ -56,9 +85,17 @@ public class PlanController {
 
     private String showForm(PlanForm form, Model model) {
         model.addAttribute("form", form);
-        model.addAttribute("medicines", medicineService.allActive());
-        model.addAttribute("reorderModes", ReorderMode.values());
+        addFormOptions(model);
         return "plans/form";
+    }
+
+    private void addFormOptions(Model model) {
+        model.addAttribute("medicines", medicineService.allActive());
+        model.addAttribute("members", memberService.all(currentUser.get()));
+        model.addAttribute("reorderModes", ReorderMode.values());
+        model.addAttribute("scheduleTypes", ScheduleType.values());
+        model.addAttribute("weekDays", DayOfWeek.values());
+        model.addAttribute("shelfStock", planService.shelfStock(currentUser.get()));
     }
 
     @PostMapping("/save")
@@ -66,28 +103,33 @@ public class PlanController {
                        RedirectAttributes ra) {
         if (result.hasErrors()) {
             while (form.getTimes().size() < 4) form.getTimes().add("");
-            model.addAttribute("medicines", medicineService.allActive());
-            model.addAttribute("reorderModes", ReorderMode.values());
+            addFormOptions(model);
             return "plans/form";
         }
-        MedicationPlan p = planService.save(currentUser.get(), form);
+        MedicationPlanService.Saved saved = planService.saveReporting(currentUser.get(), form);
+        MedicationPlan p = saved.plan();
         reorderService.evaluate(p.getId());
-        ra.addFlashAttribute("success", "Reminders saved for " + p.getMedicine().getName() + ".");
-        return "redirect:/plans";
+        String moved = saved.movedFromCommon() == 0 ? ""
+                : " " + saved.movedFromCommon() + " " + p.getMedicine().getUnitLabel() + " moved from common medicines.";
+        ra.addFlashAttribute("success", (p.isOnCommonShelf() ? p.getMedicine().getName() + " saved on the common shelf."
+                : "Reminders saved for " + p.getTitle() + ".") + moved);
+        return "redirect:/plans?member=" + p.getMember().getId();
     }
 
     @PostMapping("/{id}/toggle")
-    public String toggle(@PathVariable Long id, RedirectAttributes ra) {
+    public String toggle(@PathVariable Long id, @RequestHeader(value = "Referer", required = false) String referer,
+                         RedirectAttributes ra) {
         MedicationPlan p = planService.toggleActive(id, currentUser.get());
         ra.addFlashAttribute("success", p.isActive() ? "Reminders resumed." : "Reminders paused.");
-        return "redirect:/plans";
+        return "redirect:" + (referer != null ? referer : "/plans");
     }
 
     @PostMapping("/{id}/delete")
-    public String delete(@PathVariable Long id, RedirectAttributes ra) {
+    public String delete(@PathVariable Long id, @RequestHeader(value = "Referer", required = false) String referer,
+                         RedirectAttributes ra) {
         planService.delete(id, currentUser.get());
-        ra.addFlashAttribute("success", "Medicine removed from your list.");
-        return "redirect:/plans";
+        ra.addFlashAttribute("success", "Medicine removed from the list.");
+        return "redirect:" + (referer != null ? referer : "/plans");
     }
 
     @PostMapping("/{id}/dose")
@@ -97,16 +139,16 @@ public class PlanController {
                        @RequestParam(defaultValue = "/plans") String returnTo) {
         MedicationPlan p = planService.respond(currentUser.get(), id, time, status);
         reorderService.evaluate(p.getId());
-        return "redirect:" + (returnTo.startsWith("/") ? returnTo : "/plans");
+        return "redirect:" + (returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/plans");
     }
 
-    /** Manual refill: puts the plan's usual quantity in the cart. */
+    /** Manual refill: puts the plan's usual quantity in the cart, for the same member. */
     @PostMapping("/{id}/reorder")
     public String reorder(@PathVariable Long id, RedirectAttributes ra) {
         User user = currentUser.get();
         MedicationPlan p = planService.get(id, user);
-        cartService.add(user, p.getMedicine().getId(), p.getReorderPacks());
-        ra.addFlashAttribute("success", p.getReorderPacks() + " pack(s) of " + p.getMedicine().getName() + " added. Check out to place the refill.");
+        cartService.add(user, p.getMedicine().getId(), p.getReorderPacks(), List.of(p.getMember()));
+        ra.addFlashAttribute("success", p.getReorderPacks() + " pack(s) of " + p.getTitle() + " added. Check out to place the refill.");
         return "redirect:/cart";
     }
 }

@@ -36,11 +36,11 @@ public class SecurityConfig {
                 .requestMatchers("/", "/medicines", "/medicines/**", "/register", "/login",
                         "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/favicon.ico", "/error").permitAll()
                 .requestMatchers("/admin/**").hasRole("ADMIN")
-                .requestMatchers("/prescriptions/*/file").authenticated()   // owner or admin, checked in the service
+                .requestMatchers("/prescriptions/*/file", "/returns/*/images/*").authenticated()   // owner or admin, checked in the service
                 // Shopping and dose reminders are for customers; admin accounts only run the store.
                 // The assistant API is open to both roles; each role gets its own actions in AssistantTools.
                 .requestMatchers("/cart/**", "/api/cart/**", "/checkout", "/orders/**", "/plans/**",
-                        "/prescriptions/**").hasRole("CUSTOMER")
+                        "/prescriptions/**", "/members/**", "/notifications/settings", "/notifications/devices/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
             .exceptionHandling(ex -> ex.accessDeniedHandler(accessDeniedHandler()))
             .formLogin(form -> form

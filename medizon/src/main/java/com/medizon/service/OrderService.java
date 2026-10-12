@@ -25,6 +25,10 @@ public class OrderService {
     private final CartService cartService;
     private final NotificationService notifications;
     private final MedicationPlanService planService;
+    private final InvoiceService invoiceService;
+
+    /** One order line: packs of a medicine and who they're for. */
+    private record Line(Long medicineId, int quantity, Set<Member> members) {}
 
     // ------------------------------------------------------------------ customer checkout
 
@@ -44,8 +48,11 @@ public class OrderService {
                     .orElseThrow(() -> new BusinessException("Choose an approved prescription that hasn't expired."));
         }
 
-        Map<Long, Integer> lines = new LinkedHashMap<>();
-        cart.getItems().forEach(i -> lines.put(i.getMedicine().getId(), i.getQuantity()));
+        List<Line> lines = new ArrayList<>();
+        for (CartItem i : cart.getItems()) {
+            if (i.getMembers().isEmpty()) throw new BusinessException("Choose who " + i.getMedicine().getName() + " is for.");
+            lines.add(new Line(i.getMedicine().getId(), i.getQuantity(), new HashSet<>(i.getMembers())));
+        }
 
         Order order = createOrder(user, lines, paymentMethod, rx, OrderSource.CUSTOMER);
         cartService.clear(user);
@@ -64,6 +71,7 @@ public class OrderService {
         if (!user.hasAddress()) return Optional.of("there's no delivery address on your profile");
         if (!m.isActive()) return Optional.of(m.getName() + " is no longer sold on MediZon");
         if (m.getStock() < plan.getReorderPacks()) return Optional.of(m.getName() + " is out of stock");
+        if (m.isExpired()) return Optional.of("the stock of " + m.getName() + " has expired");
         if (m.isPrescriptionRequired() && findValidPrescription(user).isEmpty()) {
             return Optional.of("there's no approved prescription on file");
         }
@@ -75,7 +83,8 @@ public class OrderService {
         User user = plan.getUser();
         Medicine m = plan.getMedicine();
         Prescription rx = m.isPrescriptionRequired() ? findValidPrescription(user).orElse(null) : null;
-        return createOrder(user, Map.of(m.getId(), Math.max(1, plan.getReorderPacks())),
+        Set<Member> forWhom = plan.getMember() == null ? Set.of() : Set.of(plan.getMember());
+        return createOrder(user, List.of(new Line(m.getId(), Math.max(1, plan.getReorderPacks()), forWhom)),
                 PaymentMethod.COD, rx, OrderSource.AUTO_REORDER);
     }
 
@@ -86,7 +95,7 @@ public class OrderService {
 
     // ------------------------------------------------------------------ shared core
 
-    private Order createOrder(User user, Map<Long, Integer> lines, PaymentMethod paymentMethod,
+    private Order createOrder(User user, List<Line> lines, PaymentMethod paymentMethod,
                               Prescription rx, OrderSource source) {
         if (!user.hasAddress()) throw new BusinessException("Add a delivery address to your profile first.");
 
@@ -98,13 +107,15 @@ public class OrderService {
         order.setPrescription(rx);
         order.setShippingAddress(user.getFormattedAddress());
         order.setContactPhone(user.getPhone());
+        order.setShippingState(user.getState());
 
         BigDecimal subtotal = BigDecimal.ZERO;
-        for (Map.Entry<Long, Integer> line : lines.entrySet()) {
-            Medicine m = medicines.lockById(line.getKey())
+        for (Line line : lines) {
+            Medicine m = medicines.lockById(line.medicineId())
                     .orElseThrow(() -> new BusinessException("A medicine in your order no longer exists."));
-            int qty = line.getValue();
+            int qty = line.quantity();
             if (!m.isActive()) throw new BusinessException(m.getName() + " is no longer sold.");
+            if (m.isExpired()) throw new BusinessException(m.getName() + " is past its expiry date and can't be sold right now.");
             if (m.getStock() < qty) {
                 throw new BusinessException("Only " + m.getStock() + " packs of " + m.getName() + " are left.");
             }
@@ -116,6 +127,10 @@ public class OrderService {
             item.setUnitPrice(m.getPrice());
             item.setQuantity(qty);
             item.setLineTotal(m.getPrice().multiply(BigDecimal.valueOf(qty)));
+            item.setHsnCode(m.getHsnCode());
+            item.setGstRate(m.getGstRate());
+            item.setExpiryDate(m.getExpiryDate());
+            item.getMembers().addAll(line.members());
             order.addItem(item);
             subtotal = subtotal.add(item.getLineTotal());
         }
@@ -146,7 +161,9 @@ public class OrderService {
         o.setStatus(next);
         o.setUpdatedAt(LocalDateTime.now());
 
+        if (next == OrderStatus.SHIPPED) invoiceService.issue(o);
         if (next == OrderStatus.DELIVERED) {
+            invoiceService.issue(o);   // no-op unless it skipped "shipped" before invoices existed
             o.setDeliveredAt(LocalDateTime.now());
             if (o.getPaymentStatus() == PaymentStatus.PENDING) o.setPaymentStatus(PaymentStatus.PAID);
             planService.onOrderDelivered(o);   // tops up supply at home
@@ -159,6 +176,7 @@ public class OrderService {
         notifications.notify(o.getUser(), NotificationType.ORDER_UPDATE,
                 "Order " + next.getLabel().toLowerCase(),
                 "Order " + o.getOrderNumber() + " is now " + next.getLabel().toLowerCase() + "."
+                        + (next == OrderStatus.SHIPPED ? " Your tax invoice " + o.getInvoiceNumber() + " is ready on the order page." : "")
                         + (next == OrderStatus.DELIVERED ? " Tell us how it went with a quick review." : ""),
                 "/orders/" + o.getId());
         return o;
@@ -178,7 +196,8 @@ public class OrderService {
         int added = 0;
         for (OrderItem i : o.getItems()) {
             try {
-                cartService.add(user, i.getMedicine().getId(), i.getQuantity());
+                cartService.add(user, i.getMedicine().getId(), i.getQuantity(),
+                        i.getMembers().stream().filter(x -> !x.isRemoved()).toList());
                 added++;
             } catch (BusinessException ignored) {
                 // out of stock or discontinued: skip it

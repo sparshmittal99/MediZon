@@ -6,6 +6,8 @@ public enum NotificationType {
     AUTO_REORDER("bi-truck"),
     ORDER_UPDATE("bi-box-seam"),
     PRESCRIPTION_UPDATE("bi-file-earmark-medical"),
+    RETURN_UPDATE("bi-arrow-return-left"),
+    EXPIRY_ALERT("bi-calendar-x"),
     INFO("bi-info-circle");
 
     private final String icon;

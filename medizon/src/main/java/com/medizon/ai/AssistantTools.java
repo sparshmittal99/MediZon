@@ -41,6 +41,7 @@ public class AssistantTools {
     private final OrderService orderService;
     private final MedicationPlanService planService;
     private final ReorderService reorderService;
+    private final MemberService memberService;
     private final ReminderService reminderService;
     private final FeedbackService feedbackService;
     private final ReviewService reviewService;
@@ -178,7 +179,8 @@ public class AssistantTools {
     private Object cart(User user) {
         CartSummary c = cartService.summary(user);
         List<Map<String, Object>> items = c.getItems().stream().map(i -> Map.<String, Object>of(
-                "name", i.getMedicine().getName(), "quantity", i.getQuantity(), "line_total", i.getLineTotal())).toList();
+                "name", i.getMedicine().getName(), "quantity", i.getQuantity(), "line_total", i.getLineTotal(),
+                "for", i.getSortedMembers().stream().map(Member::getLabel).toList())).toList();
         return Map.of("items", items, "subtotal", c.getSubtotal(), "delivery", c.getDeliveryFee(),
                 "total", c.getTotal(), "needs_prescription", c.isPrescriptionRequired());
     }
@@ -197,6 +199,8 @@ public class AssistantTools {
         out.put("id", p.getId());
         out.put("medicine", p.getMedicine().getName());
         out.put("medicine_id", p.getMedicine().getId());
+        out.put("for", p.getMember() == null ? "Me" : p.getMember().getLabel());
+        out.put("needs_setup", p.isSetupRequired());
         out.put("active", p.isActive());
         out.put("dose", p.getDoseLabel());
         out.put("times", p.getReminderTimes().stream().map(t -> t.format(HH_MM)).toList());
@@ -207,8 +211,10 @@ public class AssistantTools {
 
     private Object createPlan(User user, JsonNode args) {
         Medicine m = medicineService.get(args.path("medicine_id").asLong());
+        Member self = memberService.self(user);
         boolean exists = planService.forUser(user).stream()
-                .anyMatch(p -> p.isActive() && p.getMedicine().getId().equals(m.getId()));
+                .anyMatch(p -> p.getMember() != null && p.getMember().getId().equals(self.getId())
+                        && p.getMedicine().getId().equals(m.getId()));
         if (exists) {
             return Map.of("error", "You already have reminders for " + m.getName()
                     + ". You can change the times in My medicines.");
@@ -218,6 +224,7 @@ public class AssistantTools {
         if (times.isEmpty() || times.size() > 6) return Map.of("error", "Give between 1 and 6 reminder times.");
 
         PlanForm form = new PlanForm();
+        form.setMemberId(self.getId());
         form.setMedicineId(m.getId());
         form.setDosePerIntake(Math.max(1, Math.min(args.path("dose").asInt(1), 10)));
         form.setTimes(times);
@@ -242,8 +249,8 @@ public class AssistantTools {
 
     private Object refill(User user, long planId) {
         MedicationPlan p = planService.get(planId, user);
-        cartService.add(user, p.getMedicine().getId(), p.getReorderPacks());
-        return Map.of("ok", true, "added", p.getReorderPacks() + " pack(s) of " + p.getMedicine().getName(),
+        cartService.add(user, p.getMedicine().getId(), p.getReorderPacks(), List.of(p.getMember()));
+        return Map.of("ok", true, "added", p.getReorderPacks() + " pack(s) of " + p.getTitle(),
                 "cart_count", cartService.count(user));
     }
 

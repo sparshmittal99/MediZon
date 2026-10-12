@@ -1,6 +1,7 @@
 package com.medizon.api;
 
 import com.medizon.domain.CartItem;
+import com.medizon.domain.Member;
 import com.medizon.domain.User;
 import com.medizon.dto.CartSummary;
 import com.medizon.service.BusinessException;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Used by the quantity steppers on product cards, product pages and the cart to change the cart without reloading. */
@@ -54,6 +56,16 @@ public class CartApi {
         out.put("prescriptionRequired", c.isPrescriptionRequired());
         out.put("empty", c.isEmpty());
         return out;
+    }
+
+    public record MembersRequest(List<Long> memberIds) {}
+
+    /** Sets who a cart line is for and returns the members it's now tagged with. */
+    @PostMapping("/{medicineId}/members")
+    public Map<String, Object> setMembers(@PathVariable Long medicineId, @RequestBody MembersRequest req) {
+        CartItem item = cartService.setMembers(currentUser.get(), medicineId, req.memberIds());
+        return Map.of("medicineId", medicineId,
+                "memberIds", item.getSortedMembers().stream().map(Member::getId).toList());
     }
 
     @ExceptionHandler(BusinessException.class)

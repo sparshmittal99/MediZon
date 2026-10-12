@@ -1,7 +1,10 @@
 package com.medizon.api;
 
+import com.medizon.domain.NotificationDevice;
 import com.medizon.domain.User;
 import com.medizon.service.CurrentUser;
+import com.medizon.service.DeviceService;
+import jakarta.servlet.http.HttpServletRequest;
 import com.medizon.service.NotificationPush;
 import com.medizon.service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +30,7 @@ public class NotificationApi {
     private final CurrentUser currentUser;
     private final NotificationPush push;
     private final JdbcTemplate jdbc;
+    private final DeviceService deviceService;
 
     /**
      * Live connection: a "notify" event arrives the moment a notification is created.
@@ -41,9 +45,10 @@ public class NotificationApi {
 
     /** {@code after} is the newest notification id this browser has already shown. */
     @GetMapping("/poll")
-    public Map<String, Object> poll(@RequestParam(defaultValue = "0") long after) {
+    public Map<String, Object> poll(@RequestParam(defaultValue = "0") long after, HttpServletRequest request) {
         User user = currentUser.get();
-        List<Map<String, Object>> fresh = notificationService.newSince(user, after).stream()
+        NotificationDevice device = user.isAdmin() ? null : deviceService.find(user, request);
+        List<Map<String, Object>> fresh = notificationService.newSince(user, after, device).stream()
                 .map(n -> Map.<String, Object>of(
                         "id", n.getId(),
                         "type", n.getType().name(),
@@ -51,7 +56,7 @@ public class NotificationApi {
                         "message", n.getMessage() == null ? "" : n.getMessage(),
                         "url", "/notifications/" + n.getId() + "/open"))
                 .toList();
-        return Map.of("unread", notificationService.unreadCount(user), "items", fresh,
+        return Map.of("unread", notificationService.unreadCount(user, device), "items", fresh,
                 "latest", notificationService.latestId(user));
     }
 }

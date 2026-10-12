@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ public class DataSeeder implements CommandLineRunner {
     private final UserRepository users;
     private final MedicineRepository medicines;
     private final PasswordEncoder encoder;
+    private final JdbcTemplate jdbc;
 
     @Value("${medizon.admin.email:}")
     private String adminEmail;
@@ -35,8 +37,18 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        dropStaleEnumChecks();
         if (medicines.count() == 0) seedCatalog();
         if (users.countByRole(Role.ADMIN) == 0) seedFirstAdmin();
+    }
+
+    /**
+     * Hibernate writes a CHECK constraint listing an enum's values when it creates a table, and "ddl-auto=update"
+     * never refreshes it, so inserting a newly added value (e.g. NotificationType.RETURN_UPDATE) fails on databases
+     * created by an older version. The enum mapping already guards the values, so the constraints are dropped.
+     */
+    private void dropStaleEnumChecks() {
+        jdbc.execute("alter table if exists notification drop constraint if exists notification_type_check");
     }
 
     /** Creates the first admin from MEDIZON_ADMIN_EMAIL / MEDIZON_ADMIN_PASSWORD when no admin exists yet. */

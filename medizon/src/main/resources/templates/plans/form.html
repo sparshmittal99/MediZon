@@ -1,25 +1,41 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/layout :: head(${form.id == null} ? 'Add medicine' : 'Edit medicine')}"></head>
+<head th:replace="~{fragments/layout :: head(${form.id == null} ? 'Add medicine' : (${form.setupRequired} ? 'Set reminders' : 'Edit medicine'))}"></head>
 <body>
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page" style="max-width: 860px">
-    <a th:href="@{/plans}" class="small"><i class="bi bi-arrow-left"></i> My medicines</a>
-    <h1 class="mz-page-title mt-2 mb-4" th:text="${form.id == null} ? 'Add a medicine' : 'Edit medicine'">Add a medicine</h1>
+    <a th:href="${form.memberId != null} ? @{/plans(member=${form.memberId})} : @{/plans}" class="small"><i class="bi bi-arrow-left"></i> My medicines</a>
+    <h1 class="mz-page-title mt-2 mb-2"
+        th:text="${form.id == null} ? 'Add a medicine' : (${form.setupRequired} ? 'Set reminders' : 'Edit medicine')">Add a medicine</h1>
+    <p th:if="${form.setupRequired}" class="mz-setup small mb-4">
+        <i class="bi bi-box-seam me-1" aria-hidden="true"></i>
+        This medicine was delivered and its supply is already counted. Choose the dose, times and days to switch on reminders.
+    </p>
+    <div th:unless="${form.setupRequired}" class="mb-4"></div>
 
     <form th:action="@{/plans/save}" th:object="${form}" method="post" novalidate>
         <input type="hidden" th:field="*{id}">
 
         <section class="mz-panel mb-4">
-            <h2 class="h5 mb-3">Medicine and dose</h2>
+            <h2 class="h5 mb-3">Who and what</h2>
             <div class="row g-3">
-                <div class="col-md-8">
+                <div class="col-md-5">
+                    <label class="form-label" for="memberId">Taken by</label>
+                    <select class="form-select" th:field="*{memberId}" th:errorclass="is-invalid" data-mz-plan-member>
+                        <option th:each="m : ${members}" th:value="${m.id}" th:attr="data-common=${m.common}"
+                                th:text="${m.self} ? 'Me' : (${m.common} ? 'Common medicines (shared, OTC)' : ${m.name} + (${m.relation} != null ? ' (' + ${m.relation} + ')' : ''))"></option>
+                    </select>
+                    <div class="invalid-feedback" th:errors="*{memberId}"></div>
+                    <div class="form-text"><a th:href="@{/members}">Add a family member</a></div>
+                </div>
+                <div class="col-md-7">
                     <label class="form-label" for="medicineId">Medicine</label>
-                    <select class="form-select" th:field="*{medicineId}" th:errorclass="is-invalid">
+                    <select class="form-select" th:field="*{medicineId}" th:errorclass="is-invalid" data-mz-plan-medicine>
                         <option value="">Choose a medicine</option>
                         <option th:each="m : ${medicines}" th:value="${m.id}"
+                                th:attr="data-shelf=${shelfStock.getOrDefault(m.id, 0)},data-unit=${m.unitLabel}"
                                 th:text="${m.name} + ' (pack of ' + ${m.unitsPerPack} + ' ' + ${m.unitLabel} + ')'"></option>
                     </select>
                     <div class="invalid-feedback" th:errors="*{medicineId}"></div>
@@ -30,6 +46,22 @@
                     <div class="form-text">Tablets, capsules or ml</div>
                     <div class="invalid-feedback" th:errors="*{dosePerIntake}"></div>
                 </div>
+                <div class="col-md-8">
+                    <label class="form-label" for="instructions">Instructions</label>
+                    <input class="form-control" th:field="*{instructions}" placeholder="after food">
+                </div>
+            </div>
+        </section>
+
+        <p class="mz-shelf-note mb-4" data-mz-shelf-only hidden>
+            <i class="bi bi-house-heart me-1" aria-hidden="true"></i>
+            Common medicines are kept at home for anyone who needs them: we track how much is left and when it expires, with no reminders.
+            To give one to a person with set doses, add it to their list instead and we'll move what they need from the shelf.
+        </p>
+
+        <section class="mz-panel mb-4" data-mz-schedule data-mz-person-only>
+            <h2 class="h5 mb-3">When it's taken</h2>
+            <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label">Reminder times</label>
                     <div class="row g-2">
@@ -39,24 +71,59 @@
                     </div>
                     <div class="form-text">Leave unused boxes empty.</div>
                 </div>
-                <div class="col-md-4">
+
+                <div class="col-12">
+                    <span class="form-label d-block">Days</span>
+                    <div class="mz-segmented" role="radiogroup" aria-label="Which days">
+                        <th:block th:each="st : ${scheduleTypes}">
+                            <input type="radio" class="btn-check" th:field="*{scheduleType}" th:value="${st}" data-mz-schedule-type>
+                            <label class="btn btn-outline-primary btn-sm" th:for="${#ids.prev('scheduleType')}" th:text="${st.label}">Every day</label>
+                        </th:block>
+                    </div>
+                </div>
+
+                <div class="col-12" data-show-for="DAYS_OF_WEEK">
+                    <span class="form-label d-block">On these days</span>
+                    <div class="d-flex flex-wrap gap-2">
+                        <th:block th:each="d : ${weekDays}">
+                            <input type="checkbox" class="btn-check" th:field="*{daysOfWeek}" th:value="${d}">
+                            <label class="btn btn-outline-secondary btn-sm mz-day" th:for="${#ids.prev('daysOfWeek')}"
+                                   th:text="${#strings.capitalize(#strings.toLowerCase(#strings.substring(d.name(), 0, 3)))}">Mon</label>
+                        </th:block>
+                    </div>
+                </div>
+
+                <div class="col-12" data-show-for="CUSTOM_DATES" data-mz-dates>
+                    <label class="form-label" for="dateToAdd">On these dates</label>
+                    <div class="d-flex gap-2" style="max-width: 22rem">
+                        <input class="form-control" type="date" id="dateToAdd" name="customDates" data-mz-date-input>
+                        <button type="button" class="btn btn-outline-primary" data-mz-date-add hidden>Add</button>
+                    </div>
+                    <ul class="mz-date-chips" data-mz-date-list aria-live="polite">
+                        <li th:each="cd : *{parsedDates}">
+                            <input type="hidden" name="customDates" th:value="${cd}">
+                            <span th:text="${#temporals.format(cd, 'EEE, d MMM yyyy')}"></span>
+                            <button type="button" class="btn-close btn-close-sm" aria-label="Remove date" data-mz-date-remove></button>
+                        </li>
+                    </ul>
+                    <div class="form-text">Pick a date and press Add for each day the medicine is taken.</div>
+                </div>
+
+                <div class="col-md-4" data-show-for="EVERY_DAY DAYS_OF_WEEK">
                     <label class="form-label" for="startDate">Start</label>
                     <input class="form-control" type="date" th:field="*{startDate}">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-4" data-show-for="EVERY_DAY DAYS_OF_WEEK">
                     <label class="form-label" for="endDate">End <span class="text-muted fw-normal">(optional)</span></label>
                     <input class="form-control" type="date" th:field="*{endDate}">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label" for="instructions">Instructions</label>
-                    <input class="form-control" th:field="*{instructions}" placeholder="after food">
+                    <div class="form-text">Leave empty for ongoing medicines.</div>
                 </div>
             </div>
         </section>
 
         <section class="mz-panel mb-4">
-            <h2 class="h5 mb-1">Supply and refills</h2>
-            <p class="small text-muted mb-3">Tell us how much you have now. We deduct each dose and act before you run out.</p>
+            <h2 class="h5 mb-1">Supply at home</h2>
+            <p class="small text-muted mb-3">How much is at home now. We deduct each dose and act before it runs out.</p>
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label" for="unitsRemaining">Units at home now</label>
@@ -64,13 +131,32 @@
                     <div class="invalid-feedback" th:errors="*{unitsRemaining}"></div>
                 </div>
                 <div class="col-md-4">
+                    <label class="form-label" for="expiryDate">Expiry date <span class="text-muted fw-normal">(on the pack)</span></label>
+                    <input class="form-control" type="date" th:field="*{expiryDate}">
+                </div>
+                <div class="col-12" data-mz-take-common hidden>
+                    <div class="mz-take-common">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" th:field="*{takeFromCommon}">
+                            <label class="form-check-label" th:for="${#ids.prev('takeFromCommon')}">
+                                <span class="fw-semibold">Move it from common medicines</span>
+                                <span class="d-block small text-muted" data-mz-take-common-text>There's some on the common shelf.</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-1" data-mz-person-only>
+                <div class="col-12"><hr class="my-1"><h3 class="h6 mb-0 mt-2">Refills</h3></div>
+                <div class="col-md-6">
                     <label class="form-label" for="reorderThresholdDays">Act when supply is down to</label>
                     <div class="input-group">
                         <input class="form-control" type="number" min="1" max="30" th:field="*{reorderThresholdDays}" th:errorclass="is-invalid">
-                        <span class="input-group-text">days</span>
+                        <span class="input-group-text">dose days</span>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label" for="reorderPacks">Packs per refill</label>
                     <input class="form-control" type="number" min="1" max="20" th:field="*{reorderPacks}" th:errorclass="is-invalid">
                 </div>
@@ -82,7 +168,7 @@
                             <span class="fw-semibold" th:text="${mode.label}"></span>
                             <span class="small text-muted" th:switch="${mode.name()}">
                                 <span th:case="'MANUAL'">: we notify you and you reorder with one tap.</span>
-                                <span th:case="'AUTO'">: we place a cash-on-delivery order to your saved address. Rx medicines need an approved prescription on file.</span>
+                                <span th:case="'AUTO'">: we place a cash-on-delivery order to your saved address, for the same person. Rx medicines need an approved prescription on file.</span>
                                 <span th:case="*">: reminders only.</span>
                             </span>
                         </label>
@@ -92,7 +178,7 @@
         </section>
 
         <div class="d-flex gap-2">
-            <button class="btn btn-primary" type="submit">Save medicine</button>
+            <button class="btn btn-primary" type="submit" th:text="${form.setupRequired} ? 'Start reminders' : 'Save medicine'">Save medicine</button>
             <a th:href="@{/plans}" class="btn btn-outline-secondary">Cancel</a>
         </div>
     </form>

@@ -64,8 +64,10 @@
                        th:text="${me != null} ? ${me.firstName} : 'Account'">Account</a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" th:href="@{/profile}"><i class="bi bi-person me-2"></i>Profile and address</a></li>
+                        <li sec:authorize="hasRole('CUSTOMER')"><a class="dropdown-item" th:href="@{/members}"><i class="bi bi-people me-2"></i>Family members</a></li>
                         <li sec:authorize="hasRole('CUSTOMER')"><a class="dropdown-item" th:href="@{/prescriptions}"><i class="bi bi-file-earmark-medical me-2"></i>Prescriptions</a></li>
                         <li><a class="dropdown-item" th:href="@{/notifications}"><i class="bi bi-bell me-2"></i>Notifications</a></li>
+                        <li sec:authorize="hasRole('CUSTOMER')"><a class="dropdown-item" th:href="@{/notifications/settings}"><i class="bi bi-sliders me-2"></i>Alerts on this device</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <form th:action="@{/logout}" method="post">
@@ -84,6 +86,21 @@
 </nav>
 
 <div th:fragment="flash" class="container mz-flash">
+    <!-- A family account on a new device chooses whose reminders pop up here -->
+    <div th:if="${deviceNeedsSetup}" class="mz-device-prompt mt-3" role="region" aria-label="Alerts on this device">
+        <i class="bi bi-phone-vibrate" aria-hidden="true"></i>
+        <div class="flex-grow-1">
+            <strong>Whose reminders should this device show?</strong>
+            <div class="small text-muted">Pick everyone, or only the family members who use this device.</div>
+        </div>
+        <form th:action="@{/notifications/settings}" method="post" class="d-flex gap-2 flex-wrap">
+            <input type="hidden" name="deviceId" th:value="${device.id}">
+            <input type="hidden" name="allMembers" value="true">
+            <input type="hidden" name="returnTo" th:value="${currentPath}">
+            <button class="btn btn-sm btn-primary" type="submit">Everyone</button>
+            <a class="btn btn-sm btn-outline-primary" th:href="@{/notifications/settings}">Choose members</a>
+        </form>
+    </div>
     <div th:if="${success}" class="alert alert-success alert-dismissible fade show mt-3" role="status">
         <i class="bi bi-check-circle me-2"></i><span th:text="${success}"></span>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -155,6 +172,8 @@
         <ul class="nav">
             <li class="nav-item"><a class="nav-link" th:classappend="${active == 'dashboard'} ? 'active'" th:href="@{/admin}">Overview</a></li>
             <li class="nav-item"><a class="nav-link" th:classappend="${active == 'orders'} ? 'active'" th:href="@{/admin/orders}">Orders</a></li>
+            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'sales'} ? 'active'" th:href="@{/admin/sales}">Sales</a></li>
+            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'returns'} ? 'active'" th:href="@{/admin/returns}">Returns</a></li>
             <li class="nav-item"><a class="nav-link" th:classappend="${active == 'prescriptions'} ? 'active'" th:href="@{/admin/prescriptions}">Prescriptions</a></li>
             <li class="nav-item"><a class="nav-link" th:classappend="${active == 'medicines'} ? 'active'" th:href="@{/admin/medicines}">Catalog</a></li>
             <li class="nav-item"><a class="nav-link" th:classappend="${active == 'users'} ? 'active'" th:href="@{/admin/users}">Users</a></li>

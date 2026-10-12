@@ -20,6 +20,10 @@ public class Notification {
     @Enumerated(EnumType.STRING)
     private NotificationType type;
 
+    /** The family member it's about, if any; devices can choose to pop up only some members' alerts. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Member member;
+
     private String title;
 
     @Column(length = 1000)

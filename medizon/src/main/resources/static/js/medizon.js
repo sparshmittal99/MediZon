@@ -277,6 +277,150 @@
         });
     });
 
+    // ---- cart: who each medicine is for, saved as boxes are ticked ----
+    document.addEventListener('change', async (e) => {
+        const box = e.target;
+        const form = box.closest('form[data-mz-members]');
+        if (!form || box.type !== 'checkbox') return;
+        const err = form.querySelector('.mz-qty-error');
+        const ids = [...form.querySelectorAll('input[name="memberIds"]:checked')].map(i => Number(i.value));
+        form.classList.add('is-busy');
+        try {
+            const res = await mzFetch('/api/cart/' + form.dataset.mzMembers + '/members', { method: 'POST', body: JSON.stringify({ memberIds: ids }) });
+            if (res.redirected) { location.href = res.url; return; }
+            const data = await res.json();
+            if (!res.ok) {
+                box.checked = !box.checked;                 // put the box back the way the server has it
+                err.textContent = data.error || 'Could not save that.';
+                err.hidden = false;
+                clearTimeout(err._t);
+                err._t = setTimeout(() => { err.hidden = true; }, 5000);
+            } else {
+                err.hidden = true;
+            }
+        } catch (ex) {
+            box.checked = !box.checked;
+            err.textContent = 'Could not reach MediZon. Check your connection.';
+            err.hidden = false;
+        } finally {
+            form.classList.remove('is-busy');
+        }
+    });
+    document.querySelectorAll('form[data-mz-members] noscript').forEach(n => n.remove());
+
+    // ---- plan form: show the fields for the chosen schedule; custom dates as removable chips ----
+    document.querySelectorAll('[data-mz-schedule]').forEach(section => {
+        const radios = section.querySelectorAll('[data-mz-schedule-type]');
+        const sync = () => {
+            const type = [...radios].find(r => r.checked)?.value || 'EVERY_DAY';
+            section.querySelectorAll('[data-show-for]').forEach(el => {
+                el.hidden = !el.dataset.showFor.split(' ').includes(type);
+            });
+        };
+        radios.forEach(r => r.addEventListener('change', sync));
+        sync();
+
+        // The common shelf only tracks stock: no schedule or refills. For a person, offer to move stock off the shelf.
+        const member = document.querySelector('[data-mz-plan-member]');
+        const medicine = document.querySelector('[data-mz-plan-medicine]');
+        const take = document.querySelector('[data-mz-take-common]');
+        if (member) {
+            const syncMember = () => {
+                const shelf = member.selectedOptions[0]?.dataset.common === 'true';
+                document.querySelectorAll('[data-mz-person-only]').forEach(el => { el.hidden = shelf; });
+                document.querySelectorAll('[data-mz-shelf-only]').forEach(el => { el.hidden = !shelf; });
+                if (take && medicine) {
+                    const opt = medicine.selectedOptions[0];
+                    const units = Number(opt?.dataset.shelf || 0);
+                    take.hidden = shelf || units <= 0;
+                    take.querySelector('[data-mz-take-common-text]').textContent = units > 0
+                        ? `${units} ${opt.dataset.unit} on the common shelf. We'll move what this course needs, or all of it for an ongoing medicine.`
+                        : '';
+                }
+            };
+            member.addEventListener('change', syncMember);
+            if (medicine) medicine.addEventListener('change', syncMember);
+            syncMember();
+        }
+
+        const dates = section.querySelector('[data-mz-dates]');
+        if (!dates) return;
+        const input = dates.querySelector('[data-mz-date-input]');
+        const add = dates.querySelector('[data-mz-date-add]');
+        const list = dates.querySelector('[data-mz-date-list]');
+        input.removeAttribute('name');            // with JavaScript, the chips carry the dates
+        add.hidden = false;
+        const fmt = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        const addDate = () => {
+            const v = input.value;
+            if (!v) { input.focus(); return; }
+            if (list.querySelector(`input[value="${v}"]`)) { input.value = ''; return; }
+            const li = document.createElement('li');
+            li.innerHTML = '<input type="hidden" name="customDates"><span></span>'
+                + '<button type="button" class="btn-close btn-close-sm" aria-label="Remove date" data-mz-date-remove></button>';
+            li.querySelector('input').value = v;
+            li.querySelector('span').textContent = fmt.format(new Date(v + 'T00:00:00'));
+            const after = [...list.children].find(c => c.querySelector('input').value > v);
+            list.insertBefore(li, after || null);
+            input.value = '';
+            input.focus();
+        };
+        add.addEventListener('click', addDate);
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addDate(); } });
+        list.addEventListener('click', (e) => {
+            if (e.target.matches('[data-mz-date-remove]')) e.target.closest('li').remove();
+        });
+    });
+
+    // ---- alerts on this device: member picks only matter for "Only these members" ----
+    document.querySelectorAll('[data-mz-device-form]').forEach(form => {
+        const picks = form.querySelector('[data-mz-member-picks]');
+        const sync = () => {
+            const all = form.querySelector('[data-mz-all]:checked')?.value !== 'false';
+            picks.classList.toggle('is-off', all);
+            picks.querySelectorAll('input').forEach(i => { i.disabled = all; });
+        };
+        form.querySelectorAll('[data-mz-all]').forEach(r => r.addEventListener('change', sync));
+        sync();
+    });
+
+    // ---- return request: photo previews and the photo limit ----
+    document.querySelectorAll('[data-mz-return-photos]').forEach(input => {
+        const box = document.querySelector('[data-mz-photo-previews]');
+        const err = document.querySelector('[data-mz-photo-error]');
+        const max = Number(input.dataset.max || 3);
+        let urls = [];
+        input.addEventListener('change', () => {
+            urls.forEach(u => URL.revokeObjectURL(u));
+            box.replaceChildren();
+            err.hidden = input.files.length <= max;
+            if (input.files.length > max) {
+                err.textContent = `Choose at most ${max} photos.`;
+                input.value = '';
+                urls = [];
+                return;
+            }
+            urls = [...input.files].map(f => URL.createObjectURL(f));
+            urls.forEach((u, i) => {
+                const img = document.createElement('img');
+                img.src = u;
+                img.alt = 'Photo ' + (i + 1);
+                box.appendChild(img);
+            });
+        });
+    });
+
+    // ---- admin sales report: show the inputs for the chosen period type; financial years read best month by month ----
+    document.querySelectorAll('[data-mz-period-form]').forEach(form => {
+        const sync = (changed) => {
+            const kind = form.querySelector('[data-mz-period]:checked')?.value || 'range';
+            form.querySelectorAll('[data-period-for]').forEach(el => { el.hidden = el.dataset.periodFor !== kind; });
+            if (changed && kind === 'fy') form.querySelector('#gMonth').checked = true;
+        };
+        form.querySelectorAll('[data-mz-period]').forEach(r => r.addEventListener('change', () => sync(true)));
+        sync(false);
+    });
+
     // "Turn on desktop alerts" buttons
     document.querySelectorAll('[data-mz-enable-alerts]').forEach(btn => {
         const sync = () => {

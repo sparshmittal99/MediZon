@@ -25,6 +25,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     long countByStatus(OrderStatus status);
     long countBySource(OrderSource source);
     long countByCreatedAtAfter(LocalDateTime since);
+    List<Order> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(LocalDateTime from, LocalDateTime to);
 
     /** Rows of [userId, orderCount] for the admin user list. */
     @Query("select o.user.id, count(o) from CustomerOrder o group by o.user.id")

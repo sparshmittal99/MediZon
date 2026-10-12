@@ -69,9 +69,15 @@
             <div class="mz-panel">
                 <h2 class="h5 mb-3">Order summary</h2>
                 <div th:each="i : ${cart.items}" class="d-flex justify-content-between small mb-2">
-                    <span th:text="${i.quantity} + ' × ' + ${i.medicine.name}"></span>
+                    <span>
+                        <span th:text="${i.quantity} + ' × ' + ${i.medicine.name}"></span>
+                        <span class="d-block text-muted" th:if="${!#lists.isEmpty(i.sortedMembers)}"
+                              th:text="'For ' + ${#strings.listJoin(i.sortedMembers.![label], ', ')}"></span>
+                        <span class="d-block text-danger" th:if="${#lists.isEmpty(i.sortedMembers)}">Choose who it's for in the cart</span>
+                    </span>
                     <span th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></span>
                 </div>
+                <a th:href="@{/cart}" class="small">Change who medicines are for</a>
                 <hr>
                 <div class="d-flex justify-content-between mb-1"><span>Subtotal</span><span th:text="'₹' + ${cart.subtotal}"></span></div>
                 <div class="d-flex justify-content-between mb-3"><span>Delivery</span>

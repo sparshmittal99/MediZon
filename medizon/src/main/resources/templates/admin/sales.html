@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Sales and returns')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page"
+      th:with="kind=${#strings.toLowerCase(p.kind.name())}, todayDate=${#temporals.createToday()}">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+        <div>
+            <h1 class="mz-page-title mb-1">Sales and returns</h1>
+            <p class="text-muted small mb-0">Sales are what customers paid (GST and delivery included) on orders that weren't cancelled,
+                counted on the day the order was placed. Refunds count on the day they were paid; net revenue is sales minus refunds.</p>
+        </div>
+    </div>
+
+    <!-- Period -->
+    <form th:action="@{/admin/sales}" method="get" class="mz-panel mb-3" data-mz-period-form>
+        <div class="d-flex flex-wrap align-items-end gap-3">
+            <div>
+                <span class="form-label small d-block mb-1">Period</span>
+                <div class="mz-segmented" role="radiogroup" aria-label="Period type">
+                    <input type="radio" class="btn-check" name="period" id="pRange" value="range" th:checked="${kind == 'range'}" data-mz-period>
+                    <label class="btn btn-sm btn-outline-primary" for="pRange">Date range</label>
+                    <input type="radio" class="btn-check" name="period" id="pMonth" value="month" th:checked="${kind == 'month'}" data-mz-period>
+                    <label class="btn btn-sm btn-outline-primary" for="pMonth">Month</label>
+                    <input type="radio" class="btn-check" name="period" id="pFy" value="fy" th:checked="${kind == 'fy'}" data-mz-period>
+                    <label class="btn btn-sm btn-outline-primary" for="pFy">Financial year</label>
+                </div>
+            </div>
+            <div class="d-flex gap-2" data-period-for="range">
+                <div>
+                    <label class="form-label small mb-1" for="from">From</label>
+                    <input class="form-control form-control-sm" type="date" id="from" name="from" th:value="${p.from}" th:max="${todayDate}">
+                </div>
+                <div>
+                    <label class="form-label small mb-1" for="to">To</label>
+                    <input class="form-control form-control-sm" type="date" id="to" name="to" th:value="${p.to}" th:max="${todayDate}">
+                </div>
+            </div>
+            <div data-period-for="month">
+                <label class="form-label small mb-1" for="month">Month</label>
+                <input class="form-control form-control-sm" type="month" id="month" name="month"
+                       th:value="${p.month != null} ? ${p.month} : ${thisMonth}" th:max="${thisMonth}">
+            </div>
+            <div data-period-for="fy">
+                <label class="form-label small mb-1" for="fy">Financial year</label>
+                <select class="form-select form-select-sm" id="fy" name="fy">
+                    <option th:each="y : ${fys}" th:value="${y}" th:text="'FY ' + ${y} + ' (Apr–Mar)'"
+                            th:selected="${p.fy != null ? y == p.fy : y == thisFy}"></option>
+                </select>
+            </div>
+            <div>
+                <span class="form-label small d-block mb-1">Show</span>
+                <div class="mz-segmented" role="radiogroup" aria-label="Group rows by">
+                    <input type="radio" class="btn-check" name="group" id="gDay" value="day" th:checked="${!monthly}" th:disabled="${!dailyAllowed}">
+                    <label class="btn btn-sm btn-outline-secondary" for="gDay" th:title="${dailyAllowed} ? '' : 'Periods over a year are shown month by month'">Day-wise</label>
+                    <input type="radio" class="btn-check" name="group" id="gMonth" value="month" th:checked="${monthly}">
+                    <label class="btn btn-sm btn-outline-secondary" for="gMonth">Month-wise</label>
+                </div>
+            </div>
+            <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" id="hideEmpty" name="hideEmpty" value="true" th:checked="${hideEmpty}">
+                <label class="form-check-label small" for="hideEmpty">Hide empty rows</label>
+            </div>
+            <button class="btn btn-sm btn-primary" type="submit">Show</button>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-3 pt-3 border-top">
+            <span class="small text-muted align-self-center me-1">Quick:</span>
+            <a class="mz-chip" th:href="@{/admin/sales(from=${todayDate}, to=${todayDate})}"
+               th:classappend="${kind == 'range' and p.singleDay and p.to == todayDate} ? 'active'">Today</a>
+            <a class="mz-chip" th:href="@{/admin/sales(from=${last7})}" th:classappend="${kind == 'range' and p.from == last7 and p.to == todayDate} ? 'active'">Last 7 days</a>
+            <a class="mz-chip" th:href="@{/admin/sales(from=${last30})}" th:classappend="${kind == 'range' and p.from == last30 and p.to == todayDate} ? 'active'">Last 30 days</a>
+            <a class="mz-chip" th:href="@{/admin/sales(from=${last90})}" th:classappend="${kind == 'range' and p.from == last90 and p.to == todayDate} ? 'active'">Last 90 days</a>
+            <a class="mz-chip" th:href="@{/admin/sales(period='month', month=${thisMonth})}" th:classappend="${kind == 'month' and p.month == thisMonth} ? 'active'">This month</a>
+            <a class="mz-chip" th:href="@{/admin/sales(period='month', month=${lastMonth})}" th:classappend="${kind == 'month' and p.month == lastMonth} ? 'active'">Last month</a>
+            <a class="mz-chip" th:href="@{/admin/sales(period='fy', fy=${thisFy})}" th:classappend="${kind == 'fy' and p.fy == thisFy} ? 'active'" th:text="'This FY (' + ${thisFy} + ')'">This FY</a>
+            <a class="mz-chip" th:href="@{/admin/sales(period='fy', fy=${lastFy})}" th:classappend="${kind == 'fy' and p.fy == lastFy} ? 'active'" th:text="'Last FY (' + ${lastFy} + ')'">Last FY</a>
+        </div>
+    </form>
+
+    <!-- Export -->
+    <details class="mz-export mb-4" th:with="q=${kind == 'fy'} ? ('period=fy&fy=' + ${p.fy}) : (${kind == 'month'} ? ('period=month&month=' + ${p.month}) : ('period=range&from=' + ${p.from} + '&to=' + ${p.to}))">
+        <summary class="btn btn-outline-primary"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Export
+            <span class="fw-normal" th:text="${p.label}"></span></summary>
+        <div class="mz-panel mt-2">
+            <form th:action="@{/admin/sales.xlsx}" method="get">
+                <input type="hidden" name="period" th:value="${kind}">
+                <th:block th:switch="${kind}">
+                    <input th:case="'fy'" type="hidden" name="fy" th:value="${p.fy}">
+                    <input th:case="'month'" type="hidden" name="month" th:value="${p.month}">
+                    <th:block th:case="*">
+                        <input type="hidden" name="from" th:value="${p.from}">
+                        <input type="hidden" name="to" th:value="${p.to}">
+                    </th:block>
+                </th:block>
+                <h2 class="h6 mb-1">Excel workbook (.xlsx)</h2>
+                <p class="small text-muted mb-3">Always includes a Summary sheet with sales, returns, net revenue and GST totals. Add:</p>
+                <div class="row row-cols-1 row-cols-md-2 g-2 mb-3">
+                    <div class="col" th:each="sec : ${sections}">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="sheets" th:value="${sec}" th:id="'sheet' + ${sec}" checked>
+                            <label class="form-check-label" th:for="'sheet' + ${sec}">
+                                <span class="fw-semibold" th:text="${sec.title}"></span>
+                                <span class="d-block small text-muted" th:text="${sec.description}"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-download me-1"></i>Download Excel</button>
+                    <a class="btn btn-link" th:href="@{'/admin/sales.csv?' + ${q} + '&group=' + (${monthly} ? 'month' : 'day')}">
+                        or the table below as CSV</a>
+                </div>
+            </form>
+        </div>
+    </details>
+
+    <!-- Today -->
+    <h2 class="mz-section-title">Today</h2>
+    <div class="row row-cols-2 row-cols-lg-4 g-3 mb-4">
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${today.orders}">0</div>
+            <div class="mz-stat-label">Orders placed</div>
+            <div class="mz-stat-sub" th:if="${today.cancelled > 0}" th:text="${today.cancelled} + ' cancelled'"></div></div></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="'₹' + ${#numbers.formatDecimal(today.sales, 1, 'COMMA', 2, 'POINT')}">0</div>
+            <div class="mz-stat-label">Sales</div>
+            <div class="mz-stat-sub" th:text="${today.packs} + ' pack(s) sold'"></div></div></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${today.returns}">0</div>
+            <div class="mz-stat-label">Returns requested</div>
+            <div class="mz-stat-sub" th:text="${today.refundCount} + ' refunded, ₹' + ${#numbers.formatDecimal(today.refunds, 1, 'COMMA', 2, 'POINT')}"></div></div></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="'₹' + ${#numbers.formatDecimal(today.net, 1, 'COMMA', 2, 'POINT')}">0</div>
+            <div class="mz-stat-label">Net revenue</div></div></div>
+    </div>
+
+    <!-- Selected period -->
+    <h2 class="mz-section-title" th:text="${p.label}">Period</h2>
+    <div class="row row-cols-2 row-cols-lg-4 g-3 mb-4">
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${period.orders}">0</div>
+            <div class="mz-stat-label">Orders placed</div>
+            <div class="mz-stat-sub" th:text="${period.cancelled} + ' cancelled · avg order ₹' + ${#numbers.formatDecimal(period.averageOrder, 1, 'COMMA', 2, 'POINT')}"></div></div></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="'₹' + ${#numbers.formatDecimal(period.sales, 1, 'COMMA', 2, 'POINT')}">0</div>
+            <div class="mz-stat-label">Sales</div>
+            <div class="mz-stat-sub" th:text="${period.packs} + ' pack(s) sold'"></div></div></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${period.returns}">0</div>
+            <div class="mz-stat-label">Returns requested</div>
+            <div class="mz-stat-sub" th:text="${period.refundCount} + ' refunded, ₹' + ${#numbers.formatDecimal(period.refunds, 1, 'COMMA', 2, 'POINT')}"></div></div></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="'₹' + ${#numbers.formatDecimal(period.net, 1, 'COMMA', 2, 'POINT')}">0</div>
+            <div class="mz-stat-label">Net revenue</div></div></div>
+    </div>
+
+    <!-- All time -->
+    <h2 class="mz-section-title">All time</h2>
+    <div class="row row-cols-2 row-cols-lg-4 g-3 mb-5">
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${allTime.orders}">0</div>
+            <div class="mz-stat-label">Orders placed</div>
+            <div class="mz-stat-sub" th:text="${allTime.cancelled} + ' cancelled'"></div></div></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="'₹' + ${#numbers.formatDecimal(allTime.sales, 1, 'COMMA', 2, 'POINT')}">0</div>
+            <div class="mz-stat-label">Sales</div>
+            <div class="mz-stat-sub" th:text="${allTime.packs} + ' pack(s) sold'"></div></div></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${allTime.returns}">0</div>
+            <div class="mz-stat-label">Returns requested</div>
+            <div class="mz-stat-sub" th:text="${allTime.refundCount} + ' refunded, ₹' + ${#numbers.formatDecimal(allTime.refunds, 1, 'COMMA', 2, 'POINT')}"></div></div></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="'₹' + ${#numbers.formatDecimal(allTime.net, 1, 'COMMA', 2, 'POINT')}">0</div>
+            <div class="mz-stat-label">Net revenue</div></div></div>
+    </div>
+
+    <!-- Rows -->
+    <h2 class="h5 mb-2" th:text="${monthly} ? 'Month by month' : 'Day by day'">Day by day</h2>
+    <div th:if="${#lists.isEmpty(rows)}" class="mz-panel mz-empty"><i class="bi bi-calendar3"></i><p class="mb-0">No activity in this period.</p></div>
+    <div th:unless="${#lists.isEmpty(rows)}" class="mz-panel-flush">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0 mz-num-table">
+                <thead><tr>
+                    <th th:text="${monthly} ? 'Month' : 'Date'">Date</th><th class="text-end">Orders</th><th class="text-end">Cancelled</th><th class="text-end">Packs</th>
+                    <th class="text-end">Sales</th><th class="text-end">Returns</th><th class="text-end">Refunded</th><th class="text-end">Net revenue</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="d : ${rows}" th:classappend="${d.empty} ? 'mz-row-quiet'">
+                    <td class="text-nowrap">
+                        <a th:if="${d.monthly}" th:href="@{/admin/sales(period='month', month=${d.month}, group='day')}"
+                           th:text="${#temporals.format(d.day, 'MMMM yyyy')}" title="Show this month day by day"></a>
+                        <th:block th:unless="${d.monthly}">
+                            <span th:text="${#temporals.format(d.day, 'EEE, d MMM yyyy')}"></span>
+                            <span th:if="${d.day == todayDate}" class="badge mz-auto-badge ms-1">Today</span>
+                        </th:block>
+                    </td>
+                    <td class="text-end" th:text="${d.orders}"></td>
+                    <td class="text-end" th:text="${d.cancelled}"></td>
+                    <td class="text-end" th:text="${d.packs}"></td>
+                    <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(d.sales, 1, 'COMMA', 2, 'POINT')}"></td>
+                    <td class="text-end" th:text="${d.returns}"></td>
+                    <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(d.refunds, 1, 'COMMA', 2, 'POINT')}"></td>
+                    <td class="text-end fw-semibold" th:text="'₹' + ${#numbers.formatDecimal(d.net, 1, 'COMMA', 2, 'POINT')}"></td>
+                </tr>
+                </tbody>
+                <tfoot>
+                <tr class="fw-bold">
+                    <td>Total</td>
+                    <td class="text-end" th:text="${period.orders}"></td>
+                    <td class="text-end" th:text="${period.cancelled}"></td>
+                    <td class="text-end" th:text="${period.packs}"></td>
+                    <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(period.sales, 1, 'COMMA', 2, 'POINT')}"></td>
+                    <td class="text-end" th:text="${period.returns}"></td>
+                    <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(period.refunds, 1, 'COMMA', 2, 'POINT')}"></td>
+                    <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(period.net, 1, 'COMMA', 2, 'POINT')}"></td>
+                </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</main>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

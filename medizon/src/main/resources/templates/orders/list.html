@@ -7,31 +7,106 @@
 
 <main class="container mz-page">
     <h1 class="mz-page-title mb-4">Your orders</h1>
-    <div th:if="${#lists.isEmpty(orders)}" class="mz-panel mz-empty">
+
+    <div th:unless="${hasOrders}" class="mz-panel mz-empty">
         <i class="bi bi-box-seam"></i>
         <p class="mb-3">You haven't placed an order yet.</p>
         <a th:href="@{/medicines}" class="btn btn-primary">Browse medicines</a>
     </div>
-    <div th:unless="${#lists.isEmpty(orders)}" class="mz-panel-flush">
-        <div class="table-responsive">
-            <table class="table align-middle mb-0">
-                <thead><tr><th>Order</th><th>Placed</th><th>Items</th><th>Total</th><th>Status</th><th></th></tr></thead>
-                <tbody>
-                <tr th:each="o : ${orders}">
-                    <td>
-                        <span class="fw-semibold" th:text="${o.orderNumber}"></span>
-                        <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Auto refill</span>
-                    </td>
-                    <td th:text="${#temporals.format(o.createdAt, 'd MMM yyyy')}"></td>
-                    <td th:text="${o.itemCount} + ' pack(s)'"></td>
-                    <td th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td>
-                    <td><span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span></td>
-                    <td class="text-end"><a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-sm btn-outline-primary">View</a></td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+
+    <th:block th:if="${hasOrders}">
+        <nav class="mz-order-tabs mb-4" aria-label="Order sections">
+            <a th:each="t : ${ {'pending', 'completed', 'cancelled', 'returns'} }" th:href="@{/orders(tab=${t})}"
+               class="mz-order-tab" th:classappend="${tab == t} ? 'active'" th:attr="aria-current=${tab == t} ? 'page'">
+                <i class="bi" th:classappend="${t == 'pending'} ? 'bi-truck' : (${t == 'completed'} ? 'bi-check2-circle' : (${t == 'cancelled'} ? 'bi-x-circle' : 'bi-arrow-return-left'))"
+                   aria-hidden="true"></i>
+                <span th:text="${#strings.capitalize(t)}">Pending</span>
+                <span class="mz-order-tab-count" th:text="${counts.get(t)}">0</span>
+            </a>
+        </nav>
+
+        <!-- Pending, completed, cancelled -->
+        <th:block th:unless="${tab == 'returns'}">
+            <div th:if="${#lists.isEmpty(orders)}" class="mz-panel mz-empty">
+                <i class="bi" th:classappend="${tab == 'pending'} ? 'bi-truck' : (${tab == 'completed'} ? 'bi-check2-circle' : 'bi-x-circle')"></i>
+                <p class="mb-0" th:switch="${tab}">
+                    <span th:case="'pending'">Nothing on its way right now.</span>
+                    <span th:case="'completed'">No delivered orders yet.</span>
+                    <span th:case="*">No cancelled orders.</span>
+                </p>
+            </div>
+            <p class="small text-muted mb-2" th:if="${tab == 'pending' and !#lists.isEmpty(orders)}">
+                Placed, confirmed and shipped orders. You can cancel an order until it ships.</p>
+            <div th:unless="${#lists.isEmpty(orders)}" class="mz-panel-flush">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead><tr>
+                            <th>Order</th><th>Placed</th>
+                            <th th:text="${tab == 'completed'} ? 'Delivered' : (${tab == 'cancelled'} ? 'Cancelled' : 'Items')">Items</th>
+                            <th>Total</th><th>Status</th><th></th>
+                        </tr></thead>
+                        <tbody>
+                        <tr th:each="o : ${orders}" th:with="ret=${latestReturn.get(o.id)}">
+                            <td>
+                                <span class="fw-semibold" th:text="${o.orderNumber}"></span>
+                                <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Auto refill</span>
+                                <div class="small text-muted" th:text="${o.itemCount} + ' pack(s)'" th:unless="${tab == 'pending'}"></div>
+                            </td>
+                            <td th:text="${#temporals.format(o.createdAt, 'd MMM yyyy')}"></td>
+                            <td th:switch="${tab}">
+                                <span th:case="'completed'" th:text="${o.deliveredAt != null} ? ${#temporals.format(o.deliveredAt, 'd MMM yyyy')} : '-'"></span>
+                                <span th:case="'cancelled'" th:text="${#temporals.format(o.updatedAt, 'd MMM yyyy')}"></span>
+                                <span th:case="*" th:text="${o.itemCount} + ' pack(s)'"></span>
+                            </td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td>
+                            <td>
+                                <span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
+                                <a th:if="${ret != null}" th:href="@{/orders(tab='returns')}" class="d-block small mt-1"
+                                   th:text="${ret.status.name() == 'REFUNDED'} ? 'Returned, refunded' : (${ret.open} ? 'Return in progress' : 'Return ' + ${#strings.toLowerCase(ret.status.label)})"></a>
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <a th:if="${o.invoiceAvailable}" th:href="@{/orders/{id}/invoice(id=${o.id})}" class="btn btn-sm btn-link">Invoice</a>
+                                <a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-sm btn-outline-primary">View</a>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </th:block>
+
+        <!-- Returns -->
+        <th:block th:if="${tab == 'returns'}">
+            <div th:if="${#lists.isEmpty(returns)}" class="mz-panel mz-empty">
+                <i class="bi bi-arrow-return-left"></i>
+                <p class="mb-1">No returns.</p>
+                <p class="small mb-0">Something wrong with a delivered order? Open it from Completed and choose Return items within 7 days of delivery.</p>
+            </div>
+            <div th:unless="${#lists.isEmpty(returns)}" class="mz-panel-flush">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead><tr><th>Return</th><th>Order</th><th>Items</th><th>Requested</th><th>Refund</th><th>Status</th></tr></thead>
+                        <tbody>
+                        <tr th:each="r : ${returns}">
+                            <td>
+                                <span class="fw-semibold" th:text="${r.returnNumber}"></span>
+                                <div class="small text-muted" th:text="${r.reason.label}"></div>
+                            </td>
+                            <td><a th:href="@{/orders/{id}(id=${r.order.id})}" th:text="${r.order.orderNumber}"></a></td>
+                            <td class="small">
+                                <div th:each="ri : ${r.items}" th:text="${ri.quantity} + ' × ' + ${ri.orderItem.medicineName}"></div>
+                            </td>
+                            <td th:text="${#temporals.format(r.createdAt, 'd MMM yyyy')}"></td>
+                            <td th:text="'₹' + ${r.refundAmount}"></td>
+                            <td><span class="badge" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span>
+                                <div th:if="${r.adminNote}" class="small text-muted mt-1" th:text="${r.adminNote}"></div></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </th:block>
+    </th:block>
 </main>
 
 <footer th:replace="~{fragments/layout :: footer}"></footer>

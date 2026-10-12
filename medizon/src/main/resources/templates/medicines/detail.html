@@ -32,6 +32,13 @@
             </div>
             <p class="small text-muted mb-4" th:text="'Pack of ' + ${m.unitsPerPack} + ' ' + ${m.unitLabel} + ', inclusive of all taxes'"></p>
 
+            <p class="mz-expiry mb-3" th:if="${m.expiryDate != null}"
+               th:classappend="${m.expired} ? 'is-expired'">
+                <i class="bi" th:classappend="${m.expired} ? 'bi-exclamation-triangle' : 'bi-calendar-check'" aria-hidden="true"></i>
+                <span th:if="${!m.expired}" th:text="'Expiry ' + ${#temporals.format(m.expiryDate, 'MMM yyyy')} + ' or later'"></span>
+                <span th:if="${m.expired}">Current stock has expired, so it can't be ordered right now.</span>
+            </p>
+
             <div th:if="${m.prescriptionRequired}" class="mz-rx-note mb-4">
                 <i class="bi bi-file-earmark-medical me-1"></i>
                 <strong>Prescription required.</strong> Upload a valid prescription; a pharmacist verifies it before dispatch.
@@ -59,7 +66,8 @@
                 <dt>Manufacturer</dt><dd th:text="${m.manufacturer}">-</dd>
                 <dt>Form</dt><dd th:text="${m.dosageForm}">-</dd>
                 <dt>Category</dt><dd th:text="${m.category}">-</dd>
-                <dt>Availability</dt><dd th:text="${m.inStock} ? 'In stock' : 'Out of stock'">-</dd>
+                <dt>Availability</dt><dd th:text="${m.expired} ? 'Unavailable' : (${m.inStock} ? 'In stock' : 'Out of stock')">-</dd>
+                <dt>Expiry</dt><dd th:text="${m.expiryDate != null} ? ${#temporals.format(m.expiryDate, 'MMM yyyy')} : 'Shown on the pack'">-</dd>
             </dl>
         </div>
     </div>

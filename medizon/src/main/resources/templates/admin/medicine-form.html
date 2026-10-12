@@ -58,9 +58,28 @@
                 <input class="form-control" type="number" min="0" th:field="*{stock}" th:errorclass="is-invalid">
                 <div class="invalid-feedback" th:errors="*{stock}"></div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-3">
+                <label class="form-label" for="expiryDate">Expiry date</label>
+                <input class="form-control" type="date" th:field="*{expiryDate}">
+                <div class="form-text">Of the batch in stock. Expired stock can't be ordered.</div>
+            </div>
+            <div class="col-md-3">
                 <label class="form-label" for="strength">Strength</label>
                 <input class="form-control" th:field="*{strength}" placeholder="500 mg">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="hsnCode">HSN code</label>
+                <input class="form-control" th:field="*{hsnCode}" inputmode="numeric" maxlength="8" th:errorclass="is-invalid">
+                <div class="invalid-feedback" th:errors="*{hsnCode}"></div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="gstRate">GST rate (%)</label>
+                <input class="form-control" type="number" step="0.01" min="0" max="40" th:field="*{gstRate}" list="gstRates" th:errorclass="is-invalid">
+                <datalist id="gstRates"><option value="0"><option value="5"><option value="12"><option value="18"></datalist>
+                <div class="invalid-feedback" th:errors="*{gstRate}"></div>
+            </div>
+            <div class="col-12">
+                <div class="form-text mt-0">Prices include GST. Invoices work out the tax inside the price from this rate and HSN code.</div>
             </div>
 
             <div class="col-12" data-mz-image-picker>

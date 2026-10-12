@@ -7,7 +7,8 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <a th:href="${adminView} ? @{/admin/orders} : @{/orders}" class="small"><i class="bi bi-arrow-left"></i> All orders</a>
+    <a th:href="${adminView} ? @{/admin/orders} : @{/orders(tab=${o.status.name() == 'DELIVERED'} ? 'completed' : (${o.status.name() == 'CANCELLED'} ? 'cancelled' : 'pending'))}"
+       class="small"><i class="bi bi-arrow-left"></i> All orders</a>
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mt-2 mb-4">
         <div>
             <h1 class="mz-page-title" th:text="'Order ' + ${o.orderNumber}">Order</h1>
@@ -16,7 +17,12 @@
                 <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Placed by auto refill</span>
             </p>
         </div>
-        <span class="badge fs-6" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
+        <div class="d-flex align-items-center gap-2">
+            <a th:if="${o.invoiceAvailable}" class="btn btn-sm btn-outline-primary"
+               th:href="${adminView} ? @{/admin/orders/{id}/invoice(id=${o.id})} : @{/orders/{id}/invoice(id=${o.id})}">
+                <i class="bi bi-receipt me-1"></i>Tax invoice</a>
+            <span class="badge fs-6" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
+        </div>
     </div>
 
     <div class="mz-panel mb-4" th:if="${o.status.name() != 'CANCELLED'}">
@@ -33,7 +39,12 @@
                     <thead><tr><th>Medicine</th><th>Price</th><th>Packs</th><th class="text-end">Amount</th></tr></thead>
                     <tbody>
                     <tr th:each="i : ${o.items}">
-                        <td th:text="${i.medicineName}"></td>
+                        <td>
+                            <span th:text="${i.medicineName}"></span>
+                            <!-- Who it's for is the customer's business; admins only see the medicines -->
+                            <div th:if="${!adminView and !#lists.isEmpty(i.sortedMembers)}" class="small text-muted"
+                                 th:text="'For ' + ${i.membersLabel}"></div>
+                        </td>
                         <td th:text="'₹' + ${i.unitPrice}"></td>
                         <td th:text="${i.quantity}"></td>
                         <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></td>
@@ -45,6 +56,41 @@
                         <td class="text-end fw-bold" th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td></tr>
                     </tfoot>
                 </table>
+            </div>
+
+            <!-- Returns -->
+            <section th:each="r : ${returns}" class="mz-panel mt-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                    <div>
+                        <h2 class="h6 mb-0">
+                            <a th:if="${adminView}" th:href="@{/admin/returns/{id}(id=${r.id})}" th:text="'Return ' + ${r.returnNumber}"></a>
+                            <span th:unless="${adminView}" th:text="'Return ' + ${r.returnNumber}"></span>
+                        </h2>
+                        <div class="small text-muted" th:text="'Requested ' + ${#temporals.format(r.createdAt, 'd MMM yyyy')} + ' · ' + ${r.reason.label}"></div>
+                    </div>
+                    <span class="badge" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span>
+                </div>
+                <ol class="mz-track mz-track-sm my-3" th:if="${r.status.name() != 'REJECTED'}">
+                    <li th:each="s : ${r.trackSteps}" th:classappend="${r.reached(s)} ? 'done'"
+                        th:text="${s.name() == 'REQUESTED'} ? 'Requested' : (${s.name() == 'APPROVED'} ? 'Approved' : ${s.label})">Step</li>
+                </ol>
+                <ul class="small mb-2 ps-3">
+                    <li th:each="ri : ${r.items}" th:text="${ri.quantity} + ' × ' + ${ri.orderItem.medicineName} + ', ₹' + ${ri.amount}"></li>
+                </ul>
+                <p class="small mb-1" th:if="${r.details}" th:text="${r.details}"></p>
+                <p class="small mb-1" th:if="${r.adminNote}"><strong>Pharmacist:</strong> <span th:text="${r.adminNote}"></span></p>
+                <p class="small mb-0 fw-semibold" th:text="(${r.status.name() == 'REFUNDED'} ? 'Refunded ' : 'Refund ') + '₹' + ${r.refundAmount}"></p>
+            </section>
+
+            <div th:if="${!adminView and o.status.name() == 'DELIVERED'}" class="mz-panel mt-4 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                    <h2 class="h6 mb-0">Something wrong with your order?</h2>
+                    <div class="small text-muted" th:if="${returnBlocker == null}"
+                         th:text="'Return damaged, wrong or expired medicines until ' + ${#temporals.format(returnBy, 'd MMM yyyy')} + '.'"></div>
+                    <div class="small text-muted" th:if="${returnBlocker != null}" th:text="${returnBlocker}"></div>
+                </div>
+                <a th:if="${returnBlocker == null}" th:href="@{/orders/{id}/return(id=${o.id})}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-return-left me-1"></i>Return items</a>
             </div>
 
             <!-- Review: shown once delivered -->

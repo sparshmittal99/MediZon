@@ -7,17 +7,40 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <h1 class="mz-page-title mb-4">Pharmacy overview</h1>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h1 class="mz-page-title mb-0">Pharmacy overview</h1>
+        <a th:href="@{/admin/sales}" class="btn btn-outline-primary"><i class="bi bi-graph-up me-1"></i>Sales and returns report</a>
+    </div>
 
-    <div class="row row-cols-2 row-cols-lg-3 row-cols-xl-6 g-3 mb-5">
+    <h2 class="mz-section-title">Today</h2>
+    <div class="row row-cols-2 row-cols-lg-4 g-3 mb-4">
+        <div class="col"><a th:href="@{/admin/sales(from=${today.day}, to=${today.day})}" class="text-decoration-none text-reset">
+            <div class="mz-stat"><div class="mz-stat-value" th:text="${today.orders}">0</div><div class="mz-stat-label">Orders today</div>
+                <div class="mz-stat-sub" th:text="${today.cancelled > 0} ? ${today.cancelled} + ' cancelled' : ${today.packs} + ' pack(s)'"></div></div></a></div>
+        <div class="col"><a th:href="@{/admin/sales(from=${today.day}, to=${today.day})}" class="text-decoration-none text-reset">
+            <div class="mz-stat"><div class="mz-stat-value" th:text="'₹' + ${#numbers.formatDecimal(today.sales, 1, 'COMMA', 2, 'POINT')}">0</div>
+                <div class="mz-stat-label">Sales today</div>
+                <div class="mz-stat-sub" th:text="'Net ₹' + ${#numbers.formatDecimal(today.net, 1, 'COMMA', 2, 'POINT')} + ' after refunds'"></div></div></a></div>
+        <div class="col"><a th:href="@{/admin/returns}" class="text-decoration-none text-reset">
+            <div class="mz-stat"><div class="mz-stat-value" th:text="${today.returns}">0</div><div class="mz-stat-label">Returns today</div>
+                <div class="mz-stat-sub" th:text="${today.refundCount} + ' refunded, ₹' + ${#numbers.formatDecimal(today.refunds, 1, 'COMMA', 2, 'POINT')}"></div></div></a></div>
+        <div class="col"><a th:href="@{/admin/returns(status='REQUESTED')}" class="text-decoration-none text-reset">
+            <div class="mz-stat" th:classappend="${returnsToReview > 0} ? 'is-attention'">
+                <div class="mz-stat-value" th:text="${returnsToReview}">0</div><div class="mz-stat-label">Returns to review</div></div></a></div>
+    </div>
+
+    <h2 class="mz-section-title">Store</h2>
+    <div class="row row-cols-2 row-cols-lg-5 g-3 mb-5">
         <div class="col"><a th:href="@{/admin/orders(status='PLACED')}" class="text-decoration-none text-reset">
             <div class="mz-stat" th:classappend="${toConfirm > 0} ? 'is-attention'">
                 <div class="mz-stat-value" th:text="${toConfirm}">0</div><div class="mz-stat-label">Orders to confirm</div></div></a></div>
         <div class="col"><a th:href="@{/admin/prescriptions}" class="text-decoration-none text-reset">
             <div class="mz-stat" th:classappend="${pendingRx > 0} ? 'is-attention'">
                 <div class="mz-stat-value" th:text="${pendingRx}">0</div><div class="mz-stat-label">Prescriptions to review</div></div></a></div>
-        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${ordersToday}">0</div><div class="mz-stat-label">Orders today</div></div></div>
-        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="'₹' + ${#numbers.formatDecimal(revenue, 1, 'COMMA', 0, 'POINT')}">0</div><div class="mz-stat-label">Revenue, all time</div></div></div>
+        <div class="col"><a th:href="@{/admin/sales}" class="text-decoration-none text-reset">
+            <div class="mz-stat"><div class="mz-stat-value" th:text="'₹' + ${#numbers.formatDecimal(revenue, 1, 'COMMA', 2, 'POINT')}">0</div>
+            <div class="mz-stat-label">Revenue after refunds</div>
+            <div class="mz-stat-sub" th:if="${refunded.signum() > 0}" th:text="'₹' + ${#numbers.formatDecimal(refunded, 1, 'COMMA', 2, 'POINT')} + ' refunded'"></div></div></a></div>
         <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${autoOrders}">0</div><div class="mz-stat-label">Auto refill orders</div></div></div>
         <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${activePlans}">0</div><div class="mz-stat-label">Active reminder plans</div></div></div>
     </div>

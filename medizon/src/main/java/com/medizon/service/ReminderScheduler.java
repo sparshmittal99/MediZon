@@ -2,6 +2,8 @@ package com.medizon.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -37,11 +39,22 @@ public class ReminderScheduler {
         }
     }
 
-    /** Every morning: close finished courses and sweep all plans for low supply. */
+    /** Every morning: clear expired stock, close finished courses and sweep all plans for low supply. */
     @Scheduled(cron = "0 0 9 * * *")
     public void dailySupplyCheck() {
+        clearExpiredStock();
         planService.closeEndedPlans(LocalDate.now());
         planService.activePlanIds().forEach(this::safeEvaluate);
+    }
+
+    /** Also on startup, so expiries that passed while the app was down are handled straight away. */
+    @EventListener(ApplicationReadyEvent.class)
+    public void clearExpiredStock() {
+        try {
+            planService.clearExpired(LocalDate.now()).forEach(this::safeEvaluate);   // written-off supply may need a refill
+        } catch (Exception e) {
+            log.error("Expired stock sweep failed", e);
+        }
     }
 
     private void safeEvaluate(Long planId) {

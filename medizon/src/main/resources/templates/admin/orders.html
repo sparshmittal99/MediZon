@@ -30,7 +30,9 @@
                     <td class="text-nowrap" th:text="${#temporals.format(o.createdAt, 'd MMM, h:mm a')}"></td>
                     <td th:text="'₹' + ${o.total}"></td>
                     <td class="small" th:text="${o.paymentMethod.name()} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></td>
-                    <td><span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span></td>
+                    <td><span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
+                        <a th:if="${o.invoiceAvailable}" th:href="@{/admin/orders/{id}/invoice(id=${o.id})}" class="d-block small mt-1">
+                            <i class="bi bi-receipt"></i> Invoice</a></td>
                     <td>
                         <form th:unless="${#lists.isEmpty(o.status.nextStatuses)}" th:action="@{/admin/orders/{id}/status(id=${o.id})}" method="post" class="d-flex gap-1">
                             <select name="status" class="form-select form-select-sm" aria-label="New status">

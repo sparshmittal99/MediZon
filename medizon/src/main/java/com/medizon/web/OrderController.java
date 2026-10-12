@@ -1,15 +1,21 @@
 package com.medizon.web;
 
-import com.medizon.domain.Order;
-import com.medizon.domain.PaymentMethod;
-import com.medizon.domain.User;
+import com.medizon.domain.*;
 import com.medizon.dto.CartSummary;
 import com.medizon.service.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.util.*;
 
 @Controller
 @RequiredArgsConstructor
@@ -19,6 +25,8 @@ public class OrderController {
     private final CartService cartService;
     private final PrescriptionService prescriptionService;
     private final ReviewService reviewService;
+    private final InvoiceService invoiceService;
+    private final ReturnService returnService;
     private final CurrentUser currentUser;
 
     @GetMapping("/checkout")
@@ -41,9 +49,38 @@ public class OrderController {
         return "redirect:/orders/" + o.getId();
     }
 
+    /** Order sections on the customer's Orders page. */
+    private static final Map<String, Set<OrderStatus>> TABS = Map.of(
+            "pending", EnumSet.of(OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.SHIPPED),
+            "completed", EnumSet.of(OrderStatus.DELIVERED),
+            "cancelled", EnumSet.of(OrderStatus.CANCELLED));
+
+    /**
+     * Orders in four sections: pending (placed, confirmed, shipped), completed (delivered), cancelled, and returns.
+     * Without a tab it opens on pending, or on completed when nothing is on its way.
+     */
     @GetMapping("/orders")
-    public String list(Model model) {
-        model.addAttribute("orders", orderService.forUser(currentUser.get()));
+    public String list(@RequestParam(required = false) String tab, Model model) {
+        User user = currentUser.get();
+        List<Order> all = orderService.forUser(user);
+        List<ReturnRequest> returns = returnService.forUser(user);
+
+        Map<String, List<Order>> byTab = new LinkedHashMap<>();
+        TABS.forEach((name, statuses) -> byTab.put(name, all.stream().filter(o -> statuses.contains(o.getStatus())).toList()));
+        String selected = tab != null && (TABS.containsKey(tab) || tab.equals("returns")) ? tab
+                : !byTab.get("pending").isEmpty() || all.isEmpty() ? "pending" : "completed";
+
+        // Latest return per order, for the badge on completed orders
+        Map<Long, ReturnRequest> latestReturn = new HashMap<>();
+        returns.forEach(r -> latestReturn.putIfAbsent(r.getOrder().getId(), r));   // newest first
+
+        model.addAttribute("tab", selected);
+        model.addAttribute("orders", selected.equals("returns") ? List.of() : byTab.get(selected));
+        model.addAttribute("counts", Map.of("pending", byTab.get("pending").size(), "completed", byTab.get("completed").size(),
+                "cancelled", byTab.get("cancelled").size(), "returns", returns.size()));
+        model.addAttribute("returns", returns);
+        model.addAttribute("latestReturn", latestReturn);
+        model.addAttribute("hasOrders", !all.isEmpty());
         return "orders/list";
     }
 
@@ -52,8 +89,19 @@ public class OrderController {
         Order o = orderService.getForUser(id, currentUser.get());
         model.addAttribute("o", o);
         model.addAttribute("review", reviewService.forOrder(o).orElse(null));
+        model.addAttribute("returns", returnService.forOrder(o));
+        model.addAttribute("returnBlocker", returnService.blocker(o).orElse(null));
+        model.addAttribute("returnBy", returnService.returnBy(o));
         model.addAttribute("adminView", false);
         return "orders/detail";
+    }
+
+    @GetMapping("/orders/{id}/invoice")
+    public String invoice(@PathVariable Long id, Model model) {
+        Order o = orderService.getForUser(id, currentUser.get());
+        model.addAttribute("inv", invoiceService.forOrder(o));
+        model.addAttribute("adminView", false);
+        return "orders/invoice";
     }
 
     @PostMapping("/orders/{id}/cancel")
@@ -77,5 +125,47 @@ public class OrderController {
         if (added == 0) ra.addFlashAttribute("error", "None of these items are available right now.");
         else ra.addFlashAttribute("success", added + " item(s) added to your cart.");
         return "redirect:/cart";
+    }
+
+    // ---------------------------------------------------------------- returns
+
+    @GetMapping("/orders/{id}/return")
+    public String returnForm(@PathVariable Long id, Model model, RedirectAttributes ra) {
+        Order o = orderService.getForUser(id, currentUser.get());
+        String blocker = returnService.blocker(o).orElse(null);
+        if (blocker != null) {
+            ra.addFlashAttribute("error", blocker);
+            return "redirect:/orders/" + id;
+        }
+        model.addAttribute("o", o);
+        model.addAttribute("returnable", returnService.returnable(o));
+        model.addAttribute("returnBy", returnService.returnBy(o));
+        model.addAttribute("reasons", ReturnReason.values());
+        model.addAttribute("maxImages", ReturnService.MAX_IMAGES);
+        return "orders/return";
+    }
+
+    @PostMapping("/orders/{id}/return")
+    public String requestReturn(@PathVariable Long id,
+                                @RequestParam(required = false) List<Long> itemId,
+                                @RequestParam(required = false) List<Integer> qty,
+                                @RequestParam(required = false) ReturnReason reason,
+                                @RequestParam(required = false) String details,
+                                @RequestParam(required = false) List<MultipartFile> images,
+                                RedirectAttributes ra) {
+        ReturnRequest r = returnService.request(currentUser.get(), id, itemId, qty, reason, details, images);
+        ra.addFlashAttribute("success", "Return " + r.getReturnNumber() + " requested. We'll let you know once it's reviewed.");
+        return "redirect:/orders/" + id;
+    }
+
+    /** Return photos: streamed to the customer who sent them and to admins only. */
+    @GetMapping("/returns/{id}/images/{index}")
+    public ResponseEntity<Resource> returnImage(@PathVariable Long id, @PathVariable int index) {
+        ReturnImage img = returnService.image(id, index, currentUser.get());
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(img.getContentType()))
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"return-" + id + "-" + (index + 1) + "\"")
+                .body(returnService.file(img));
     }
 }

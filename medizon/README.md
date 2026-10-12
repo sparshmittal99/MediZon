@@ -44,7 +44,8 @@ All settings are in `application.properties` and can be overridden with environm
 | `ASSISTANT_URL` | Where the assistant service runs (default `http://localhost:8001`) |
 | `ASSISTANT_TOKEN` | Optional shared secret; set the same value on both services |
 | `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_USER`, `MAIL_PASSWORD` | Email copies of reminders and alerts (logged only when disabled) |
-| `UPLOAD_DIR` | Where prescription files are stored |
+| `UPLOAD_DIR` | Where prescription files and return photos are stored |
+| `SELLER_NAME`, `SELLER_GSTIN`, `SELLER_DRUG_LICENSE`, `SELLER_ADDRESS`, `SELLER_STATE`, `SELLER_PHONE`, `SELLER_EMAIL` | Seller details on GST invoices. `SELLER_STATE` decides CGST + SGST (same state as the customer) or IGST |
 | `BASE_URL` | Used for links inside emails |
 | `MEDIZON_ADMIN_EMAIL`, `MEDIZON_ADMIN_PASSWORD`, `MEDIZON_ADMIN_NAME` | First admin account, created on startup when no admin exists |
 
@@ -52,10 +53,13 @@ All settings are in `application.properties` and can be overridden with environm
 
 **Customers**: search and browse by category, cart, checkout (COD, simulated UPI/card), order tracking,
 cancel before shipping, buy again, prescription upload, profile and address, notification centre,
-desktop notifications, chat assistant.
+desktop notifications, chat assistant, family members (each with their own medicines, reminders and supply),
+per-device alert settings (everyone, or only some members), choosing who each cart item is for (or the household's
+common OTC shelf), GST tax invoices, and returns with a reason and photos.
 
 **Pharmacist / admin**: dashboard, customer order pipeline (Placed → Confirmed → Shipped → Delivered / Cancelled),
-prescription review with validity date, catalog management with stock, low-stock list, customer accounts,
+prescription review with validity date, GST tax invoices, return review (approve or reject, pickup with optional
+restock, refund), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, medicines sold, HSN summary and returns sheets; CSV), catalog management with stock, low-stock list, customer accounts,
 creating other admin accounts, customer feedback, and a chat assistant for store tasks and review insights. Admin accounts are for running the store only; they can't shop, order or set reminders.
 
 ## How reminders and refills work
@@ -80,7 +84,31 @@ creating other admin accounts, customer feedback, and a chat assistant for store
 - A reminder counts the dose as taken. Tapping **Skip** adds it back, so the count stays right even if the customer never taps anything.
 - `reorderPending` makes sure there is one alert or one auto order per low-supply cycle. It clears when the refill is delivered or the customer edits the plan's supply.
 - A daily 9 AM sweep re-checks every plan and switches off courses whose end date has passed.
+- Each cart line is tagged with who it's for. On delivery the units go to those members' plans (split evenly when a
+  line is for several people). A member with no plan for that medicine yet gets one that holds the supply and waits
+  for its first schedule: dose times plus every day, certain weekdays, or specific dates.
+- Days left follow the real schedule, so weekly and custom-date plans aren't counted as daily.
+- Items bought as **Common (OTC)** go straight onto the household's common shelf, which only lists what's at home and
+  its expiry: no reminders or refill alerts. Adding that medicine to a person's list moves stock off the shelf: what the
+  rest of their course needs (or all of it for an ongoing medicine); an emptied shelf entry disappears.
+- Each medicine carries an expiry date: set per catalog item by the admin, shown on the product page, printed on the
+  invoice, and carried to the supply at home on delivery (the earliest expiry still at home is shown). Expired stock
+  can't be ordered.
+- Every morning (and on startup) expired stock at home is cleared with an alert: common-shelf entries and delivered
+  medicines that were never scheduled are removed from My medicines; a scheduled plan keeps its reminders but its
+  expired units are written off, which triggers the usual refill alert or auto order.
 - Each reminder becomes an in-app notification (bell), a desktop notification (the browser polls `/api/notifications/poll` every 30 s), and an email if mail is enabled.
+  Each browser has an `mz_device` cookie; a device that follows only some members doesn't pop up or count the others' alerts.
+
+## Invoices and returns
+
+- Prices are GST-inclusive. When an order ships it gets the next invoice number of the financial year
+  (`MZ/2026-27/00001`); the invoice works out each line's taxable value from its HSN code and GST rate (set per
+  medicine in the catalog). Delivery is taxed at the main item's rate as a composite supply. Print or save it as PDF
+  from the browser.
+- Customers can ask to return delivered items for 7 days, with a reason and 1 to 3 photos. An admin approves or
+  rejects it with a note; approved returns are marked picked up (the packs leave the member's supply count, and can go
+  back into stock) and then refunded.
 
 ## Chat assistant
 

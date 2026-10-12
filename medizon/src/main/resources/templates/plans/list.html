@@ -6,17 +6,52 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
         <div>
             <h1 class="mz-page-title">My medicines</h1>
-            <p class="text-muted mb-0">Dose reminders, what's left at home, and how each one gets refilled.</p>
+            <p class="text-muted mb-0">Dose reminders, what's left at home, and how each one gets refilled, for everyone in the family.</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-outline-primary" data-mz-enable-alerts>
-                <i class="bi bi-bell me-1"></i>Turn on desktop alerts</button>
-            <a th:href="@{/plans/new}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add medicine</a>
+            <a th:href="@{/notifications/settings}" class="btn btn-outline-primary"><i class="bi bi-bell me-1"></i>Alerts on this device</a>
+            <a th:href="@{/members}" class="btn btn-outline-primary"><i class="bi bi-people me-1"></i>Family</a>
+            <a th:href="${selected != null} ? @{/plans/new(memberId=${selected.id})} : @{/plans/new}" class="btn btn-primary">
+                <i class="bi bi-plus-lg me-1"></i>Add medicine</a>
         </div>
     </div>
+
+    <!-- Member tabs -->
+    <nav class="mz-member-tabs mb-4" aria-label="Family members">
+        <a class="mz-chip" th:classappend="${selected == null} ? 'active'" th:href="@{/plans}"
+           th:attr="aria-current=${selected == null} ? 'page'">Everyone</a>
+        <a th:each="m : ${members}" class="mz-chip" th:classappend="${selected != null and selected.id == m.id} ? 'active'"
+           th:href="@{/plans(member=${m.id})}" th:attr="aria-current=${selected != null and selected.id == m.id} ? 'page'">
+            <span class="mz-avatar mz-avatar-sm" th:classappend="${m.common} ? 'is-common'" th:text="${m.initial}" aria-hidden="true">M</span>
+            <span th:text="${m.label}">Me</span>
+            <span class="opacity-75" th:if="${planCount.get(m.id) != null}" th:text="'(' + ${planCount.get(m.id)} + ')'"></span>
+        </a>
+        <a class="mz-chip mz-chip-add" th:href="@{/members}" th:unless="${hasFamily}"><i class="bi bi-person-plus"></i> Add family member</a>
+    </nav>
+
+    <!-- Delivered medicines that still need a schedule -->
+    <section th:unless="${#lists.isEmpty(needSetup)}" class="mz-setup mb-4" id="setup">
+        <div class="d-flex align-items-start gap-3">
+            <i class="bi bi-alarm mz-setup-icon" aria-hidden="true"></i>
+            <div class="flex-grow-1">
+                <h2 class="h5 mb-1">Set reminders for delivered medicines</h2>
+                <p class="small mb-3">These arrived and are counted in the supply at home. Choose dose times and days to start reminders and refill alerts.</p>
+                <ul class="list-unstyled mb-0 d-grid gap-2">
+                    <li th:each="p : ${needSetup}" class="mz-setup-row">
+                        <span class="mz-avatar mz-avatar-sm" th:classappend="${p.member.common} ? 'is-common'" th:text="${p.member.initial}" aria-hidden="true"></span>
+                        <span class="flex-grow-1">
+                            <strong th:text="${p.medicine.name}">Medicine</strong>
+                            <span class="small text-muted" th:text="'for ' + ${p.member.label} + ' · ' + ${p.unitsRemaining} + ' ' + ${p.medicine.unitLabel} + ' at home'"></span>
+                        </span>
+                        <a th:href="@{/plans/{id}/edit(id=${p.id})}" class="btn btn-sm btn-amber">Set reminders</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </section>
 
     <!-- Today -->
     <section class="mz-pack mb-5" th:unless="${#lists.isEmpty(doses)}">
@@ -31,9 +66,11 @@
                 </span>
                 <span class="mz-slot-time" th:text="${#temporals.format(d.time, 'h:mm a')}">8:00 AM</span>
                 <span class="mz-slot-name" th:text="${d.plan.doseLabel} + ' ' + ${d.plan.medicine.name}">Medicine</span>
+                <span th:if="${!d.plan.member.self}" class="mz-slot-who" th:text="${d.plan.member.label}">Asha</span>
                 <span th:if="${d.state == 'taken' or d.state == 'skipped'}" class="small text-muted" th:text="${d.state == 'taken'} ? 'Taken' : 'Skipped'"></span>
                 <form th:if="${d.answerable or d.state == 'upcoming'}" th:action="@{/plans/{id}/dose(id=${d.plan.id})}" method="post">
                     <input type="hidden" name="time" th:value="${#temporals.format(d.time, 'HH:mm')}">
+                    <input type="hidden" name="returnTo" th:value="${selected != null} ? '/plans?member=' + ${selected.id} : '/plans'">
                     <button class="btn btn-primary" name="status" value="TAKEN" th:text="${d.state == 'upcoming'} ? 'Take now' : 'Taken'">Taken</button>
                     <button th:if="${d.answerable}" class="btn btn-outline-secondary" name="status" value="SKIPPED">Skip</button>
                 </form>
@@ -41,71 +78,130 @@
         </ol>
     </section>
 
-    <!-- Plans -->
-    <div th:if="${#lists.isEmpty(plans)}" class="mz-panel mz-empty">
-        <i class="bi bi-alarm"></i>
-        <p class="mb-1">You haven't added any medicines yet.</p>
-        <p class="small mb-3">Add one to get dose reminders and a heads-up before you run out.</p>
-        <a th:href="@{/plans/new}" class="btn btn-primary">Add medicine</a>
-    </div>
-
-    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
-        <div class="col" th:each="p : ${plans}" th:id="'plan-' + ${p.id}">
-            <article class="mz-plan" th:classappend="${!p.active} ? 'is-paused' : (${p.runningLow} ? 'is-low')">
-                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                    <div>
-                        <h3><a class="text-reset text-decoration-none" th:href="@{/medicines/{id}(id=${p.medicine.id})}" th:text="${p.medicine.name}">Name</a></h3>
-                        <div class="small text-muted" th:text="${p.doseLabel} + ', ' + ${p.reminderTimes.size()} + ' time(s) a day' + (${p.instructions != null and p.instructions != ''} ? (', ' + ${p.instructions}) : '')"></div>
-                    </div>
-                    <span th:unless="${p.active}" class="badge text-bg-secondary">Paused</span>
-                </div>
-
-                <div class="mb-3">
-                    <span class="mz-time" th:each="t : ${p.reminderTimes}" th:text="${#temporals.format(t, 'h:mm a')}">8:00 AM</span>
-                </div>
-
-                <div class="d-flex align-items-baseline gap-2">
-                    <span class="mz-days" th:text="${p.daysLeftRounded}">0</span>
-                    <span class="text-muted" th:text="${p.daysLeftRounded == 1} ? 'day left' : 'days left'">days left</span>
-                </div>
-                <div class="mz-meter" role="meter" th:aria-valuenow="${p.supplyPercent}" aria-valuemin="0" aria-valuemax="100"
-                     th:aria-label="'Supply for ' + ${p.medicine.name}">
-                    <span th:style="'width:' + ${p.supplyPercent} + '%'"></span>
-                </div>
-                <div class="small text-muted mb-3"
-                     th:text="${p.unitsRemaining} + ' ' + ${p.medicine.unitLabel} + ' at home' + (${p.dailyUnits > 0} ? (', runs out around ' + ${#temporals.format(p.runOutDate, 'd MMM')}) : '')"></div>
-
-                <div class="mz-mode mb-3" th:classappend="'mz-mode-' + ${p.reorderMode}">
-                    <i class="bi" th:classappend="${p.reorderMode.name() == 'AUTO'} ? 'bi-truck' : (${p.reorderMode.name() == 'MANUAL'} ? 'bi-bell' : 'bi-bell-slash')"></i>
-                    <span th:text="${p.reorderMode.label}"></span>
-                    <span th:if="${p.reorderMode.name() != 'OFF'}" class="text-muted fw-normal"
-                          th:text="'at ' + ${p.reorderThresholdDays} + ' days, ' + ${p.reorderPacks} + ' pack(s)'"></span>
-                    <div th:if="${p.reorderPending}" class="small text-muted fw-normal mt-1">
-                        <span th:text="${p.reorderMode.name() == 'AUTO'} ? 'Refill ordered' : 'Refill alert sent'"></span>
-                        <span th:if="${p.lastReorderAt != null}" th:text="' on ' + ${#temporals.format(p.lastReorderAt, 'd MMM')}"></span>
-                    </div>
-                </div>
-
-                <div class="mt-auto d-flex flex-wrap gap-2">
-                    <form th:action="@{/plans/{id}/reorder(id=${p.id})}" method="post">
-                        <button class="btn btn-sm" th:classappend="${p.runningLow} ? 'btn-amber' : 'btn-outline-primary'" type="submit">
-                            <i class="bi bi-bag-plus me-1"></i>Reorder now</button>
-                    </form>
-                    <a th:href="@{/plans/{id}/edit(id=${p.id})}" class="btn btn-sm btn-outline-secondary">Edit</a>
-                    <form th:action="@{/plans/{id}/toggle(id=${p.id})}" method="post">
-                        <button class="btn btn-sm btn-outline-secondary" type="submit" th:text="${p.active} ? 'Pause' : 'Resume'">Pause</button>
-                    </form>
-                    <form th:action="@{/plans/{id}/delete(id=${p.id})}" method="post"
-                          data-mz-confirm="Remove this medicine and its reminders?" data-mz-confirm-ok="Remove">
-                        <button class="btn btn-sm btn-link text-danger" type="submit" aria-label="Remove"><i class="bi bi-trash"></i></button>
-                    </form>
-                </div>
-            </article>
+    <!-- One section per member -->
+    <section th:each="m : ${sections}" class="mb-5" th:with="list=${plansByMember.get(m.id)}">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <h2 class="mz-member-head">
+                <span class="mz-avatar" th:classappend="${m.common} ? 'is-common'" th:text="${m.initial}" aria-hidden="true">M</span>
+                <span>
+                    <span th:text="${m.label}">Me</span>
+                    <span th:if="${m.relation}" class="small text-muted fw-normal" th:text="${m.relation}"></span>
+                </span>
+            </h2>
+            <a th:href="@{/plans/new(memberId=${m.id})}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-plus-lg me-1"></i><span th:text="${m.self} ? 'Add medicine' : (${m.common} ? 'Add to the shelf' : 'Add for ' + ${m.label})">Add medicine</span></a>
         </div>
-    </div>
+
+        <div th:if="${list == null}" class="mz-panel mz-empty">
+            <i class="bi" th:classappend="${m.common} ? 'bi-house-heart' : 'bi-alarm'"></i>
+            <p class="mb-1" th:text="${m.common} ? 'No common medicines yet.' : (${m.self} ? 'No medicines in your list yet.' : 'No medicines for ' + ${m.label} + ' yet.')"></p>
+            <p class="small mb-0" th:text="${m.common}
+                    ? 'Mark household medicines like paracetamol or ORS as Common (OTC) in the cart and they land here when delivered.'
+                    : 'Add one to get dose reminders and a heads-up before it runs out. Medicines bought for this person show up here when delivered.'"></p>
+        </div>
+
+        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3" th:if="${list != null}">
+            <div class="col" th:each="p : ${list}" th:id="'plan-' + ${p.id}">
+                <!-- Common shelf: what's at home, no reminders -->
+                <article class="mz-plan mz-shelf-item" th:if="${p.onCommonShelf}">
+                    <h3 class="mb-1"><a class="text-reset text-decoration-none" th:href="@{/medicines/{id}(id=${p.medicine.id})}" th:text="${p.medicine.name}">Name</a></h3>
+                    <div class="small text-muted mb-3">At home for anyone who needs it. No reminders.</div>
+                    <div class="d-flex align-items-baseline gap-2 mb-2">
+                        <span class="mz-days" th:text="${p.unitsRemaining}">0</span>
+                        <span class="text-muted" th:text="${p.medicine.unitLabel} + ' at home'">at home</span>
+                    </div>
+                    <div class="mz-expiry" th:classappend="${p.expired} ? 'is-expired' : (${p.expiringSoon} ? 'is-soon')">
+                        <i class="bi" th:classappend="${p.expired or p.expiringSoon} ? 'bi-exclamation-triangle' : 'bi-calendar-check'" aria-hidden="true"></i>
+                        <span th:if="${p.expiryDate == null}" class="text-muted">Expiry not recorded</span>
+                        <span th:if="${p.expiryDate != null and p.expired}" th:text="'Expired ' + ${#temporals.format(p.expiryDate, 'MMM yyyy')} + '. Do not use it'"></span>
+                        <span th:if="${p.expiryDate != null and !p.expired}" th:text="'Expires ' + ${#temporals.format(p.expiryDate, 'd MMM yyyy')}"></span>
+                    </div>
+                    <div class="mt-auto pt-3 d-flex flex-wrap gap-2">
+                        <a th:href="@{/plans/new(medicineId=${p.medicine.id})}" class="btn btn-sm btn-outline-primary"
+                           title="Set doses for one person; what their course needs moves to their list">
+                            <i class="bi bi-person-check me-1"></i>Give to someone</a>
+                        <form th:action="@{/plans/{id}/reorder(id=${p.id})}" method="post">
+                            <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-bag-plus me-1"></i>Buy more</button>
+                        </form>
+                        <a th:href="@{/plans/{id}/edit(id=${p.id})}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                        <form th:action="@{/plans/{id}/delete(id=${p.id})}" method="post"
+                              data-mz-confirm="Remove this medicine from the common shelf?" data-mz-confirm-ok="Remove">
+                            <button class="btn btn-sm btn-link text-danger" type="submit" aria-label="Remove"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
+                </article>
+
+                <article class="mz-plan" th:unless="${p.onCommonShelf}" th:classappend="${!p.active} ? 'is-paused' : (${p.runningLow} ? 'is-low')">
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                        <div>
+                            <h3><a class="text-reset text-decoration-none" th:href="@{/medicines/{id}(id=${p.medicine.id})}" th:text="${p.medicine.name}">Name</a></h3>
+                            <div class="small text-muted" th:if="${p.dailyUnits > 0}"
+                                 th:text="${p.doseLabel} + ', ' + ${p.reminderTimes.size()} + ' time(s) a day' + (${p.instructions != null and p.instructions != ''} ? (', ' + ${p.instructions}) : '')"></div>
+                        </div>
+                        <span th:unless="${p.active}" class="badge text-bg-secondary">Paused</span>
+                    </div>
+
+                    <div class="mb-3" th:if="${p.dailyUnits > 0}">
+                        <div class="small fw-semibold mb-1"><i class="bi bi-calendar3 me-1" aria-hidden="true"></i><span th:text="${p.scheduleLabel}"></span></div>
+                        <span class="mz-time" th:each="t : ${p.reminderTimes}" th:text="${#temporals.format(t, 'h:mm a')}">8:00 AM</span>
+                    </div>
+
+                    <th:block th:if="${p.dailyUnits > 0}">
+                        <div class="d-flex align-items-baseline gap-2" th:unless="${p.supplyEnough}">
+                            <span class="mz-days" th:text="${p.daysLeftRounded}">0</span>
+                            <span class="text-muted" th:text="${p.daysLeftRounded == 1} ? 'dose day left' : 'dose days left'">days left</span>
+                        </div>
+                        <div class="d-flex align-items-baseline gap-2" th:if="${p.supplyEnough}">
+                            <span class="mz-days"><i class="bi bi-check2-circle"></i></span>
+                            <span class="text-muted">Enough for the course</span>
+                        </div>
+                        <div class="mz-meter" role="meter" th:aria-valuenow="${p.supplyPercent}" aria-valuemin="0" aria-valuemax="100"
+                             th:aria-label="'Supply for ' + ${p.medicine.name}">
+                            <span th:style="'width:' + ${p.supplyPercent} + '%'"></span>
+                        </div>
+                    </th:block>
+                    <div class="small text-muted mb-2"
+                         th:text="${p.unitsRemaining} + ' ' + ${p.medicine.unitLabel} + ' at home' + (${p.dailyUnits > 0 and !p.supplyEnough} ? (', runs out around ' + ${#temporals.format(p.runOutDate, 'd MMM')}) : '')"></div>
+                    <div class="mz-expiry mb-3" th:classappend="${p.expired} ? 'is-expired' : (${p.expiringSoon} ? 'is-soon')">
+                        <i class="bi" th:classappend="${p.expired or p.expiringSoon} ? 'bi-exclamation-triangle' : 'bi-calendar-check'" aria-hidden="true"></i>
+                        <span th:if="${p.expiryDate == null}" class="text-muted">Expiry not recorded</span>
+                        <span th:if="${p.expiryDate != null and p.expired}" th:text="'Expired ' + ${#temporals.format(p.expiryDate, 'MMM yyyy')} + '. Do not use it'"></span>
+                        <span th:if="${p.expiryDate != null and !p.expired}" th:text="'Expires ' + ${#temporals.format(p.expiryDate, 'd MMM yyyy')}"></span>
+                    </div>
+
+                    <div class="mz-mode mb-3" th:classappend="'mz-mode-' + ${p.reorderMode}" th:if="${p.dailyUnits > 0}">
+                        <i class="bi" th:classappend="${p.reorderMode.name() == 'AUTO'} ? 'bi-truck' : (${p.reorderMode.name() == 'MANUAL'} ? 'bi-bell' : 'bi-bell-slash')"></i>
+                        <span th:text="${p.reorderMode.label}"></span>
+                        <span th:if="${p.reorderMode.name() != 'OFF'}" class="text-muted fw-normal"
+                              th:text="'at ' + ${p.reorderThresholdDays} + ' days, ' + ${p.reorderPacks} + ' pack(s)'"></span>
+                        <div th:if="${p.reorderPending}" class="small text-muted fw-normal mt-1">
+                            <span th:text="${p.reorderMode.name() == 'AUTO'} ? 'Refill ordered' : 'Refill alert sent'"></span>
+                            <span th:if="${p.lastReorderAt != null}" th:text="' on ' + ${#temporals.format(p.lastReorderAt, 'd MMM')}"></span>
+                        </div>
+                    </div>
+
+                    <div class="mt-auto d-flex flex-wrap gap-2">
+                        <form th:action="@{/plans/{id}/reorder(id=${p.id})}" method="post">
+                            <button class="btn btn-sm" th:classappend="${p.runningLow} ? 'btn-amber' : 'btn-outline-primary'" type="submit">
+                                <i class="bi bi-bag-plus me-1"></i>Reorder now</button>
+                        </form>
+                        <a th:href="@{/plans/{id}/edit(id=${p.id})}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                        <form th:action="@{/plans/{id}/toggle(id=${p.id})}" method="post" th:if="${p.dailyUnits > 0}">
+                            <button class="btn btn-sm btn-outline-secondary" type="submit" th:text="${p.active} ? 'Pause' : 'Resume'">Pause</button>
+                        </form>
+                        <form th:action="@{/plans/{id}/delete(id=${p.id})}" method="post"
+                              data-mz-confirm="Remove this medicine and its reminders?" data-mz-confirm-ok="Remove">
+                            <button class="btn btn-sm btn-link text-danger" type="submit" aria-label="Remove"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </section>
 
     <p class="small text-muted mt-4">Each reminder counts the dose as taken and deducts it from what's at home; tap Skip and it's added back.
-        Delivered orders top up the count automatically.</p>
+        Delivered orders top up the count of the person each medicine was bought for. Common (OTC) medicines sit on the shelf
+        with no reminders; add one to a person's list and what their doses need moves across.</p>
 </main>
 
 <footer th:replace="~{fragments/layout :: footer}"></footer>

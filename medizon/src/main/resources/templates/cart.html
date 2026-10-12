@@ -26,6 +26,23 @@
                                 <a class="fw-semibold text-decoration-none" th:href="@{/medicines/{id}(id=${i.medicine.id})}" th:text="${i.medicine.name}">Name</a>
                                 <span th:if="${i.medicine.prescriptionRequired}" class="mz-rx position-static ms-1">Rx</span>
                                 <div class="small text-muted" th:text="'₹' + ${i.medicine.price} + ' per pack of ' + ${i.medicine.unitsPerPack}"></div>
+                                <form class="mz-for" th:action="@{/cart/{id}/members(id=${i.medicine.id})}" method="post"
+                                      th:attr="data-mz-members=${i.medicine.id}">
+                                    <span class="mz-for-label" th:id="'for' + ${i.id}">For</span>
+                                    <div class="mz-member-picks" role="group" th:attr="aria-labelledby='for' + ${i.id}">
+                                        <label th:each="m : ${people}" class="mz-pick mz-pick-sm">
+                                            <input type="checkbox" name="memberIds" th:value="${m.id}" th:checked="${i.hasMember(m.id)}">
+                                            <span th:text="${m.label}">Me</span>
+                                        </label>
+                                        <label th:unless="${i.medicine.prescriptionRequired}" class="mz-pick mz-pick-sm mz-pick-common"
+                                               title="Shared household medicine, not for one person">
+                                            <input type="checkbox" name="memberIds" th:value="${common.id}" th:checked="${i.hasMember(common.id)}">
+                                            <span><i class="bi bi-house-heart me-1" aria-hidden="true"></i>Common (OTC)</span>
+                                        </label>
+                                    </div>
+                                    <noscript><button class="btn btn-sm btn-link p-0" type="submit">Save</button></noscript>
+                                    <div class="mz-qty-error small" role="alert" hidden></div>
+                                </form>
                             </td>
                             <td>
                                 <div th:replace="~{fragments/layout :: cartStepper(${i.medicine}, false)}"></div>
@@ -55,6 +72,10 @@
                 <hr>
                 <div class="d-flex justify-content-between fw-bold fs-5 mb-3"><span>Total</span>
                     <span data-mz-total th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
+                <p class="small text-muted" th:if="${#lists.size(people) > 1}">
+                    Tick who each medicine is for; it's added to their list when delivered. Pick several people and the packs are shared between them.</p>
+                <p class="small text-muted" th:if="${#lists.size(people) == 1}">
+                    Buying for family? <a th:href="@{/members}">Add family members</a> and choose who each medicine is for.</p>
                 <div class="mz-rx-note small mb-3" data-mz-rx-note th:hidden="${!cart.prescriptionRequired}">
                     Some items need a prescription. You'll choose or upload one at checkout.
                 </div>

@@ -1,6 +1,8 @@
 package com.medizon.service;
 
+import com.medizon.domain.Member;
 import com.medizon.domain.Notification;
+import com.medizon.domain.NotificationDevice;
 import com.medizon.domain.NotificationType;
 import com.medizon.domain.User;
 import com.medizon.repository.NotificationRepository;
@@ -26,7 +28,7 @@ public class NotificationService {
 
     private static final Set<NotificationType> EMAILED = EnumSet.of(
             NotificationType.DOSE_REMINDER, NotificationType.REORDER_ALERT,
-            NotificationType.AUTO_REORDER, NotificationType.PRESCRIPTION_UPDATE);
+            NotificationType.AUTO_REORDER, NotificationType.PRESCRIPTION_UPDATE, NotificationType.EXPIRY_ALERT);
 
     private static final Duration ALERT_WINDOW = Duration.ofMinutes(15);
 
@@ -39,8 +41,15 @@ public class NotificationService {
 
     @Transactional
     public Notification notify(User user, NotificationType type, String title, String message, String link) {
+        return notify(user, type, title, message, link, null);
+    }
+
+    /** {@code member} tags alerts about one family member, so each device can choose whose alerts it pops up. */
+    @Transactional
+    public Notification notify(User user, NotificationType type, String title, String message, String link, Member member) {
         Notification n = new Notification();
         n.setUser(user);
+        n.setMember(member);
         n.setType(type);
         n.setTitle(title);
         n.setMessage(message);
@@ -61,6 +70,13 @@ public class NotificationService {
     public List<Notification> recent(User user) { return notifications.findTop50ByUserOrderByCreatedAtDesc(user); }
 
     public long unreadCount(User user) { return notifications.countByUserAndReadFalse(user); }
+
+    /** Unread count for the bell on one device: members it doesn't follow aren't counted. */
+    public long unreadCount(User user, NotificationDevice device) {
+        if (device == null || device.isAllMembers()) return unreadCount(user);
+        Set<Long> ids = device.getMemberIds();
+        return ids.isEmpty() ? notifications.countUnreadWithoutMember(user) : notifications.countUnreadFor(user, ids);
+    }
 
     /** Returns the link to follow after marking the notification read. */
     @Transactional
@@ -83,6 +99,12 @@ public class NotificationService {
     public List<Notification> newSince(User user, long afterId) {
         return notifications.findByUserAndReadFalseAndIdGreaterThanAndCreatedAtAfterOrderByIdAsc(
                 user, afterId, LocalDateTime.now().minus(ALERT_WINDOW));
+    }
+
+    /** As above, minus alerts about members this device doesn't follow. */
+    @Transactional(readOnly = true)
+    public List<Notification> newSince(User user, long afterId, NotificationDevice device) {
+        return newSince(user, afterId).stream().filter(n -> device == null || device.allows(n.getMember())).toList();
     }
 
     public long latestId(User user) { return notifications.latestId(user); }

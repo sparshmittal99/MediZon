@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Return ' + ${r.returnNumber})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <a th:href="@{/admin/returns}" class="small"><i class="bi bi-arrow-left"></i> All returns</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mt-2 mb-4">
+        <div>
+            <h1 class="mz-page-title" th:text="'Return ' + ${r.returnNumber}">Return</h1>
+            <p class="text-muted mb-0">
+                <span th:text="'Requested ' + ${#temporals.format(r.createdAt, 'd MMM yyyy, h:mm a')} + ' by ' + ${r.user.fullName}"></span>
+                · <a th:href="@{/admin/orders/{id}(id=${r.order.id})}" th:text="'Order ' + ${r.order.orderNumber}"></a>
+                <span th:if="${r.order.deliveredAt != null}" th:text="', delivered ' + ${#temporals.format(r.order.deliveredAt, 'd MMM')}"></span>
+            </p>
+        </div>
+        <span class="badge fs-6" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span>
+    </div>
+
+    <div class="mz-panel mb-4" th:if="${r.status.name() != 'REJECTED'}">
+        <ol class="mz-track">
+            <li th:each="s : ${r.trackSteps}" th:classappend="${r.reached(s)} ? 'done'"
+                th:text="${s.name() == 'REQUESTED'} ? 'Requested' : (${s.name() == 'APPROVED'} ? 'Approved' : ${s.label})">Step</li>
+        </ol>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="mz-panel-flush mb-4">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Medicine</th><th>Ordered</th><th>Returning</th><th class="text-end">Refund</th></tr></thead>
+                    <tbody>
+                    <tr th:each="ri : ${r.items}">
+                        <td th:text="${ri.orderItem.medicineName}"></td>
+                        <td th:text="${ri.orderItem.quantity} + ' pack(s)'"></td>
+                        <td th:text="${ri.quantity} + ' pack(s)'"></td>
+                        <td class="text-end" th:text="'₹' + ${ri.amount}"></td>
+                    </tr>
+                    </tbody>
+                    <tfoot><tr><td colspan="3" class="text-end fw-bold">Refund</td>
+                        <td class="text-end fw-bold" th:text="'₹' + ${r.refundAmount}"></td></tr></tfoot>
+                </table>
+            </div>
+
+            <section class="mz-panel mb-4">
+                <h2 class="h6">Reason</h2>
+                <p class="mb-1 fw-semibold" th:text="${r.reason.label}"></p>
+                <p class="mb-0 mz-review-text" th:text="${r.details != null} ? ${r.details} : 'No details given.'"></p>
+            </section>
+
+            <section class="mz-panel">
+                <h2 class="h6">Photos</h2>
+                <div class="mz-photo-grid">
+                    <a th:each="img, s : ${r.images}" th:href="@{/returns/{id}/images/{i}(id=${r.id}, i=${s.index})}" target="_blank" rel="noopener">
+                        <img th:src="@{/returns/{id}/images/{i}(id=${r.id}, i=${s.index})}" th:alt="'Return photo ' + ${s.count}" loading="lazy">
+                    </a>
+                </div>
+            </section>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="mz-panel mb-3" th:if="${r.adminNote != null or r.decidedAt != null}">
+                <h2 class="h6">Decision</h2>
+                <p class="small mb-1" th:if="${r.decidedAt}" th:text="${#temporals.format(r.decidedAt, 'd MMM yyyy, h:mm a')}"></p>
+                <p class="small mb-0" th:if="${r.adminNote}" th:text="${r.adminNote}"></p>
+                <p class="small mt-2 mb-0" th:if="${r.pickedUpAt}"
+                   th:text="'Picked up ' + ${#temporals.format(r.pickedUpAt, 'd MMM')} + (${r.restocked} ? ', packs restocked' : ', not restocked')"></p>
+                <p class="small mb-0" th:if="${r.refundedAt}" th:text="'Refunded ' + ${#temporals.format(r.refundedAt, 'd MMM')}"></p>
+            </div>
+
+            <!-- Requested: approve or reject -->
+            <form th:if="${r.status.name() == 'REQUESTED'}" th:action="@{/admin/returns/{id}/decision(id=${r.id})}" method="post" class="mz-panel">
+                <h2 class="h6">Review</h2>
+                <label class="form-label small" for="note">Note to the customer</label>
+                <textarea class="form-control mb-3" id="note" name="note" rows="3" maxlength="1000"
+                          placeholder="Required when rejecting, e.g. the photo doesn't show any damage"></textarea>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary flex-grow-1" name="approve" value="true" type="submit">Approve</button>
+                    <button class="btn btn-outline-danger flex-grow-1" name="approve" value="false" type="submit">Reject</button>
+                </div>
+            </form>
+
+            <!-- Approved: picked up -->
+            <form th:if="${r.status.name() == 'APPROVED'}" th:action="@{/admin/returns/{id}/picked-up(id=${r.id})}" method="post" class="mz-panel">
+                <h2 class="h6">Pickup</h2>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" name="restock" value="true" id="restock">
+                    <label class="form-check-label small" for="restock">Packs are sealed and fit to sell: add them back to stock</label>
+                </div>
+                <button class="btn btn-primary w-100" type="submit">Mark picked up</button>
+                <p class="small text-muted mt-2 mb-0">This also takes the packs out of the customer's supply count at home.</p>
+            </form>
+
+            <!-- Picked up: refund -->
+            <form th:if="${r.status.name() == 'PICKED_UP'}" th:action="@{/admin/returns/{id}/refund(id=${r.id})}" method="post" class="mz-panel"
+                  th:attr="data-mz-confirm='Refund ₹' + ${r.refundAmount} + ' to ' + ${r.user.fullName} + '?'"
+                  data-mz-confirm-title="Refund" data-mz-confirm-ok="Refund">
+                <h2 class="h6">Refund</h2>
+                <p class="small" th:text="'Paid by ' + ${r.order.paymentMethod.label} + '. Refund ₹' + ${r.refundAmount} + ' through the same method, then mark it done.'"></p>
+                <button class="btn btn-primary w-100" type="submit">Mark refunded</button>
+            </form>
+        </div>
+    </div>
+</main>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

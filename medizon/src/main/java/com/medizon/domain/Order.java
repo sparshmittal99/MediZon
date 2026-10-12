@@ -48,6 +48,14 @@ public class Order {
     private String shippingAddress;
     private String contactPhone;
 
+    /** State delivered to, snapshotted for the invoice's place of supply (CGST + SGST or IGST). */
+    private String shippingState;
+
+    /** Set when the order ships; GST invoice serials run consecutively per financial year. */
+    @Column(unique = true, length = 16)
+    private String invoiceNumber;
+    private LocalDateTime invoicedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     private Prescription prescription;
 
@@ -69,6 +77,11 @@ public class Order {
     /** Progress steps shown on the order page (cancelled orders don't show the tracker). */
     public List<OrderStatus> getTrackSteps() {
         return List.of(OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.DELIVERED);
+    }
+
+    /** The tax invoice is issued when the order ships. */
+    public boolean isInvoiceAvailable() {
+        return status == OrderStatus.SHIPPED || status == OrderStatus.DELIVERED;
     }
 
     public int getItemCount() {

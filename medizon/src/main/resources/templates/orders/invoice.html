@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Invoice ' + ${inv.order.invoiceNumber})}"></head>
+<body class="mz-invoice-page">
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<th:block th:if="${adminView}"><div th:replace="~{fragments/layout :: adminNav}"></div></th:block>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" style="max-width: 980px" th:with="o=${inv.order}, s=${inv.seller}">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 mz-no-print">
+        <a th:href="${adminView} ? @{/admin/orders/{id}(id=${o.id})} : @{/orders/{id}(id=${o.id})}" class="small">
+            <i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
+        <button type="button" class="btn btn-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print or save as PDF</button>
+    </div>
+
+    <div th:if="${adminView and !s.complete}" class="alert alert-warning small mz-no-print">
+        Seller details are incomplete. Set <code>SELLER_GSTIN</code>, <code>SELLER_ADDRESS</code> and <code>SELLER_STATE</code>
+        (and <code>SELLER_DRUG_LICENSE</code>) so invoices carry them and tax is split correctly between CGST + SGST and IGST.
+    </div>
+
+    <article class="mz-invoice" aria-label="Tax invoice">
+        <header class="mz-invoice-head">
+            <div>
+                <div class="mz-brand mb-1"><span class="mz-mark" aria-hidden="true"><i class="bi bi-capsule"></i></span><span th:text="${s.name}">MediZon</span></div>
+                <div class="small" th:if="${!#strings.isEmpty(s.address)}" th:text="${s.address}"></div>
+                <div class="small" th:if="${!#strings.isEmpty(s.state)}"
+                     th:text="'State: ' + ${s.state} + (${s.stateCode} != null ? ' (' + ${s.stateCode} + ')' : '')"></div>
+                <div class="small" th:if="${!#strings.isEmpty(s.gstin)}"><strong>GSTIN:</strong> <span th:text="${s.gstin}"></span></div>
+                <div class="small" th:if="${!#strings.isEmpty(s.drugLicense)}"><strong>Drug licence:</strong> <span th:text="${s.drugLicense}"></span></div>
+                <div class="small" th:if="${!#strings.isEmpty(s.phone) or !#strings.isEmpty(s.email)}">
+                    <span th:text="${s.phone}"></span><span th:if="${!#strings.isEmpty(s.phone) and !#strings.isEmpty(s.email)}"> · </span><span th:text="${s.email}"></span>
+                </div>
+            </div>
+            <div class="text-md-end">
+                <h1 class="mz-invoice-title">Tax invoice</h1>
+                <dl class="mz-invoice-meta">
+                    <dt>Invoice no.</dt><dd th:text="${o.invoiceNumber}"></dd>
+                    <dt>Invoice date</dt><dd th:text="${#temporals.format(o.invoicedAt, 'd MMM yyyy')}"></dd>
+                    <dt>Order no.</dt><dd th:text="${o.orderNumber}"></dd>
+                    <dt>Order date</dt><dd th:text="${#temporals.format(o.createdAt, 'd MMM yyyy')}"></dd>
+                </dl>
+            </div>
+        </header>
+
+        <section class="mz-invoice-parties">
+            <div>
+                <h2>Billed and shipped to</h2>
+                <div class="fw-semibold" th:text="${o.user.fullName}"></div>
+                <div th:text="${o.shippingAddress}"></div>
+                <div th:if="${o.contactPhone}" th:text="'Phone: ' + ${o.contactPhone}"></div>
+            </div>
+            <div>
+                <h2>Supply</h2>
+                <div><strong>Place of supply:</strong> <span th:text="${inv.placeOfSupply}"></span></div>
+                <div th:text="${inv.interState} ? 'Inter-state supply (IGST)' : 'Intra-state supply (CGST + SGST)'"></div>
+                <div><strong>Payment:</strong> <span th:text="${o.paymentMethod.label} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></span></div>
+                <div th:if="${o.prescription != null}"><strong>Prescription:</strong> <span th:text="${o.prescription.label}"></span></div>
+            </div>
+        </section>
+
+        <div class="table-responsive">
+            <table class="table mz-invoice-table mb-0">
+                <thead>
+                <tr>
+                    <th>#</th><th>Item</th><th>HSN</th><th class="text-end">Qty</th><th class="text-end">Rate (incl. GST)</th>
+                    <th class="text-end">Taxable value</th><th class="text-end">GST %</th>
+                    <th:block th:unless="${inv.interState}"><th class="text-end">CGST</th><th class="text-end">SGST</th></th:block>
+                    <th th:if="${inv.interState}" class="text-end">IGST</th>
+                    <th class="text-end">Amount</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="l : ${inv.lines}">
+                    <td th:text="${l.number}"></td>
+                    <td><span th:text="${l.description}"></span>
+                        <span th:if="${l.expiryDate != null}" class="d-block small text-muted" th:text="'Exp. ' + ${#temporals.format(l.expiryDate, 'MM/yyyy')}"></span></td>
+                    <td th:text="${#strings.isEmpty(l.hsnCode)} ? '-' : ${l.hsnCode}"></td>
+                    <td class="text-end" th:text="${l.quantity}"></td>
+                    <td class="text-end" th:text="${#numbers.formatDecimal(l.unitPrice, 1, 'COMMA', 2, 'POINT')}"></td>
+                    <td class="text-end" th:text="${#numbers.formatDecimal(l.taxableValue, 1, 'COMMA', 2, 'POINT')}"></td>
+                    <td class="text-end" th:text="${l.gstRate.toPlainString()} + '%'"></td>
+                    <th:block th:unless="${inv.interState}">
+                        <td class="text-end" th:text="${#numbers.formatDecimal(l.cgst, 1, 'COMMA', 2, 'POINT')}"></td>
+                        <td class="text-end" th:text="${#numbers.formatDecimal(l.sgst, 1, 'COMMA', 2, 'POINT')}"></td>
+                    </th:block>
+                    <td th:if="${inv.interState}" class="text-end" th:text="${#numbers.formatDecimal(l.igst, 1, 'COMMA', 2, 'POINT')}"></td>
+                    <td class="text-end fw-semibold" th:text="${#numbers.formatDecimal(l.total, 1, 'COMMA', 2, 'POINT')}"></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <section class="mz-invoice-foot">
+            <div>
+                <h2>Tax summary</h2>
+                <table class="table table-sm mz-invoice-table mb-2">
+                    <thead><tr><th>GST %</th><th class="text-end">Taxable</th>
+                        <th:block th:unless="${inv.interState}"><th class="text-end">CGST</th><th class="text-end">SGST</th></th:block>
+                        <th th:if="${inv.interState}" class="text-end">IGST</th></tr></thead>
+                    <tbody>
+                    <tr th:each="t : ${inv.taxSummary}">
+                        <td th:text="${t.gstRate.toPlainString()} + '%'"></td>
+                        <td class="text-end" th:text="${#numbers.formatDecimal(t.taxableValue, 1, 'COMMA', 2, 'POINT')}"></td>
+                        <th:block th:unless="${inv.interState}">
+                            <td class="text-end" th:text="${#numbers.formatDecimal(t.cgst, 1, 'COMMA', 2, 'POINT')}"></td>
+                            <td class="text-end" th:text="${#numbers.formatDecimal(t.sgst, 1, 'COMMA', 2, 'POINT')}"></td>
+                        </th:block>
+                        <td th:if="${inv.interState}" class="text-end" th:text="${#numbers.formatDecimal(t.igst, 1, 'COMMA', 2, 'POINT')}"></td>
+                    </tr>
+                    </tbody>
+                </table>
+                <p class="small mb-0"><strong>Amount in words:</strong> <span th:text="${inv.amountInWords}"></span></p>
+            </div>
+            <dl class="mz-invoice-totals">
+                <dt>Taxable value</dt><dd th:text="'₹' + ${#numbers.formatDecimal(inv.taxableTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
+                <th:block th:unless="${inv.interState}">
+                    <dt>CGST</dt><dd th:text="'₹' + ${#numbers.formatDecimal(inv.cgstTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
+                    <dt>SGST</dt><dd th:text="'₹' + ${#numbers.formatDecimal(inv.sgstTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
+                </th:block>
+                <th:block th:if="${inv.interState}">
+                    <dt>IGST</dt><dd th:text="'₹' + ${#numbers.formatDecimal(inv.igstTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
+                </th:block>
+                <dt class="mz-invoice-grand">Total</dt>
+                <dd class="mz-invoice-grand" th:text="'₹' + ${#numbers.formatDecimal(inv.grandTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
+            </dl>
+        </section>
+
+        <footer class="mz-invoice-notes">
+            <p>Prices include GST. Delivery charges are part of a composite supply and are taxed at the rate of the main item.
+                Tax is not payable on reverse charge basis.</p>
+            <p class="mb-0">This is a computer-generated invoice and doesn't need a signature.</p>
+        </footer>
+    </article>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

@@ -6,7 +6,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import org.springframework.format.annotation.DateTimeFormat;
+
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.math.RoundingMode;
 
 @Entity
@@ -56,6 +59,23 @@ public class Medicine {
 
     private boolean prescriptionRequired;
 
+    /** HSN code printed on invoices; 3004 covers packaged medicaments. */
+    @NotBlank(message = "Enter the HSN code")
+    @Pattern(regexp = "\\d{4,8}", message = "HSN codes are 4 to 8 digits")
+    @Column(length = 8, columnDefinition = "varchar(8) not null default '3004'")
+    private String hsnCode = "3004";
+
+    /** GST rate in percent. Prices are GST-inclusive; the invoice works out the tax inside the price. */
+    @NotNull(message = "Enter the GST rate")
+    @DecimalMin(value = "0.0", message = "GST can't be negative")
+    @DecimalMax(value = "40.0", message = "GST can't be above 40%")
+    @Column(columnDefinition = "numeric(5,2) not null default 5")
+    private BigDecimal gstRate = new BigDecimal("5");
+
+    /** Expiry of the batch currently in stock. Expired stock can't be sold. */
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate expiryDate;
+
     private boolean active = true;
 
     private String imageUrl;
@@ -86,4 +106,11 @@ public class Medicine {
     }
 
     public boolean isInStock() { return stock > 0; }
+
+    public boolean isExpired() { return expiryDate != null && expiryDate.isBefore(LocalDate.now()); }
+
+    /** Expires within the next 90 days: admins should sell it first or pull it. */
+    public boolean isExpiringSoon() {
+        return expiryDate != null && !isExpired() && expiryDate.isBefore(LocalDate.now().plusDays(90));
+    }
 }

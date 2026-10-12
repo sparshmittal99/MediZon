@@ -40,7 +40,7 @@
                                 <i class="bi" th:classappend="${d.state == 'taken'} ? 'bi-check-lg' : (${d.state == 'skipped'} ? 'bi-dash-lg' : ${d.plan.medicine.icon})"></i>
                             </span>
                             <span class="mz-slot-time" th:text="${#temporals.format(d.time, 'h:mm a')}">8:00 AM</span>
-                            <span class="mz-slot-name" th:text="${d.plan.medicine.name}">Medicine</span>
+                            <span class="mz-slot-name" th:text="${d.plan.title}">Medicine</span>
                             <form th:if="${d.answerable}" th:action="@{/plans/{id}/dose(id=${d.plan.id})}" method="post">
                                 <input type="hidden" name="time" th:value="${#temporals.format(d.time, 'HH:mm')}">
                                 <input type="hidden" name="returnTo" value="/">
