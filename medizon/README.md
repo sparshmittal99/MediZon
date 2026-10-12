@@ -3,7 +3,8 @@
 Online medicine ordering with dose reminders, supply tracking, manual or automatic refills,
 prescription verification and a built-in chat assistant.
 
-**Stack:** Java 17, Spring Boot 3.3, Spring Security, Spring Data JPA, PostgreSQL, Thymeleaf + Bootstrap 5.
+**Stack:** Java 17, Spring Boot 3.3, Spring Security, Spring Data JPA, PostgreSQL, Thymeleaf + Bootstrap 5,
+Apache POI (Excel export). Tests use JUnit 5 and Mockito.
 The assistant is a separate Python service (FastAPI + scikit-learn) in [`../medizon-assistant`](../medizon-assistant); it needs no external AI service or API key.
 
 ## Run it
@@ -18,7 +19,7 @@ export MEDIZON_ADMIN_PASSWORD=...
 
 # 3. Start the assistant (in another terminal)
 cd ../medizon-assistant
-python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scriptsctivate
+python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn assistant.app:app --port 8001
 
@@ -65,25 +66,25 @@ creating other admin accounts, customer feedback, and a chat assistant for store
 ## How reminders and refills work
 
 ```
- Order delivered ──► supply at home += packs × units per pack ──► refill alert re-armed
+ Order delivered ──► each member's supply += their share of packs × units per pack ──► refill alert re-armed
                                                         │
- Every minute (ReminderScheduler)                       ▼
-   dose time reached ──► DoseLog created, reminder sent, dose deducted from supply
+ Every 10 seconds (ReminderScheduler)                   ▼
+   dose time reached on a dose day ──► DoseLog created, reminder sent, dose deducted from supply
                                                         │
-                    days left = units left / (dose × times per day)
+                    days left = dose days the supply still covers (walks the real schedule)
                                                         │
                        days left ≤ "act when down to" threshold?
                           │                                   │
                        MANUAL                               AUTO
           "Running low" alert + Reorder now        OrderService.placeAutoReorder()
           (adds the usual packs to cart)           COD order to saved address, customer notified.
-                                                   Falls back to an alert if there's no address,
-                                                   no stock, or no valid prescription for an Rx medicine.
+                                                   Falls back to an alert if there's no address, no stock,
+                                                   expired stock, or no valid prescription for an Rx medicine.
 ```
 
 - A reminder counts the dose as taken. Tapping **Skip** adds it back, so the count stays right even if the customer never taps anything.
 - `reorderPending` makes sure there is one alert or one auto order per low-supply cycle. It clears when the refill is delivered or the customer edits the plan's supply.
-- A daily 9 AM sweep re-checks every plan and switches off courses whose end date has passed.
+- A daily 9 AM sweep clears expired stock, switches off courses that have no dose days left, and re-checks every plan.
 - Each cart line is tagged with who it's for. On delivery the units go to those members' plans (split evenly when a
   line is for several people). A member with no plan for that medicine yet gets one that holds the supply and waits
   for its first schedule: dose times plus every day, certain weekdays, or specific dates.
@@ -155,17 +156,23 @@ Emergencies ("chest pain", "can't breathe", overdose, self-harm) always get a ca
 ```
 src/main/java/com/medizon
 ├── config/      Security, login, catalog seed and first admin
-├── domain/      JPA entities and enums
+├── domain/      JPA entities and enums (family members, plans, orders, returns, invoice counters ...)
 ├── repository/  Spring Data repositories
-├── service/     Business logic, scheduler, notifications, email, file storage
+├── service/     Business logic, scheduler, notifications, email, file storage, GST invoices, returns,
+│                sales report (SQL aggregation) and Excel export
 ├── ai/          Assistant client, actions it may run, request loop
 ├── web/         MVC controllers (Thymeleaf pages), customer and admin
-├── api/         JSON endpoints: notification polling, assistant chat
-└── dto/         Forms and view models
+├── api/         JSON endpoints: notification polling, cart quantities and members, assistant chat
+└── dto/         Forms and view models (invoice, report period, sales rows ...)
 src/main/resources
 ├── templates/   Bootstrap 5 pages (fragments/layout.html holds navbar, footer, cards)
-└── static/      medizon.css theme, medizon.js (polling, desktop alerts), assistant.js (chat widget)
+└── static/      medizon.css theme, medizon.js (polling, desktop alerts, forms), assistant.js (chat widget)
+src/test/java/com/medizon
+├── domain/      MedicationPlanScheduleTest: days left for daily, weekly and custom-date schedules
+└── service/     InvoiceMathTest, ReportPeriodTest, ExpirySweepTest (Mockito)
 ```
+
+Run the tests with `mvn test` (they are plain unit tests and need no database).
 
 ## Before production
 
