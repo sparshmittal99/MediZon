@@ -291,5 +291,4 @@ MediZon/
     └── tests/
 ```
 
-For more on how the assistant, the scheduler, invoices and returns work inside, see [`medizon/README.md`](medizon/README.md).
-For more on how the assistant, the scheduler, invoices and returns work inside, see [`medizon/README.md`](medizon/README.md).
+For live demo of this application visit https://medizon-mze9.onrender.com/.
