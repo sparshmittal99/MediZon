@@ -292,3 +292,4 @@ MediZon/
 ```
 
 For more on how the assistant, the scheduler, invoices and returns work inside, see [`medizon/README.md`](medizon/README.md).
+For live demo of application visit https://medizon-mze9.onrender.com/
