@@ -1,6 +1,8 @@
 # MediZon
 
-An online pharmacy for the whole family. Customers order medicines for themselves, their family members or a shared household shelf, get dose reminders, track how much supply they have at home and when it expires, and get refills manually or automatically. Pharmacists and admins manage orders, prescriptions, returns and stock, issue GST tax invoices, and run sales reports with Excel export. Both get a built-in chat assistant.
+An online pharmacy for the whole family. Customers order medicines for themselves, their family members, a shared household shelf or someone else, deliver to any of their saved addresses, get dose reminders, track how much supply they have at home and when it expires, and get refills manually or automatically. Pharmacists and admins manage orders, prescriptions, returns, stock and the PIN codes they deliver to, issue GST tax invoices, and run sales reports with Excel export. Both get a built-in chat assistant.
+
+**Live demo:** https://medizon-mze9.onrender.com/
 
 The repository has two services:
 
@@ -15,8 +17,12 @@ The repository has two services:
 
 ### For customers
 - **Shopping:** browse by category, search by name or salt, view product details (including expiry), add to cart, check out.
+- **Shop before signing in:** visitors can fill a cart; it moves into their account when they sign in, and "Sign in to checkout" brings them straight back to checkout.
+- **"Delivers to" location:** pick where you want delivery from the header (device location, a pin on the map, an address search or a PIN code, using OpenStreetMap) and see straight away whether MediZon delivers there.
+- **Address book:** save up to 15 delivery addresses (Home, Office or a named place), including addresses for someone else with the receiver's name and phone. One is the default; checkout and the header picker choose between them.
+- **Billing address:** one optional billing address with an optional GSTIN, set from the account menu. Checkout shows it next to the delivery address and the tax invoice prints both. Without it, orders are billed to you at the delivery address.
 - **Family members:** add up to 12 people (mother, son ...). Each has their own medicines, reminders, supply and refill settings. There is also a **Common (OTC)** shelf for household medicines.
-- **Who it's for:** in the cart, tick who each medicine is for: one or more people, or the common shelf. Prescription medicines must be for a named person.
+- **Who it's for:** in the cart, say how many packs each person gets (for example 2 for you and 1 for your mother), or put them on the common shelf. **Others** is for someone outside the family: it's delivered but not added to My medicines. Prescription medicines must be for a named person.
 - **Payments:** cash on delivery, or simulated UPI and card payments.
 - **Orders:** track status (Placed → Confirmed → Shipped → Delivered), cancel before shipping, buy again, and review delivered orders.
 - **GST tax invoices:** available once an order ships. Print it or save it as PDF from the browser.
@@ -30,10 +36,11 @@ The repository has two services:
   - **Expiry tracking:** the earliest expiry still at home is shown. Expired stock is cleared automatically with an alert.
 - **Refills:** when supply runs low you get either:
   - **Manual:** a "Running low" alert with a one-click reorder.
-  - **Auto:** an order is placed automatically to your saved address, for the same family member.
+  - **Auto:** an order is placed automatically for the same family member, to the address chosen on that reminder (or your default address).
 - **Alerts on each device:** choose whether a browser pops up everyone's reminders or only some members' (for example, a parent's tablet shows only their own).
 - **One-off reminders**, e.g. "book a blood test on Friday at 9".
-- **Notification centre**, profile and saved address, and feedback to the pharmacist.
+- **Account settings:** change your password (current password first, then the new one twice; other devices are signed out) and sign out other devices.
+- **Notification centre**, profile, and feedback to the pharmacist.
 
 ### For pharmacists and admins
 - **Dashboard:** today's sales, net revenue after refunds, what needs attention (orders, prescriptions, returns, low stock) and daily site traffic.
@@ -43,6 +50,7 @@ The repository has two services:
 - **Sales and returns report:** a date range, a month or a financial year, shown day-wise or month-wise. Export to **Excel** (summary with GST totals, plus optional month-wise, day-wise, orders, medicines sold, HSN summary and returns sheets) or **CSV**.
 - **Prescription review:** approve or reject, and set a validity date.
 - **Catalogue management:** add and edit medicines, images, stock, HSN code, GST rate, batch expiry and active/inactive status, plus a low-stock list. Expired and soon-to-expire stock is highlighted, and expired stock can't be sold.
+- **Delivery areas:** the PIN codes MediZon delivers to (add one or paste a list, with area, city and state; pause or remove). Orders to any other PIN code are refused, including automatic refills. The dashboard warns while none are set up, because nobody can order until then.
 - **Users:** enable or disable customers, force sign-out, and create other admin accounts. Admins can't be self-registered.
 - **Reviews and feedback**, with a **"Get improvement ideas"** button. It groups complaints by topic and sentiment and ranks suggestions.
 
@@ -80,7 +88,8 @@ It's available on every page after sign-in.
 |---|---|
 | Bootstrap | 5.3.3 |
 | Bootstrap Icons | 1.11.3 |
-| Plain JavaScript | chat widget, cart steppers and member pickers, schedule form, return photo previews, notification polling and desktop alerts |
+| Plain JavaScript | chat widget, cart steppers and packs per person, schedule form, return photo previews, location picker, notification polling and desktop alerts |
+| Leaflet + OpenStreetMap | Leaflet 1.9.4 map, OpenStreetMap tiles and Nominatim address search for the "Delivers to" picker; loaded in the browser only when the map opens, no API key |
 
 ### Assistant: `medizon-assistant/`
 | Technology | Version |
@@ -160,7 +169,7 @@ export MEDIZON_ADMIN_PASSWORD=ChangeMe123
 export MEDIZON_ADMIN_NAME=Admin
 ```
 
-Optionally, set the seller details printed on GST invoices (see [Configuration](#configuration)), for example `SELLER_STATE="Maharashtra"` and `SELLER_GSTIN=...`.
+Optionally, set your own seller details for GST invoices and the site footer (see [Configuration](#configuration)), for example `SELLER_STATE="Maharashtra"` and `SELLER_GSTIN=...`. Until you do, placeholder values are used.
 
 Then run:
 ```bash
@@ -170,7 +179,8 @@ mvn spring-boot:run
 
 Open **http://localhost:8080**:
 - Sign in with the admin account above to manage the store.
-- Use **Create account** to sign up as a customer and shop.
+- **Add at least one delivery area first:** under **Admin > Delivery areas**, add the PIN codes you deliver to. Until then, customers can browse and fill a cart but can't place orders.
+- Use **Create account** to sign up as a customer and shop. Save a delivery address whose PIN code is in a delivery area.
 
 ### Run everything in Docker instead
 ```bash
@@ -183,7 +193,7 @@ This starts PostgreSQL, the assistant and the web app together. Put the `MEDIZON
 
 ### Run the tests
 ```bash
-# Web app: schedule maths, GST invoice maths, report periods, expiry sweep (JUnit 5 + Mockito)
+# Web app: schedule maths, sharing packs between people, GST invoice maths, report periods, expiry sweep (JUnit 5 + Mockito)
 cd medizon
 mvn test
 
@@ -206,10 +216,10 @@ Every setting has a default for local development, and each can be overridden wi
 | `ASSISTANT_URL` | `http://localhost:8001` | Where the assistant service runs |
 | `ASSISTANT_TOKEN` | empty | Shared secret. Set the same value on both services. |
 | `UPLOAD_DIR` | `uploads` | Folder for prescriptions, return photos and medicine images |
-| `SELLER_NAME` | `MediZon Pharmacy` | Seller name on GST invoices |
-| `SELLER_GSTIN` / `SELLER_DRUG_LICENSE` | empty | GSTIN and drug licence number on invoices |
-| `SELLER_ADDRESS` / `SELLER_PHONE` / `SELLER_EMAIL` | empty | Seller contact details on invoices |
-| `SELLER_STATE` | empty | Seller's state. Customers in the same state are charged CGST + SGST, others IGST. |
+| `SELLER_NAME` | `MediZon Pharmacy` | Seller name on GST invoices and in the footer |
+| `SELLER_GSTIN` / `SELLER_DRUG_LICENSE` | placeholder values | GSTIN and drug licence numbers on invoices. Replace them with your real ones. |
+| `SELLER_ADDRESS` / `SELLER_PHONE` / `SELLER_EMAIL` | placeholder values (Mumbai) | Seller contact details on invoices and in the footer |
+| `SELLER_STATE` | `Maharashtra` | Seller's state. Customers in the same state are charged CGST + SGST, others IGST. |
 | `BASE_URL` | `http://localhost:8080` | Used in links inside emails |
 | `MEDIZON_TZ` | `Asia/Kolkata` | Time zone for reminders |
 | `MAIL_ENABLED` | `false` | Send emails. When off, emails are only logged. |
@@ -223,9 +233,9 @@ Uploads are limited to 5 MB per file and 16 MB per request (a return can carry 3
 ## How reminders and refills work
 
 ```
- Order delivered ──► each line's units are split between the members it was for
+ Order delivered ──► each line's units are shared by the packs each person was ordered
                      (a member without a plan for it gets one that waits for its first schedule;
-                      common-shelf items just go on the shelf)
+                      common-shelf items just go on the shelf; "Others" isn't tracked)
                                    │
  Scheduler (every 10 s)            ▼
    dose time reached on a dose day ──► reminder sent, dose subtracted from supply
@@ -235,10 +245,11 @@ Uploads are limited to 5 MB per file and 16 MB per request (a return can carry 3
               days left ≤ the plan's "act when down to" threshold?
                  │                                     │
               MANUAL                                 AUTO
-   "Running low" alert + Reorder        order placed automatically (cash on delivery) to the
-                                        saved address, for the same member. Falls back to an
-                                        alert if there is no address, no stock, expired stock,
-                                        or no valid prescription.
+   "Running low" alert + Reorder        order placed automatically (cash on delivery) for the same
+                                        member, to the reminder's chosen address or the default one.
+                                        Falls back to an alert if there is no address, MediZon doesn't
+                                        deliver to its PIN code, no stock, expired stock, or no valid
+                                        prescription.
 ```
 
 - A dose counts as taken by default. Tapping **Skip** adds it back to supply.
@@ -246,9 +257,17 @@ Uploads are limited to 5 MB per file and 16 MB per request (a return can carry 3
 - Every morning at 9 (and on startup), expired stock at home is cleared with an alert, finished courses are switched off, and every plan is re-checked for low supply. A scheduled plan keeps its reminders but its expired units are written off, which triggers the usual refill alert or order.
 - **Common shelf:** only lists what's at home and its expiry, with no reminders. Adding that medicine to a person's list can move stock off the shelf.
 
+## How delivery and checkout work
+
+- **Delivery areas:** every order, including automatic refills, is checked against the active PIN codes in **Admin > Delivery areas** on the server. The header's "Delivers to" picker is only a quick check for the customer.
+- **Location picker:** the browser turns the device location, a map pin or a typed address into a PIN code with OpenStreetMap's Nominatim, then asks MediZon whether it delivers there. The choice is remembered in cookies for 180 days and cleared on sign-out.
+- **Visitor cart:** kept in the browser session until sign-in, then added to the account's cart (up to the stock available; items that can no longer be sold are skipped).
+- **Packs per person:** each cart line records how many packs each person gets. On delivery, the tablets are shared in the same proportion, so they always add up.
+- **Addresses at checkout:** the order keeps a copy of the receiver, phone and address it ships to, plus the billing name, address and GSTIN. Later edits to the address book don't change past orders or invoices.
+
 ## How invoices and returns work
 
-- **Invoices:** prices include GST. When an order ships it gets the next invoice number of the financial year. Each line's taxable value is worked back out of the price (`taxable = price × 100 / (100 + rate)`), split into CGST + SGST or IGST by the customer's state. Delivery is taxed at the main item's rate.
+- **Invoices:** prices include GST. When an order ships it gets the next invoice number of the financial year. Each line's taxable value is worked back out of the price (`taxable = price × 100 / (100 + rate)`), split into CGST + SGST or IGST by the delivery state. Delivery is taxed at the main item's rate. The invoice prints **Bill to** (the billing address and GSTIN, or you) and **Ship to** (the receiver and delivery address).
 - **Returns:** Requested → Approved (or Rejected, with a note) → Picked up → Refunded. Pickup takes the packs out of the family member's supply and can put them back into stock. The refund is the price paid per pack × packs returned.
 - **Sales report:** sales count on the day an order was placed, refunds on the day they were paid out, and net revenue = sales − refunds.
 
@@ -266,18 +285,20 @@ MediZon/
 │       ├── main/
 │       │   ├── java/com/medizon/
 │       │   │   ├── config/           Security, login, data seeding, first admin
-│       │   │   ├── domain/           JPA entities and enums (members, plans, orders, returns, invoices ...)
+│       │   │   ├── domain/           JPA entities and enums (members, plans, orders, addresses, returns, invoices ...)
 │       │   │   ├── repository/       Spring Data repositories
-│       │   │   ├── service/          Business logic, scheduler, notifications, invoices, returns, sales report, Excel
+│       │   │   ├── service/          Business logic, scheduler, notifications, addresses, delivery areas, invoices,
+│       │   │   │                     returns, sales report, Excel
 │       │   │   ├── ai/               Assistant client and the actions it may run
-│       │   │   ├── web/              MVC controllers (customer and admin pages)
-│       │   │   ├── api/              JSON endpoints (notifications, cart, assistant chat)
-│       │   │   └── dto/              Forms and view models (invoice, report period, sales rows ...)
+│       │   │   ├── web/              MVC controllers (customer and admin pages), "Delivers to" location cookies
+│       │   │   ├── api/              JSON endpoints (notifications, cart, location, account, assistant chat)
+│       │   │   └── dto/              Forms and view models (address, billing, invoice, report period, sales rows ...)
 │       │   └── resources/
 │       │       ├── application.properties
-│       │       ├── templates/        Thymeleaf pages (incl. invoice, returns, family members, sales report)
-│       │       └── static/           CSS and JS (chat widget, notifications, forms)
-│       └── test/java/com/medizon/    JUnit tests: schedules, invoice maths, report periods, expiry sweep
+│       │       ├── templates/        Thymeleaf pages (incl. addresses, billing, account, invoice, returns,
+│       │       │                     family members, delivery areas, sales report)
+│       │       └── static/           CSS and JS (chat widget, notifications, location picker, forms)
+│       └── test/java/com/medizon/    JUnit tests: schedules, pack shares, invoice maths, report periods, expiry sweep
 └── medizon-assistant/                Python assistant service
     ├── Dockerfile
     ├── requirements.txt

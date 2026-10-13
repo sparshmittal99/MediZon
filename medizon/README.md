@@ -87,17 +87,19 @@ creating other admin accounts, customer feedback, and a chat assistant for store
                           │                                   │
                        MANUAL                               AUTO
           "Running low" alert + Reorder now        OrderService.placeAutoReorder()
-          (adds the usual packs to cart)           COD order to saved address, customer notified.
-                                                   Falls back to an alert if there's no address, no stock,
+          (adds the usual packs to cart)           COD order to the plan's refill address (or the default
+                                                   one), customer notified. Falls back to an alert if there's
+                                                   no address, the PIN code isn't delivered to, no stock,
                                                    expired stock, or no valid prescription for an Rx medicine.
 ```
 
 - A reminder counts the dose as taken. Tapping **Skip** adds it back, so the count stays right even if the customer never taps anything.
 - `reorderPending` makes sure there is one alert or one auto order per low-supply cycle. It clears when the refill is delivered or the customer edits the plan's supply.
 - A daily 9 AM sweep clears expired stock, switches off courses that have no dose days left, and re-checks every plan.
-- Each cart line is tagged with who it's for. On delivery the units go to those members' plans (split evenly when a
-  line is for several people). A member with no plan for that medicine yet gets one that holds the supply and waits
-  for its first schedule: dose times plus every day, certain weekdays, or specific dates.
+- Each cart line records how many packs each person gets. On delivery the units go to those members' plans in the
+  same proportion (`domain/Shares` splits them so they always add up; older orders without per-person packs are
+  split evenly). "Others" lines are delivered but not tracked. A member with no plan for that medicine yet gets one
+  that holds the supply and waits for its first schedule: dose times plus every day, certain weekdays, or specific dates.
 - Days left follow the real schedule, so weekly and custom-date plans aren't counted as daily.
 - Items bought as **Common (OTC)** go straight onto the household's common shelf, which only lists what's at home and
   its expiry: no reminders or refill alerts. Adding that medicine to a person's list moves stock off the shelf: what the
@@ -115,8 +117,11 @@ creating other admin accounts, customer feedback, and a chat assistant for store
 
 - Prices are GST-inclusive. When an order ships it gets the next invoice number of the financial year
   (`MZ/2026-27/00001`); the invoice works out each line's taxable value from its HSN code and GST rate (set per
-  medicine in the catalog). Delivery is taxed at the main item's rate as a composite supply. Print or save it as PDF
-  from the browser.
+  medicine in the catalog). Delivery is taxed at the main item's rate as a composite supply. It prints Bill to (the
+  billing address and GSTIN, or the buyer) and Ship to (the receiver and delivery address), both copied onto the order
+  at checkout. Print or save it as PDF from the browser.
+- Every order, including automatic refills, must go to a PIN code listed and active under **Admin > Delivery areas**;
+  `OrderService.createOrder` checks it, so checkout and refills follow the same rule.
 - Customers can ask to return delivered items for 7 days, with a reason and 1 to 3 photos. An admin approves or
   rejects it with a note; approved returns are marked picked up (the packs leave the member's supply count, and can go
   back into stock) and then refunded.
@@ -166,19 +171,21 @@ Emergencies ("chest pain", "can't breathe", overdose, self-harm) always get a ca
 ```
 src/main/java/com/medizon
 ├── config/      Security, login, catalog seed and first admin
-├── domain/      JPA entities and enums (family members, plans, orders, returns, invoice counters ...)
+├── domain/      JPA entities and enums (family members, plans, orders, addresses, delivery PIN codes, returns,
+│                invoice counters ...) and Shares (splits packs between people)
 ├── repository/  Spring Data repositories
-├── service/     Business logic, scheduler, notifications, email, file storage, GST invoices, returns,
-│                sales report (SQL aggregation) and Excel export
+├── service/     Business logic, scheduler, notifications, email, file storage, addresses, delivery areas,
+│                visitor cart, GST invoices, returns, sales report (SQL aggregation) and Excel export
 ├── ai/          Assistant client, actions it may run, request loop
-├── web/         MVC controllers (Thymeleaf pages), customer and admin
-├── api/         JSON endpoints: notification polling, cart quantities and members, assistant chat
-└── dto/         Forms and view models (invoice, report period, sales rows ...)
+├── web/         MVC controllers (Thymeleaf pages), customer and admin; DeliveryLocations ("Delivers to" cookies)
+├── api/         JSON endpoints: notification polling, cart quantities and packs per person, location check,
+│                current-password check, assistant chat
+└── dto/         Forms and view models (address, billing, invoice, report period, sales rows ...)
 src/main/resources
-├── templates/   Bootstrap 5 pages (fragments/layout.html holds navbar, footer, cards)
-└── static/      medizon.css theme, medizon.js (polling, desktop alerts, forms), assistant.js (chat widget)
+├── templates/   Bootstrap 5 pages (fragments/layout.html holds navbar, location picker, footer, cards)
+└── static/      medizon.css theme, medizon.js (polling, desktop alerts, location picker, forms), assistant.js (chat widget)
 src/test/java/com/medizon
-├── domain/      MedicationPlanScheduleTest: days left for daily, weekly and custom-date schedules
+├── domain/      MedicationPlanScheduleTest (days left for daily, weekly and custom-date schedules), SharesTest
 └── service/     InvoiceMathTest, ReportPeriodTest, ExpirySweepTest (Mockito)
 ```
 
