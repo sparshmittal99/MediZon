@@ -14,7 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The people an account manages medicines for. Every customer has an entry for themselves and a "common medicines"
@@ -37,7 +39,7 @@ public class MemberService {
     public List<Member> people(User user) {
         self(user);
         return members.findByUserAndRemovedFalseOrderByIdAsc(user).stream()
-                .filter(m -> !m.isCommon())
+                .filter(m -> !m.isCommon() && !m.isOthers())
                 .sorted(Comparator.comparing(Member::getKind).thenComparing(Member::getId))
                 .toList();
     }
@@ -58,6 +60,12 @@ public class MemberService {
     @Transactional
     public Member common(User user) {
         return members.findFirstByUserAndKind(user, MemberKind.COMMON).orElseGet(() -> create(user, MemberKind.COMMON, "Common medicines"));
+    }
+
+    /** Cart lines for someone outside the household; never shown in tabs, plans or device settings. */
+    @Transactional
+    public Member others(User user) {
+        return members.findFirstByUserAndKind(user, MemberKind.OTHERS).orElseGet(() -> create(user, MemberKind.OTHERS, "Others"));
     }
 
     private Member create(User user, MemberKind kind, String name) {
@@ -92,7 +100,7 @@ public class MemberService {
             m.setKind(MemberKind.FAMILY);
         } else {
             m = get(id, user);
-            if (m.isCommon()) throw new BusinessException("The common medicines shelf can't be renamed.");
+            if (m.isCommon() || m.isOthers()) throw new BusinessException("This entry can't be renamed.");
         }
         m.setName(n);
         m.setRelation(m.isSelf() || r.isEmpty() ? null : r);
@@ -112,9 +120,11 @@ public class MemberService {
 
         Member self = self(user);
         for (CartItem c : cartItems.findByUserOrderByIdAsc(user)) {
-            if (c.getMembers().removeIf(x -> x.getId().equals(m.getId())) && c.getMembers().isEmpty()) {
-                c.getMembers().add(self);
-            }
+            Map<Member, Integer> alloc = new LinkedHashMap<>(c.getAllocation());
+            Integer theirs = alloc.remove(m);
+            if (theirs == null) continue;
+            alloc.merge(self, theirs, Integer::sum);   // their packs go to the account holder
+            c.allocate(alloc);
         }
         devices.findByUserOrderByLastSeenAtDesc(user).forEach(d -> d.getMembers().removeIf(x -> x.getId().equals(m.getId())));
         return m;

@@ -4,13 +4,14 @@ import com.medizon.domain.User;
 import com.medizon.service.CartService;
 import com.medizon.service.CurrentUser;
 import com.medizon.service.MemberService;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.util.List;
+import java.util.Optional;
 
 @Controller
 @RequestMapping("/cart")
@@ -21,34 +22,41 @@ public class CartController {
     private final MemberService memberService;
     private final CurrentUser currentUser;
 
+    /** Signed-out visitors see their session cart and sign in to check out, like any shop. */
     @GetMapping
-    public String view(Model model) {
-        User user = currentUser.get();
+    public String view(Model model, HttpSession session) {
+        Optional<User> signedIn = currentUser.find();
+        if (signedIn.isPresent() && signedIn.get().isAdmin()) return "redirect:/admin";
+        model.addAttribute("freeAbove", CartService.FREE_DELIVERY_ABOVE);
+        if (signedIn.isEmpty()) {
+            model.addAttribute("cart", cartService.guestSummary(session));
+            model.addAttribute("guest", true);
+            return "cart";
+        }
+        User user = signedIn.get();
         model.addAttribute("cart", cartService.summary(user));
         model.addAttribute("people", memberService.people(user));
         model.addAttribute("common", memberService.common(user));
-        model.addAttribute("freeAbove", CartService.FREE_DELIVERY_ABOVE);
+        model.addAttribute("others", memberService.others(user));
+        model.addAttribute("guest", false);
         return "cart";
     }
 
     @PostMapping("/add")
-    public String add(@RequestParam Long medicineId, @RequestParam(defaultValue = "1") int quantity,
+    public String add(@RequestParam Long medicineId, @RequestParam(defaultValue = "1") int quantity, HttpSession session,
                       @RequestHeader(value = "Referer", required = false) String referer, RedirectAttributes ra) {
-        cartService.add(currentUser.get(), medicineId, quantity);
+        Optional<User> signedIn = currentUser.find();
+        if (signedIn.isPresent()) cartService.add(signedIn.get(), medicineId, quantity);
+        else cartService.addGuest(session, medicineId, quantity);
         ra.addFlashAttribute("success", "Added to cart.");
         return "redirect:" + (referer != null ? referer : "/cart");
     }
 
-    @PostMapping("/{id}/remove")
-    public String remove(@PathVariable Long id) {
-        cartService.remove(currentUser.get(), id);
-        return "redirect:/cart";
-    }
-
-    /** Who a line is for; the cart page saves this as boxes are ticked, this is the no-JavaScript path. */
-    @PostMapping("/{medicineId}/members")
-    public String members(@PathVariable Long medicineId, @RequestParam(required = false) List<Long> memberIds) {
-        cartService.setMembers(currentUser.get(), medicineId, memberIds);
+    @PostMapping("/{medicineId}/remove")
+    public String remove(@PathVariable Long medicineId, HttpSession session) {
+        Optional<User> signedIn = currentUser.find();
+        if (signedIn.isPresent()) cartService.setQuantity(signedIn.get(), medicineId, 0);
+        else cartService.setGuestQuantity(session, medicineId, 0);
         return "redirect:/cart";
     }
 }

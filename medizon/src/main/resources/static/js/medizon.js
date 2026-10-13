@@ -211,6 +211,8 @@
         if (row) {
             if (data.quantity === 0) row.remove();
             else row.querySelector('[data-mz-line-total]').textContent = data.lineTotal;
+            const alloc = row.querySelector('[data-mz-alloc]');
+            if (alloc && data.allocation) renderAlloc(alloc, data.allocation, data.quantity);
         }
         summary.querySelector('[data-mz-subtotal]').textContent = data.subtotal;
         summary.querySelector('[data-mz-delivery]').textContent = data.delivery;
@@ -277,36 +279,104 @@
         });
     });
 
-    // ---- cart: who each medicine is for, saved as boxes are ticked ----
-    document.addEventListener('change', async (e) => {
-        const box = e.target;
-        const form = box.closest('form[data-mz-members]');
-        if (!form || box.type !== 'checkbox') return;
-        const err = form.querySelector('.mz-qty-error');
-        const ids = [...form.querySelectorAll('input[name="memberIds"]:checked')].map(i => Number(i.value));
-        form.classList.add('is-busy');
+    // ---- cart: who the packs are for ----
+    // One pack goes to one choice (tapping another moves it). With several packs, each chosen person has their own
+    // - n + and the line's quantity is their sum. "Others" (outside the family) is never mixed with family members.
+    function renderAlloc(box, allocation, quantity) {
+        const max = Number(box.dataset.max || 0);
+        const opts = [...box.querySelectorAll('.mz-alloc-opt')];
+        const on = opts.filter(o => (allocation[o.dataset.member] || 0) > 0).length;
+        box.classList.toggle('is-multi', quantity > 1);
+        opts.forEach(o => {
+            const n = allocation[o.dataset.member] || 0;
+            o.dataset.packs = n;
+            o.classList.toggle('is-on', n > 0);
+            o.querySelector('.mz-alloc-pick').setAttribute('aria-pressed', n > 0);
+            o.querySelector('.mz-alloc-n').textContent = n;
+            o.querySelector('[data-d="1"]').disabled = quantity >= max;
+            o.querySelector('[data-d="-1"]').disabled = on === 1 && n <= 1;   // the last pack goes with the main stepper
+        });
+    }
+    document.querySelectorAll('[data-mz-alloc]').forEach(box => {
+        const now = {};
+        box.querySelectorAll('.mz-alloc-opt').forEach(o => { now[o.dataset.member] = Number(o.dataset.packs || 0); });
+        renderAlloc(box, now, Object.values(now).reduce((a, b) => a + b, 0));
+    });
+
+    function allocError(box, text) {
+        const err = box.querySelector('.mz-qty-error');
+        err.textContent = text;
+        err.hidden = false;
+        clearTimeout(err._t);
+        err._t = setTimeout(() => { err.hidden = true; }, 5000);
+    }
+
+    /** The packs per person after a tap, or null when the tap changes nothing. */
+    function nextAllocation(box, opt, step) {
+        const max = Number(box.dataset.max || 0);
+        const opts = [...box.querySelectorAll('.mz-alloc-opt')];
+        const next = {};
+        opts.forEach(o => { next[o.dataset.member] = Number(o.dataset.packs || 0); });
+        const total = Object.values(next).reduce((a, b) => a + b, 0);
+        const on = opts.filter(o => next[o.dataset.member] > 0);
+        const id = opt.dataset.member;
+        const mine = next[id];
+
+        if (step) {                                              // - n + on one person
+            if (step > 0 && total >= max) { allocError(box, `Only ${max} packs are in stock.`); return null; }
+            if (step < 0 && mine <= 1 && on.length === 1) return null;
+            next[id] = Math.max(0, mine + step);
+            return next;
+        }
+        if (mine > 0) {                                          // tapping someone already chosen
+            if (on.length === 1) return null;                    // someone has to get it
+            next[id] = 0;                                        // their packs come off the line
+            return next;
+        }
+        if (total <= 1 || opt.dataset.exclusive) {               // one pack, or "Others": it all goes to them
+            Object.keys(next).forEach(k => { next[k] = 0; });
+            next[id] = Math.max(1, total);
+            return next;
+        }
+        let freed = 0;                                           // a family member takes over from "Others"
+        opts.filter(o => o.dataset.exclusive).forEach(o => { freed += next[o.dataset.member]; next[o.dataset.member] = 0; });
+        if (freed > 0) { next[id] = freed; return next; }
+        const biggest = on.reduce((a, b) => (next[b.dataset.member] > next[a.dataset.member] ? b : a));
+        if (next[biggest.dataset.member] >= 2) {                 // share an existing pack with them
+            next[biggest.dataset.member] -= 1;
+            next[id] = 1;
+            return next;
+        }
+        if (total >= max) { allocError(box, `Only ${max} packs are in stock.`); return null; }
+        next[id] = 1;                                            // everyone has one already: add a pack for them
+        return next;
+    }
+
+    document.addEventListener('click', async (e) => {
+        const pick = e.target.closest('.mz-alloc-pick');
+        const stepBtn = e.target.closest('.mz-alloc-step button');
+        if (!pick && !stepBtn) return;
+        const box = e.target.closest('[data-mz-alloc]');
+        const opt = e.target.closest('.mz-alloc-opt');
+        if (!box || box.classList.contains('is-busy')) return;
+        const packs = nextAllocation(box, opt, stepBtn ? Number(stepBtn.dataset.d) : 0);
+        if (!packs) return;
+        box.classList.add('is-busy');
         try {
-            const res = await mzFetch('/api/cart/' + form.dataset.mzMembers + '/members', { method: 'POST', body: JSON.stringify({ memberIds: ids }) });
+            const res = await mzFetch('/api/cart/' + box.dataset.mzAlloc + '/allocation', { method: 'POST', body: JSON.stringify({ packs }) });
             if (res.redirected) { location.href = res.url; return; }
             const data = await res.json();
-            if (!res.ok) {
-                box.checked = !box.checked;                 // put the box back the way the server has it
-                err.textContent = data.error || 'Could not save that.';
-                err.hidden = false;
-                clearTimeout(err._t);
-                err._t = setTimeout(() => { err.hidden = true; }, 5000);
-            } else {
-                err.hidden = true;
-            }
+            if (!res.ok) { allocError(box, data.error || 'Could not save that.'); return; }
+            box.querySelector('.mz-qty-error').hidden = true;
+            document.querySelectorAll(`[data-mz-cart="${box.dataset.mzAlloc}"]`).forEach(b => renderQty(b, data.quantity, 'Cart updated'));
+            setBadge('mzCartCount', data.cartCount);
+            updateCartPage(box, data);
         } catch (ex) {
-            box.checked = !box.checked;
-            err.textContent = 'Could not reach MediZon. Check your connection.';
-            err.hidden = false;
+            allocError(box, 'Could not reach MediZon. Check your connection.');
         } finally {
-            form.classList.remove('is-busy');
+            box.classList.remove('is-busy');
         }
     });
-    document.querySelectorAll('form[data-mz-members] noscript').forEach(n => n.remove());
 
     // ---- plan form: show the fields for the chosen schedule; custom dates as removable chips ----
     document.querySelectorAll('[data-mz-schedule]').forEach(section => {
@@ -341,6 +411,17 @@
             member.addEventListener('change', syncMember);
             if (medicine) medicine.addEventListener('change', syncMember);
             syncMember();
+        }
+
+        // Automatic refills: choose which saved address they go to
+        const refillAddress = document.querySelector('[data-mz-refill-address]');
+        if (refillAddress) {
+            const modes = document.querySelectorAll('[data-mz-reorder-mode]');
+            const syncRefill = () => {
+                refillAddress.hidden = [...modes].find(r => r.checked)?.value !== 'AUTO';
+            };
+            modes.forEach(r => r.addEventListener('change', syncRefill));
+            syncRefill();
         }
 
         const dates = section.querySelector('[data-mz-dates]');
@@ -430,5 +511,376 @@
         };
         sync();
         btn.addEventListener('click', async () => { await Notification.requestPermission(); sync(); });
+    });
+
+    // ---- account settings: show / hide passwords, and catch mismatched new passwords before posting ----
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-mz-pw-toggle]');
+        if (!btn) return;
+        const input = btn.parentElement.querySelector('input');
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        btn.querySelector('i').className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+    });
+    document.querySelectorAll('[data-mz-password-form]').forEach(form => {
+        const next = form.querySelector('[name="newPassword"]');
+        const confirm = form.querySelector('[name="confirmPassword"]');
+
+        // Step 1: the customer types their current password (never filled in by the browser) and we check it;
+        // step 2: the new password twice. The server checks the current password again when saving.
+        const current = form.querySelector('[data-mz-no-autofill]');
+        const step1 = form.querySelector('[data-mz-step="1"]');
+        const step2 = form.querySelector('[data-mz-step="2"]');
+        const nextBtn = form.querySelector('[data-mz-step-next]');
+        const error = form.querySelector('[data-mz-step-error]');
+        const done = form.querySelector('[data-mz-step-done]');
+        const dots = form.querySelectorAll('[data-mz-step-dot]');
+        current.readOnly = true;
+        current.value = '';
+        current.addEventListener('focus', () => { current.readOnly = false; });
+        const goTo = (n) => {
+            step1.querySelector('.mz-pw').hidden = n === 2;
+            step1.querySelector('label').hidden = n === 2;
+            nextBtn.hidden = n === 2;
+            step2.hidden = n === 1;
+            done.hidden = n === 1;
+            dots.forEach(d => d.classList.toggle('is-active', Number(d.dataset.mzStepDot) <= n));
+            (n === 1 ? current : next).focus();
+        };
+        nextBtn.hidden = false;
+        step2.hidden = true;
+        const verify = async () => {
+            error.hidden = true;
+            if (!current.value) { error.textContent = 'Enter your current password.'; error.hidden = false; current.focus(); return; }
+            nextBtn.disabled = true;
+            try {
+                const res = await mzFetch('/api/account/verify-password', { method: 'POST', body: JSON.stringify({ password: current.value }) });
+                const data = await res.json();
+                if (res.ok) { goTo(2); return; }
+                error.textContent = data.error || 'That isn’t your current password.';
+                error.hidden = false;
+                current.select();
+            } catch (e) {
+                error.textContent = 'Could not reach MediZon. Check your connection.';
+                error.hidden = false;
+            } finally { nextBtn.disabled = false; }
+        };
+        nextBtn.addEventListener('click', verify);
+        current.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); verify(); } });
+        form.querySelector('[data-mz-step-back]').addEventListener('click', () => {
+            current.value = '';
+            next.value = '';
+            confirm.value = '';
+            goTo(1);
+        });
+        const check = () => {
+            const bad = confirm.value !== '' && confirm.value !== next.value;
+            confirm.classList.toggle('is-invalid', bad);
+            confirm.setCustomValidity(bad ? 'The new passwords don’t match.' : '');
+        };
+        next.addEventListener('input', check);
+        confirm.addEventListener('input', check);
+    });
+
+    // ---- delivery location: "Delivers to" in the header ----
+    // The browser turns the device location, a pin on the map or a typed address into a PIN code using
+    // OpenStreetMap's Nominatim geocoder; /api/location checks it against the admin's delivery areas and remembers it.
+    // Geocoding helpers shared by the location picker and the address form
+    const OSM = 'https://nominatim.openstreetmap.org';
+    const pinOf = (s) => { const p = String(s || '').replace(/\s+/g, ''); return /^[1-9][0-9]{5}$/.test(p) ? p : null; };
+    const labelOf = (a = {}) => {
+        const area = a.suburb || a.neighbourhood || a.residential || a.village || a.city_district || '';
+        const city = a.city || a.town || a.state_district || a.county || '';
+        return [area, city].filter((v, i, all) => v && all.indexOf(v) === i).join(', ');
+    };
+
+    async function reverse(lat, lon) {
+        const res = await fetch(`${OSM}/reverse?format=jsonv2&addressdetails=1&accept-language=en&lat=${lat}&lon=${lon}`);
+        if (!res.ok) throw new Error('geocoder');
+        const data = await res.json();
+        return { pincode: pinOf(data.address?.postcode), label: labelOf(data.address), address: data.address };
+    }
+
+    (function locationPicker() {
+        const modal = document.getElementById('mzLocModal');
+        if (!modal) return;
+        const result = modal.querySelector('[data-mz-loc-result]');
+        const gps = modal.querySelector('[data-mz-loc-gps]');
+        const pinForm = modal.querySelector('[data-mz-loc-pin-form]');
+        const pinInput = pinForm.querySelector('input');
+        const search = modal.querySelector('[data-mz-loc-search]');
+        const hits = modal.querySelector('[data-mz-loc-hits]');
+        const mapWrap = modal.querySelector('[data-mz-loc-map-wrap]');
+        const mapOpen = modal.querySelector('[data-mz-loc-map-open]');
+        const mapText = modal.querySelector('[data-mz-loc-map-text]');
+        const mapConfirm = modal.querySelector('[data-mz-loc-map-confirm]');
+
+
+        function show(kind, text) {
+            result.className = 'mz-loc-result is-' + kind;
+            const icon = { ok: 'bi-check-circle-fill', off: 'bi-x-circle-fill', busy: 'bi-hourglass-split' }[kind];
+            result.innerHTML = `<i class="bi ${icon}" aria-hidden="true"></i><span></span>`;
+            result.querySelector('span').textContent = text;
+            result.hidden = false;
+        }
+
+        function updateHeader(data) {
+            document.querySelectorAll('[data-mz-loc]').forEach(btn => {
+                btn.classList.toggle('is-off', !data.serviceable);
+                btn.querySelector('[data-mz-loc-k]').textContent = data.serviceable ? 'Delivers to' : 'We don’t deliver to';
+                btn.querySelector('[data-mz-loc-v]').textContent = (data.label ? data.label + ' ' : '') + data.pincode;
+                btn.setAttribute('aria-label', 'Change delivery location');
+            });
+            modal.dataset.pincode = data.pincode;
+        }
+
+        /** Checks and remembers a PIN code, or a saved address when {@code addressId} is given. */
+        async function choose(pincode, label, addressId) {
+            show('busy', addressId ? 'Checking this address…' : `Checking ${pincode}…`);
+            try {
+                const body = addressId ? { addressId } : { pincode, label: label || '' };
+                const res = await mzFetch('/api/location', { method: 'POST', body: JSON.stringify(body) });
+                const data = await res.json();
+                if (!res.ok) { show('off', data.error || 'Could not check that PIN code.'); return; }
+                updateHeader(data);
+                modal.querySelectorAll('[data-mz-loc-address]').forEach(b =>
+                    b.classList.toggle('is-selected', String(addressId || '') === b.dataset.mzLocAddress));
+                if (data.serviceable) {
+                    show('ok', `Great, we deliver to ${data.label ? data.label + ' ' : ''}${data.pincode}.`);
+                    setTimeout(() => bootstrap.Modal.getInstance(modal)?.hide(), 1100);
+                } else {
+                    show('off', `Sorry, we don’t deliver to ${data.pincode} yet. Try another PIN code or address.`);
+                }
+            } catch (e) {
+                show('off', 'Could not reach MediZon. Check your connection.');
+            }
+        }
+
+
+        // Device location
+        gps.addEventListener('click', () => {
+            if (!navigator.geolocation) { show('off', 'This browser can’t share its location. Enter a PIN code instead.'); return; }
+            show('busy', 'Finding where you are…');
+            gps.disabled = true;
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                try {
+                    const here = await reverse(pos.coords.latitude, pos.coords.longitude);
+                    if (here.pincode) await choose(here.pincode, here.label);
+                    else show('off', 'We couldn’t find a PIN code for your location. Enter it below.');
+                } catch (e) {
+                    show('off', 'Couldn’t look up your location right now. Enter a PIN code instead.');
+                } finally { gps.disabled = false; }
+            }, (err) => {
+                gps.disabled = false;
+                show('off', err.code === err.PERMISSION_DENIED
+                    ? 'Location access is blocked. Allow it in your browser, or enter a PIN code.'
+                    : 'Couldn’t get your location. Enter a PIN code instead.');
+            }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+        });
+
+        // Saved addresses
+        modal.querySelectorAll('[data-mz-loc-address]').forEach(btn =>
+            btn.addEventListener('click', () => choose(null, null, Number(btn.dataset.mzLocAddress))));
+
+        // Typed PIN code
+        pinInput.addEventListener('input', () => { pinInput.value = pinInput.value.replace(/\D/g, '').slice(0, 6); });
+        pinForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const pin = pinOf(pinInput.value);
+            if (!pin) { show('off', 'Enter a valid 6 digit PIN code.'); pinInput.focus(); return; }
+            choose(pin, '');
+        });
+
+        // Address search
+        let searchTimer, searchSeq = 0;
+        search.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            const q = search.value.trim();
+            if (q.length < 3) { hits.replaceChildren(); return; }
+            searchTimer = setTimeout(async () => {
+                const seq = ++searchSeq;
+                try {
+                    const res = await fetch(`${OSM}/search?format=jsonv2&addressdetails=1&countrycodes=in&limit=6&accept-language=en&q=${encodeURIComponent(q)}`);
+                    const places = res.ok ? await res.json() : [];
+                    if (seq !== searchSeq) return;          // a newer search is on its way
+                    hits.replaceChildren(...places.map(place => {
+                        const li = document.createElement('li');
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        const name = place.display_name.split(', ').slice(0, 4).join(', ');
+                        btn.textContent = name;
+                        const pin = pinOf(place.address?.postcode);
+                        if (pin) {
+                            const tag = document.createElement('span');
+                            tag.className = 'mz-loc-hit-pin';
+                            tag.textContent = pin;
+                            btn.appendChild(tag);
+                        }
+                        btn.addEventListener('click', async () => {
+                            hits.replaceChildren();
+                            search.value = name;
+                            if (pin) { choose(pin, labelOf(place.address)); return; }
+                            try {
+                                const spot = await reverse(place.lat, place.lon);
+                                if (spot.pincode) choose(spot.pincode, spot.label || labelOf(place.address));
+                                else show('off', 'That place has no PIN code on the map. Enter the PIN code instead.');
+                            } catch (e) { show('off', 'Couldn’t look up that place. Enter the PIN code instead.'); }
+                        });
+                        li.appendChild(btn);
+                        return li;
+                    }));
+                    if (!places.length) {
+                        const li = document.createElement('li');
+                        li.className = 'small text-muted px-2 py-1';
+                        li.textContent = 'No places found. Try a nearby landmark or the PIN code.';
+                        hits.appendChild(li);
+                    }
+                } catch (e) { /* offline: the PIN code box still works */ }
+            }, 450);
+        });
+
+        // Pin on the map (Leaflet + OpenStreetMap tiles, loaded the first time the map opens)
+        let map, marker, picked;
+        const loadLeaflet = () => window.L ? Promise.resolve() : new Promise((ok, fail) => {
+            const css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+            document.head.appendChild(css);
+            const js = document.createElement('script');
+            js.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+            js.onload = ok;
+            js.onerror = fail;
+            document.head.appendChild(js);
+        });
+        async function pinned(latlng) {
+            picked = null;
+            mapConfirm.disabled = true;
+            mapText.textContent = 'Looking up this spot…';
+            try {
+                const spot = await reverse(latlng.lat, latlng.lng);
+                if (!spot.pincode) { mapText.textContent = 'No PIN code here. Move the pin a little or enter the PIN code.'; return; }
+                picked = spot;
+                mapText.textContent = `${spot.label ? spot.label + ' · ' : ''}PIN ${spot.pincode}`;
+                mapConfirm.disabled = false;
+            } catch (e) { mapText.textContent = 'Couldn’t look up this spot right now.'; }
+        }
+        mapOpen.addEventListener('click', async () => {
+            mapWrap.hidden = !mapWrap.hidden;
+            mapOpen.textContent = mapWrap.hidden ? 'Show map' : 'Hide map';
+            if (mapWrap.hidden) return;
+            try { await loadLeaflet(); } catch (e) { mapText.textContent = 'The map couldn’t load. Enter a PIN code instead.'; return; }
+            if (!map) {
+                const start = [20.5937, 78.9629];      // centre of India until we know better
+                map = L.map(modal.querySelector('[data-mz-loc-map]')).setView(start, 5);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+                marker = L.marker(start, { draggable: true }).addTo(map);
+                marker.on('dragend', () => pinned(marker.getLatLng()));
+                map.on('click', (e) => { marker.setLatLng(e.latlng); pinned(e.latlng); });
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition((pos) => {
+                        const here = [pos.coords.latitude, pos.coords.longitude];
+                        map.setView(here, 16);
+                        marker.setLatLng(here);
+                        pinned(marker.getLatLng());
+                    }, () => {}, { timeout: 10000, maximumAge: 60000 });
+                }
+            }
+            setTimeout(() => map.invalidateSize(), 50);
+        });
+        mapConfirm.addEventListener('click', () => { if (picked) choose(picked.pincode, picked.label); });
+
+        modal.addEventListener('show.bs.modal', () => {
+            result.hidden = true;
+            hits.replaceChildren();
+            pinInput.value = modal.dataset.pincode || '';
+        });
+        modal.addEventListener('shown.bs.modal', () => { if (map) map.invalidateSize(); });
+    })();
+
+    // ---- address form: myself or someone else, address type, fill from this device's location, PIN code check ----
+    document.querySelectorAll('[data-mz-address-form]').forEach(form => {
+        const name = form.querySelector('[name="receiverName"]');
+        const phone = form.querySelector('[name="receiverPhone"]');
+        const mine = { name: form.dataset.myName || '', phone: form.dataset.myPhone || '' };
+        const syncWho = (changed) => {
+            const other = form.querySelector('[data-mz-for-whom]:checked')?.value === 'true';
+            form.querySelector('[data-mz-receiver-title]').textContent = other ? 'Receiver’s details' : 'Your details';
+            form.querySelector('[data-mz-receiver-name-label]').textContent = other ? 'Receiver’s name' : 'Your name';
+            form.querySelector('[data-mz-receiver-phone-label]').textContent = other ? 'Receiver’s mobile number' : 'Your mobile number';
+            if (!changed) return;
+            if (other) {
+                // Start empty for someone else, unless the customer already typed another person's details
+                if (name.value === mine.name) name.value = '';
+                if (phone.value === mine.phone) phone.value = '';
+                name.focus();
+            } else {
+                if (!name.value) name.value = mine.name;
+                if (!phone.value) phone.value = mine.phone;
+            }
+        };
+        form.querySelectorAll('[data-mz-for-whom]').forEach(r => r.addEventListener('change', () => syncWho(true)));
+        syncWho(false);
+
+        const custom = form.querySelector('[data-mz-address-custom]');
+        const syncType = () => {
+            const other = form.querySelector('[data-mz-address-type]:checked')?.value === 'OTHER';
+            custom.hidden = !other;
+            if (other) custom.querySelector('input').focus();
+        };
+        form.querySelectorAll('[data-mz-address-type]').forEach(r => r.addEventListener('change', syncType));
+
+        // Live "we deliver here" check on the PIN code
+        const pin = form.querySelector('[data-mz-address-pin]');
+        const pinMsg = form.querySelector('[data-mz-address-pin-msg]');
+        let lastPin = '';
+        const checkPin = async () => {
+            const p = pinOf(pin.value);
+            if (!p) { pinMsg.textContent = ''; lastPin = ''; return; }
+            if (p === lastPin) return;
+            lastPin = p;
+            try {
+                const res = await fetch(mzUrl('/api/location/check?pincode=' + p), { credentials: 'same-origin' });
+                const data = await res.json();
+                if (p !== lastPin) return;
+                pinMsg.className = 'small ' + (data.serviceable ? 'text-success' : 'text-danger');
+                pinMsg.innerHTML = data.serviceable
+                    ? '<i class="bi bi-check-circle-fill me-1"></i>We deliver to this PIN code.'
+                    : '<i class="bi bi-x-circle-fill me-1"></i>Sorry, we don’t deliver to this PIN code yet.';
+            } catch (e) { pinMsg.textContent = ''; }
+        };
+        pin.addEventListener('input', () => { pin.value = pin.value.replace(/[^0-9 ]/g, ''); checkPin(); });
+        checkPin();
+
+        // Fill area, city, state and PIN code from where the device is
+        const gps = form.querySelector('[data-mz-address-gps]');
+        const gpsMsg = form.querySelector('[data-mz-address-gps-msg]');
+        const say = (text, bad) => { gpsMsg.textContent = text; gpsMsg.className = 'small mb-3 ' + (bad ? 'text-danger' : 'text-muted'); gpsMsg.hidden = false; };
+        gps.addEventListener('click', () => {
+            if (!navigator.geolocation) { say('This browser can’t share its location.', true); return; }
+            gps.disabled = true;
+            say('Finding where you are…');
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                try {
+                    const here = await reverse(pos.coords.latitude, pos.coords.longitude);
+                    const a = here.address || {};
+                    const set = (field, value) => { const el = form.querySelector(`[name="${field}"]`); if (value) el.value = value; };
+                    set('area', [a.road, a.suburb || a.neighbourhood].filter(Boolean).join(', '));
+                    set('city', a.city || a.town || a.village || a.state_district);
+                    set('state', a.state);
+                    set('pincode', here.pincode);
+                    say('Filled in from your location. Add your flat or house number and check the rest.');
+                    form.querySelector('[name="addressLine"]').focus();
+                    checkPin();
+                } catch (e) {
+                    say('Couldn’t look up your location right now. Type the address instead.', true);
+                } finally { gps.disabled = false; }
+            }, (err) => {
+                gps.disabled = false;
+                say(err.code === err.PERMISSION_DENIED ? 'Location access is blocked. Allow it in your browser, or type the address.'
+                    : 'Couldn’t get your location. Type the address instead.', true);
+            }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+        });
     });
 })();

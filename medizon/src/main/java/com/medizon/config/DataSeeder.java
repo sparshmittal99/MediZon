@@ -49,6 +49,7 @@ public class DataSeeder implements CommandLineRunner {
      */
     private void dropStaleEnumChecks() {
         jdbc.execute("alter table if exists notification drop constraint if exists notification_type_check");
+        jdbc.execute("alter table if exists family_members drop constraint if exists family_members_kind_check");
     }
 
     /** Creates the first admin from MEDIZON_ADMIN_EMAIL / MEDIZON_ADMIN_PASSWORD when no admin exists yet. */

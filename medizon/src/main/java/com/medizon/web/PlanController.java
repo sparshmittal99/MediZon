@@ -26,6 +26,7 @@ public class PlanController {
 
     private final MedicationPlanService planService;
     private final ReorderService reorderService;
+    private final AddressService addressService;
     private final MedicineService medicineService;
     private final CartService cartService;
     private final MemberService memberService;
@@ -96,6 +97,7 @@ public class PlanController {
         model.addAttribute("scheduleTypes", ScheduleType.values());
         model.addAttribute("weekDays", DayOfWeek.values());
         model.addAttribute("shelfStock", planService.shelfStock(currentUser.get()));
+        model.addAttribute("addresses", addressService.list(currentUser.get()));
     }
 
     @PostMapping("/save")

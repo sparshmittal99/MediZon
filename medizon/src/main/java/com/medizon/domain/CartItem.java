@@ -6,10 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "medicine_id"}))
@@ -32,6 +30,57 @@ public class CartItem {
     @JoinTable(name = "cart_item_members",
             joinColumns = @JoinColumn(name = "cart_item_id"), inverseJoinColumns = @JoinColumn(name = "member_id"))
     private Set<Member> members = new HashSet<>();
+
+    /**
+     * Packs per member id: how the line's packs are shared out. Always adds up to {@link #quantity}; lines from before
+     * per-person packs have none and are split evenly (see {@link #getAllocation()}).
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "cart_item_packs", joinColumns = @JoinColumn(name = "cart_item_id"))
+    @MapKeyColumn(name = "member_id")
+    @Column(name = "packs")
+    private Map<Long, Integer> packs = new HashMap<>();
+
+    /** Packs for each member it's for, account holder first; members left with no pack are skipped. */
+    public Map<Member, Integer> getAllocation() {
+        List<Member> who = getSortedMembers();
+        Map<Member, Integer> out = new LinkedHashMap<>();
+        boolean recorded = !packs.isEmpty() && who.stream().allMatch(m -> packs.containsKey(m.getId()));
+        int[] split = Shares.split(quantity, recorded ? who.stream().mapToInt(m -> packs.get(m.getId())).toArray() : new int[who.size()]);
+        for (int i = 0; i < who.size(); i++) if (split[i] > 0) out.put(who.get(i), split[i]);
+        return out;
+    }
+
+    /** Packs per member id, for the page and the API. */
+    public Map<Long, Integer> getAllocationById() {
+        Map<Long, Integer> out = new LinkedHashMap<>();
+        getAllocation().forEach((m, n) -> out.put(m.getId(), n));
+        return out;
+    }
+
+    public int packsFor(Long memberId) {
+        return getAllocationById().getOrDefault(memberId, 0);
+    }
+
+    /** Replaces who it's for and how many packs each gets; the quantity becomes the total. */
+    public void allocate(Map<Member, Integer> perMember) {
+        members.clear();
+        packs.clear();
+        perMember.forEach((m, n) -> {
+            if (n != null && n > 0) {
+                members.add(m);
+                packs.put(m.getId(), n);
+            }
+        });
+        quantity = packs.values().stream().mapToInt(Integer::intValue).sum();
+    }
+
+    /** "Me (2), Asha (1)", or just "Me" when one person has every pack. */
+    public String getAllocationLabel() {
+        Map<Member, Integer> a = getAllocation();
+        if (a.size() == 1) return a.keySet().iterator().next().getLabel();
+        return a.entrySet().stream().map(e -> e.getKey().getLabel() + " (" + e.getValue() + ")").collect(Collectors.joining(", "));
+    }
 
     public BigDecimal getLineTotal() {
         return medicine.getPrice().multiply(BigDecimal.valueOf(quantity));

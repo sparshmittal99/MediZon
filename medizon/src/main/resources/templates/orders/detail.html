@@ -132,8 +132,12 @@
         <div class="col-lg-4">
             <div class="mz-panel mb-3">
                 <h2 class="h6">Delivery to</h2>
-                <p class="mb-1" th:text="${o.user.fullName}"></p>
-                <p class="small text-muted mb-3" th:text="${o.shippingAddress}"></p>
+                <p class="mb-1">
+                    <span class="fw-semibold" th:text="${o.deliverTo}"></span>
+                    <span th:if="${o.addressLabel != null}" class="badge text-bg-light ms-1" th:text="${o.addressLabel}"></span>
+                </p>
+                <p class="small text-muted mb-1" th:text="${o.shippingAddress}"></p>
+                <p class="small text-muted mb-3" th:if="${o.contactPhone}"><i class="bi bi-telephone me-1"></i><span th:text="${o.contactPhone}"></span></p>
                 <h2 class="h6">Payment</h2>
                 <p class="small mb-0" th:text="${o.paymentMethod.label} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></p>
                 <p th:if="${o.prescription != null}" class="small mt-3 mb-0">

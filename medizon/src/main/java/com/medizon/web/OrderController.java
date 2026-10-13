@@ -3,6 +3,7 @@ package com.medizon.web;
 import com.medizon.domain.*;
 import com.medizon.dto.CartSummary;
 import com.medizon.service.*;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -16,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 @Controller
 @RequiredArgsConstructor
@@ -27,24 +29,42 @@ public class OrderController {
     private final ReviewService reviewService;
     private final InvoiceService invoiceService;
     private final ReturnService returnService;
+    private final DeliveryAreaService deliveryAreas;
+    private final AddressService addressService;
+    private final DeliveryLocations deliveryLocations;
     private final CurrentUser currentUser;
 
+    /**
+     * Checkout starts on the address asked for (just added), else the one picked in the header, else the default,
+     * skipping any we don't deliver to.
+     */
     @GetMapping("/checkout")
-    public String checkout(Model model) {
+    public String checkout(@RequestParam(required = false) Long address, HttpServletRequest request, Model model) {
         User user = currentUser.get();
         CartSummary cart = cartService.summary(user);
         if (cart.isEmpty()) return "redirect:/cart";
+        List<Address> addresses = addressService.list(user);
+        Map<Long, Boolean> serviceable = new HashMap<>();
+        addresses.forEach(a -> serviceable.put(a.getId(), deliveryAreas.isServiceable(a.getPincode())));
+        Long selected = Stream.of(address, deliveryLocations.selectedAddressId(request))
+                .filter(id -> id != null && serviceable.getOrDefault(id, false))
+                .findFirst()
+                .orElseGet(() -> addresses.stream().filter(a -> serviceable.get(a.getId())).map(Address::getId).findFirst().orElse(null));
         model.addAttribute("cart", cart);
         model.addAttribute("paymentMethods", PaymentMethod.values());
         model.addAttribute("prescriptions", prescriptionService.validForUser(user));
+        model.addAttribute("addresses", addresses);
+        model.addAttribute("serviceable", serviceable);
+        model.addAttribute("selectedAddress", selected);
         return "checkout";
     }
 
     @PostMapping("/checkout")
     public String placeOrder(@RequestParam PaymentMethod paymentMethod,
                              @RequestParam(required = false) Long prescriptionId,
+                             @RequestParam(required = false) Long addressId,
                              RedirectAttributes ra) {
-        Order o = orderService.checkout(currentUser.get(), paymentMethod, prescriptionId);
+        Order o = orderService.checkout(currentUser.get(), paymentMethod, prescriptionId, addressId);
         ra.addFlashAttribute("success", "Order " + o.getOrderNumber() + " placed. We'll notify you as it moves.");
         return "redirect:/orders/" + o.getId();
     }

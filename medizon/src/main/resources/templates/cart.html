@@ -26,23 +26,22 @@
                                 <a class="fw-semibold text-decoration-none" th:href="@{/medicines/{id}(id=${i.medicine.id})}" th:text="${i.medicine.name}">Name</a>
                                 <span th:if="${i.medicine.prescriptionRequired}" class="mz-rx position-static ms-1">Rx</span>
                                 <div class="small text-muted" th:text="'₹' + ${i.medicine.price} + ' per pack of ' + ${i.medicine.unitsPerPack}"></div>
-                                <form class="mz-for" th:action="@{/cart/{id}/members(id=${i.medicine.id})}" method="post"
-                                      th:attr="data-mz-members=${i.medicine.id}">
+                                <!-- Who the packs are for. One pack goes to one choice; with more packs each person gets
+                                     their own - n + and the line's quantity is the sum (medizon.js, /api/cart/{id}/allocation). -->
+                                <div th:unless="${guest}" class="mz-for mz-alloc" th:classappend="${i.quantity > 1} ? 'is-multi'"
+                                     th:attr="data-mz-alloc=${i.medicine.id},data-max=${i.medicine.stock}">
                                     <span class="mz-for-label" th:id="'for' + ${i.id}">For</span>
                                     <div class="mz-member-picks" role="group" th:attr="aria-labelledby='for' + ${i.id}">
-                                        <label th:each="m : ${people}" class="mz-pick mz-pick-sm">
-                                            <input type="checkbox" name="memberIds" th:value="${m.id}" th:checked="${i.hasMember(m.id)}">
-                                            <span th:text="${m.label}">Me</span>
-                                        </label>
-                                        <label th:unless="${i.medicine.prescriptionRequired}" class="mz-pick mz-pick-sm mz-pick-common"
-                                               title="Shared household medicine, not for one person">
-                                            <input type="checkbox" name="memberIds" th:value="${common.id}" th:checked="${i.hasMember(common.id)}">
-                                            <span><i class="bi bi-house-heart me-1" aria-hidden="true"></i>Common (OTC)</span>
-                                        </label>
+                                        <th:block th:each="m : ${people}">
+                                            <div th:replace="~{fragments/layout :: allocOption(${i}, ${m}, '', '', false)}"></div>
+                                        </th:block>
+                                        <th:block th:unless="${i.medicine.prescriptionRequired}">
+                                            <div th:replace="~{fragments/layout :: allocOption(${i}, ${common}, 'bi-house-heart', 'mz-pick-common', false)}"></div>
+                                        </th:block>
+                                        <div th:replace="~{fragments/layout :: allocOption(${i}, ${others}, 'bi-person-walking', 'mz-pick-others', true)}"></div>
                                     </div>
-                                    <noscript><button class="btn btn-sm btn-link p-0" type="submit">Save</button></noscript>
                                     <div class="mz-qty-error small" role="alert" hidden></div>
-                                </form>
+                                </div>
                             </td>
                             <td>
                                 <div th:replace="~{fragments/layout :: cartStepper(${i.medicine}, false)}"></div>
@@ -50,7 +49,7 @@
                             <td class="text-end fw-semibold" data-mz-line-total
                                 th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></td>
                             <td class="text-end">
-                                <form th:action="@{/cart/{id}/remove(id=${i.id})}" method="post">
+                                <form th:action="@{/cart/{id}/remove(id=${i.medicine.id})}" method="post">
                                     <button class="btn btn-sm btn-link text-danger" type="submit" aria-label="Remove"><i class="bi bi-trash"></i></button>
                                 </form>
                             </td>
@@ -72,14 +71,20 @@
                 <hr>
                 <div class="d-flex justify-content-between fw-bold fs-5 mb-3"><span>Total</span>
                     <span data-mz-total th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
-                <p class="small text-muted" th:if="${#lists.size(people) > 1}">
-                    Tick who each medicine is for; it's added to their list when delivered. Pick several people and the packs are shared between them.</p>
-                <p class="small text-muted" th:if="${#lists.size(people) == 1}">
-                    Buying for family? <a th:href="@{/members}">Add family members</a> and choose who each medicine is for.</p>
+                <th:block th:unless="${guest}">
+                    <p class="small text-muted" th:if="${#lists.size(people) == 1}">
+                        Buying for family? <a th:href="@{/members}">Add family members</a> and choose who each medicine is for.</p>
+                </th:block>
                 <div class="mz-rx-note small mb-3" data-mz-rx-note th:hidden="${!cart.prescriptionRequired}">
                     Some items need a prescription. You'll choose or upload one at checkout.
                 </div>
-                <a th:href="@{/checkout}" class="btn btn-primary w-100">Go to checkout</a>
+                <a th:unless="${guest}" th:href="@{/checkout}" class="btn btn-primary w-100">Go to checkout</a>
+                <th:block th:if="${guest}">
+                    <!-- /checkout needs a signed-in customer: Spring Security sends visitors to sign in, then back to checkout. -->
+                    <a th:href="@{/checkout}" class="btn btn-primary w-100"><i class="bi bi-box-arrow-in-right me-1"></i>Sign in to checkout</a>
+                    <p class="small text-muted text-center mt-2 mb-0">New to MediZon? <a th:href="@{/register}">Create an account</a>.
+                        Your cart is kept.</p>
+                </th:block>
             </div>
         </div>
     </div>

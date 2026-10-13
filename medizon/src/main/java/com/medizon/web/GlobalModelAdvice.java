@@ -1,9 +1,11 @@
 package com.medizon.web;
 
 import com.medizon.domain.NotificationDevice;
+import com.medizon.domain.User;
 import com.medizon.service.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -11,9 +13,12 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.servlet.support.RequestContextUtils;
 
+import java.util.Optional;
+
 /**
  * Adds the signed-in user, cart count, per-medicine cart quantities, this device's notification settings and its
- * unread count to every page; turns rule violations into flash messages.
+ * unread count to every page, plus the seller's contact details and the "Delivers to" location; turns rule
+ * violations into flash messages.
  */
 @ControllerAdvice(basePackages = "com.medizon.web")
 @RequiredArgsConstructor
@@ -24,10 +29,29 @@ public class GlobalModelAdvice {
     private final NotificationService notificationService;
     private final DeviceService deviceService;
     private final MemberService memberService;
+    private final InvoiceService invoiceService;
+    private final DeliveryLocations deliveryLocations;
+    private final AddressService addressService;
 
     @ModelAttribute
     public void common(Model model, HttpServletRequest request, HttpServletResponse response) {
-        currentUser.find().ifPresent(u -> {
+        model.addAttribute("seller", invoiceService.seller());
+        Optional<User> signedIn = currentUser.find();
+        if (signedIn.isEmpty()) {
+            HttpSession session = request.getSession(false);
+            model.addAttribute("cartCount", cartService.guestCount(session));
+            model.addAttribute("cartQuantities", cartService.guestQuantities(session));
+            deliveryLocations.current(request, null).ifPresent(l -> model.addAttribute("deliverTo", l));
+            return;
+        }
+        signedIn.ifPresent(u -> {
+            if (!u.isAdmin()) {
+                // Signed in through a remember-me cookie: the login handler didn't run, so move the visitor cart here.
+                if (CartService.hasGuestCart(request.getSession(false))) cartService.mergeGuestCart(u, request.getSession(false));
+                deliveryLocations.current(request, u).ifPresent(l -> model.addAttribute("deliverTo", l));
+                model.addAttribute("savedAddresses", addressService.list(u));
+                model.addAttribute("selectedAddressId", deliveryLocations.selectedAddressId(request));
+            }
             model.addAttribute("me", u);
             model.addAttribute("cartCount", cartService.count(u));
             NotificationDevice device = null;

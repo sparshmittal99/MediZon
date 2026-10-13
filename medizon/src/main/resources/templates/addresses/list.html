@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Saved addresses')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" style="max-width: 860px">
+    <a th:href="@{/account}" class="small"><i class="bi bi-arrow-left"></i> Account settings</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mt-2 mb-4">
+        <div>
+            <h1 class="mz-page-title mb-1">Saved addresses</h1>
+            <p class="text-muted mb-0">Choose one at checkout. Automatic refills go to your default address.</p>
+        </div>
+        <a th:href="@{/addresses/new}" class="btn btn-primary" th:classappend="${#lists.size(addresses) >= max} ? 'disabled'">
+            <i class="bi bi-plus-lg me-1"></i>Add new address</a>
+    </div>
+
+    <div th:if="${#lists.isEmpty(addresses)}" class="mz-panel mz-empty">
+        <i class="bi bi-geo-alt"></i>
+        <p class="mb-3">No saved addresses yet.</p>
+        <a th:href="@{/addresses/new}" class="btn btn-primary">Add an address</a>
+    </div>
+
+    <div class="d-grid gap-3">
+        <article th:each="a : ${addresses}" class="mz-addr-card" th:classappend="${a.defaultAddress} ? 'is-default'">
+            <div class="mz-addr-icon" aria-hidden="true"><i class="bi" th:classappend="${a.type.icon}"></i></div>
+            <div class="flex-grow-1 min-w-0">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                    <h2 class="h6 mb-0" th:text="${a.label}">Home</h2>
+                    <span th:if="${a.defaultAddress}" class="badge text-bg-success">Default</span>
+                    <span th:if="${a.forSomeoneElse}" class="badge text-bg-light">Someone else</span>
+                    <span th:unless="${serviceable.get(a.id)}" class="badge text-bg-danger">We don't deliver here yet</span>
+                </div>
+                <div class="fw-semibold small" th:text="${a.receiverName}"></div>
+                <div class="small text-muted" th:text="${a.formatted}"></div>
+                <div class="small text-muted"><i class="bi bi-telephone me-1"></i><span th:text="${a.receiverPhone}"></span></div>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <a th:href="@{/addresses/{id}/edit(id=${a.id})}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil me-1"></i>Edit</a>
+                    <form th:unless="${a.defaultAddress}" th:action="@{/addresses/{id}/default(id=${a.id})}" method="post">
+                        <button class="btn btn-sm btn-outline-secondary" type="submit">Set as default</button>
+                    </form>
+                    <form th:action="@{/addresses/{id}/delete(id=${a.id})}" method="post"
+                          th:attr="data-mz-confirm=${a.defaultAddress} ? 'Your newest other address becomes the default.' : 'You can add it again any time.'"
+                          data-mz-confirm-title="Remove this address?" data-mz-confirm-ok="Remove">
+                        <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash me-1"></i>Remove</button>
+                    </form>
+                </div>
+            </div>
+        </article>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

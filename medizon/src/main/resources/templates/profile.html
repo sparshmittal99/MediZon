@@ -6,10 +6,11 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page" style="max-width: 760px">
-    <h1 class="mz-page-title">Profile and address</h1>
-    <p class="text-muted mb-4">Orders, including automatic refills, are delivered to this address.</p>
+    <h1 class="mz-page-title">Profile and addresses</h1>
+    <p class="text-muted mb-4">Your name and mobile number, and where your orders go.</p>
 
     <form th:action="@{/profile}" th:object="${form}" method="post" class="mz-panel" novalidate>
+        <input type="hidden" name="returnTo" th:if="${param.returnTo}" th:value="${param.returnTo}">
         <div class="row g-3">
             <div class="col-md-6">
                 <label class="form-label" for="fullName">Full name</label>
@@ -21,26 +22,28 @@
                 <input class="form-control" type="tel" th:field="*{phone}" th:errorclass="is-invalid" autocomplete="tel">
                 <div class="invalid-feedback" th:errors="*{phone}"></div>
             </div>
-            <div class="col-12">
-                <label class="form-label" for="addressLine">Address</label>
-                <input class="form-control" th:field="*{addressLine}" placeholder="Flat, building, street, area" autocomplete="street-address">
-            </div>
-            <div class="col-md-5">
-                <label class="form-label" for="city">City</label>
-                <input class="form-control" th:field="*{city}" autocomplete="address-level2">
-            </div>
-            <div class="col-md-4">
-                <label class="form-label" for="state">State</label>
-                <input class="form-control" th:field="*{state}" autocomplete="address-level1">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="pincode">PIN code</label>
-                <input class="form-control" th:field="*{pincode}" th:errorclass="is-invalid" inputmode="numeric" autocomplete="postal-code">
-                <div class="invalid-feedback" th:errors="*{pincode}"></div>
-            </div>
         </div>
         <button class="btn btn-primary mt-4" type="submit">Save profile</button>
     </form>
+
+    <section class="mz-panel mt-4" th:if="${addresses != null}">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h2 class="h5 mb-0">Delivery addresses</h2>
+            <div class="d-flex gap-2">
+                <a th:href="@{/addresses/new}" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg me-1"></i>Add address</a>
+                <a th:href="@{/addresses}" class="btn btn-sm btn-outline-primary">Manage</a>
+            </div>
+        </div>
+        <p th:if="${#lists.isEmpty(addresses)}" class="small text-muted mb-0">No saved addresses yet. Add one to place orders.</p>
+        <div th:each="a : ${addresses}" class="d-flex gap-2 py-2 border-top small">
+            <i class="bi text-success" th:classappend="${a.type.icon}" aria-hidden="true"></i>
+            <div>
+                <strong th:text="${a.label}"></strong>
+                <span th:if="${a.defaultAddress}" class="badge text-bg-light ms-1">Default</span>
+                <div class="text-muted" th:text="${a.receiverName} + ' · ' + ${a.formatted}"></div>
+            </div>
+        </div>
+    </section>
 </main>
 
 <footer th:replace="~{fragments/layout :: footer}"></footer>

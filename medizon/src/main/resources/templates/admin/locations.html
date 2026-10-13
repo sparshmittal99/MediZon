@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Delivery areas')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+        <div>
+            <h1 class="mz-page-title mb-1">Delivery areas</h1>
+            <p class="text-muted mb-0">Customers can only order to these PIN codes. The header's location picker checks them as people choose where to deliver.</p>
+        </div>
+        <span class="badge text-bg-light fs-6" th:text="${activeCount} + ' delivering'">0 delivering</span>
+    </div>
+
+    <section class="mz-panel mb-4">
+        <h2 class="h6 mb-3">Add PIN codes</h2>
+        <form th:action="@{/admin/locations}" method="post" class="row g-3" autocomplete="off">
+            <div class="col-12">
+                <label class="form-label small" for="pincodes">PIN codes</label>
+                <textarea id="pincodes" name="pincodes" class="form-control" rows="2" required
+                          placeholder="400050, 400051, 400052"></textarea>
+                <div class="form-text">One or many: separate them with commas, spaces or new lines.</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small" for="area">Area <span class="text-muted fw-normal">(optional)</span></label>
+                <input id="area" name="area" class="form-control" placeholder="Bandra West">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small" for="city">City <span class="text-muted fw-normal">(optional)</span></label>
+                <input id="city" name="city" class="form-control" placeholder="Mumbai">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small" for="state">State <span class="text-muted fw-normal">(optional)</span></label>
+                <input id="state" name="state" class="form-control" placeholder="Maharashtra">
+            </div>
+            <div class="col-12">
+                <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1"></i>Add to delivery areas</button>
+            </div>
+        </form>
+    </section>
+
+    <div th:if="${#lists.isEmpty(pincodes)}" class="mz-panel mz-empty">
+        <i class="bi bi-geo-alt"></i>
+        <p class="mb-0">No PIN codes yet. Until you add some, customers see "We don't deliver here" and can't check out.</p>
+    </div>
+    <div th:unless="${#lists.isEmpty(pincodes)}" class="mz-panel-flush">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>PIN code</th><th>Area</th><th>City</th><th>State</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+                <tbody>
+                <tr th:each="p : ${pincodes}" th:classappend="${!p.active} ? 'mz-user-off'">
+                    <td class="fw-semibold" style="font-variant-numeric: tabular-nums" th:text="${p.pincode}"></td>
+                    <td th:text="${p.area} ?: '—'"></td>
+                    <td th:text="${p.city} ?: '—'"></td>
+                    <td th:text="${p.state} ?: '—'"></td>
+                    <td>
+                        <span th:if="${p.active}" class="badge text-bg-success">Delivering</span>
+                        <span th:unless="${p.active}" class="badge text-bg-secondary">Paused</span>
+                    </td>
+                    <td class="text-end">
+                        <div class="d-inline-flex gap-2">
+                            <form th:action="@{/admin/locations/{id}/active(id=${p.id})}" method="post">
+                                <input type="hidden" name="active" th:value="${!p.active}">
+                                <button class="btn btn-sm btn-outline-secondary" type="submit" th:text="${p.active} ? 'Pause' : 'Resume'">Pause</button>
+                            </form>
+                            <form th:action="@{/admin/locations/{id}/delete(id=${p.id})}" method="post"
+                                  th:attr="data-mz-confirm='Customers in ' + ${p.pincode} + ' will no longer be able to order.'"
+                                  data-mz-confirm-title="Remove this PIN code?" data-mz-confirm-ok="Remove">
+                                <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Remove"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

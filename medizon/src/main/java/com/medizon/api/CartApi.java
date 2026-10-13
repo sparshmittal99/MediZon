@@ -1,12 +1,12 @@
 package com.medizon.api;
 
 import com.medizon.domain.CartItem;
-import com.medizon.domain.Member;
 import com.medizon.domain.User;
 import com.medizon.dto.CartSummary;
 import com.medizon.service.BusinessException;
 import com.medizon.service.CartService;
 import com.medizon.service.CurrentUser;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,8 +14,8 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /** Used by the quantity steppers on product cards, product pages and the cart to change the cart without reloading. */
 @RestController
@@ -30,24 +30,40 @@ public class CartApi {
 
     /** Packs per medicine id and the badge count, so open pages can resync after the assistant changes the cart. */
     @GetMapping
-    public Map<String, Object> cart() {
-        User user = currentUser.get();
-        return Map.of("quantities", cartService.quantities(user), "cartCount", cartService.count(user));
+    public Map<String, Object> cart(HttpSession session) {
+        Optional<User> user = currentUser.find();
+        if (user.isEmpty()) {
+            return Map.of("quantities", cartService.guestQuantities(session), "cartCount", cartService.guestCount(session));
+        }
+        return Map.of("quantities", cartService.quantities(user.get()), "cartCount", cartService.count(user.get()));
     }
 
-    /** Sets the quantity and returns the new totals, already formatted the way the cart page shows them. */
+    /**
+     * Sets the quantity and returns the new totals, already formatted the way the cart page shows them. Signed-out
+     * visitors change their session cart.
+     */
     @PostMapping("/{medicineId}")
-    public Map<String, Object> setQuantity(@PathVariable Long medicineId, @RequestBody QuantityRequest req) {
-        User user = currentUser.get();
-        int qty = cartService.setQuantity(user, medicineId, req.quantity());
-        CartSummary c = cartService.summary(user);
+    public Map<String, Object> setQuantity(@PathVariable Long medicineId, @RequestBody QuantityRequest req, HttpSession session) {
+        Optional<User> user = currentUser.find();
+        int qty;
+        CartSummary c;
+        long count;
+        if (user.isPresent()) {
+            qty = cartService.setQuantity(user.get(), medicineId, req.quantity());
+            c = cartService.summary(user.get());
+            count = cartService.count(user.get());
+        } else {
+            qty = cartService.setGuestQuantity(session, medicineId, req.quantity());
+            c = cartService.guestSummary(session);
+            count = cartService.guestCount(session);
+        }
         BigDecimal line = c.getItems().stream().filter(i -> i.getMedicine().getId().equals(medicineId))
                 .map(CartItem::getLineTotal).findFirst().orElse(BigDecimal.ZERO);
 
         Map<String, Object> out = new HashMap<>();
         out.put("medicineId", medicineId);
         out.put("quantity", qty);
-        out.put("cartCount", cartService.count(user));
+        out.put("cartCount", count);
         out.put("lineTotal", money(line));
         out.put("subtotal", money(c.getSubtotal()));
         out.put("delivery", c.getDeliveryFee().signum() == 0 ? "Free" : "₹" + c.getDeliveryFee().toPlainString());
@@ -55,17 +71,19 @@ public class CartApi {
         out.put("total", money(c.getTotal()));
         out.put("prescriptionRequired", c.isPrescriptionRequired());
         out.put("empty", c.isEmpty());
+        c.getItems().stream().filter(i -> i.getMedicine().getId().equals(medicineId)).findFirst()
+                .ifPresent(i -> out.put("allocation", i.getAllocationById()));
         return out;
     }
 
-    public record MembersRequest(List<Long> memberIds) {}
+    /** Packs per member id; members missing or at 0 aren't on the line. */
+    public record AllocationRequest(Map<Long, Integer> packs) {}
 
-    /** Sets who a cart line is for and returns the members it's now tagged with. */
-    @PostMapping("/{medicineId}/members")
-    public Map<String, Object> setMembers(@PathVariable Long medicineId, @RequestBody MembersRequest req) {
-        CartItem item = cartService.setMembers(currentUser.get(), medicineId, req.memberIds());
-        return Map.of("medicineId", medicineId,
-                "memberIds", item.getSortedMembers().stream().map(Member::getId).toList());
+    /** Sets how many packs each person gets; the line's quantity becomes the total. Returns the new totals. */
+    @PostMapping("/{medicineId}/allocation")
+    public Map<String, Object> setAllocation(@PathVariable Long medicineId, @RequestBody AllocationRequest req, HttpSession session) {
+        CartItem item = cartService.setAllocation(currentUser.get(), medicineId, req.packs());
+        return setQuantity(medicineId, new QuantityRequest(item.getQuantity()), session);
     }
 
     @ExceptionHandler(BusinessException.class)

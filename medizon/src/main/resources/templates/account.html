@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('Account settings')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<th:block th:if="${me.admin}"><div th:replace="~{fragments/layout :: adminNav}"></div></th:block>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" style="max-width: 860px">
+    <div class="mz-account-head mb-4">
+        <span class="mz-avatar" aria-hidden="true" th:text="${#strings.toUpperCase(#strings.substring(me.firstName + '?', 0, 1))}">A</span>
+        <div class="min-w-0">
+            <h1 class="mz-page-title mb-0">Account settings</h1>
+            <div class="text-muted small text-truncate">
+                <span th:text="${me.fullName}"></span> · <span th:text="${me.email}"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <nav class="mz-account-nav" aria-label="Account">
+                <a href="#signin"><i class="bi bi-person-badge" aria-hidden="true"></i>Sign-in details</a>
+                <a href="#password"><i class="bi bi-key" aria-hidden="true"></i>Change password</a>
+                <a href="#devices"><i class="bi bi-laptop" aria-hidden="true"></i>Signed-in devices</a>
+                <a th:href="@{/profile}"><i class="bi bi-person" aria-hidden="true"></i>Profile</a>
+                <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/addresses}"><i class="bi bi-geo-alt" aria-hidden="true"></i>Saved addresses</a>
+                <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/billing-address}"><i class="bi bi-receipt" aria-hidden="true"></i>Billing address</a>
+                <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/members}"><i class="bi bi-people" aria-hidden="true"></i>Family members</a>
+                <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/orders}"><i class="bi bi-box-seam" aria-hidden="true"></i>Your orders</a>
+                <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/notifications/settings}"><i class="bi bi-sliders" aria-hidden="true"></i>Alerts on this device</a>
+            </nav>
+        </div>
+
+        <div class="col-lg-8">
+            <section class="mz-panel mb-4" id="signin">
+                <h2 class="h5 mb-3">Sign-in details</h2>
+                <dl class="mz-account-dl mb-0">
+                    <dt>Email</dt><dd th:text="${me.email}"></dd>
+                    <dt>Mobile</dt><dd th:text="${me.phone} ?: 'Not added'"></dd>
+                    <dt>Account type</dt><dd th:text="${me.admin} ? 'Admin' : 'Customer'"></dd>
+                    <dt>Member since</dt><dd th:text="${#temporals.format(me.createdAt, 'd MMM yyyy')}"></dd>
+                    <dt th:if="${me.lastLoginAt != null}">Last sign-in</dt>
+                    <dd th:if="${me.lastLoginAt != null}" th:text="${#temporals.format(me.lastLoginAt, 'd MMM yyyy, h:mm a')}"></dd>
+                </dl>
+                <a th:href="@{/profile}" class="btn btn-sm btn-outline-primary mt-3">Edit name and mobile</a>
+            </section>
+
+            <section class="mz-panel mb-4" id="password">
+                <h2 class="h5 mb-1">Change password</h2>
+                <p class="small text-muted mb-3">After the change, you'll stay signed in here and be signed out on your other devices.</p>
+                <!-- Two steps: confirm the current password, then choose the new one. Without JavaScript all fields show. -->
+                <form th:action="@{/account/password}" method="post" autocomplete="off" data-mz-password-form>
+                    <ol class="mz-steps small mb-3" aria-label="Steps">
+                        <li class="is-active" data-mz-step-dot="1">Current password</li>
+                        <li data-mz-step-dot="2">New password</li>
+                    </ol>
+
+                    <div data-mz-step="1">
+                        <label class="form-label" for="currentPassword">Enter your current password</label>
+                        <div class="mz-pw" style="max-width: 24rem">
+                            <!-- medizon.js keeps it readonly until focused, so the browser doesn't fill in a saved password -->
+                            <input class="form-control" id="currentPassword" name="currentPassword" type="password" required
+                                   autocomplete="off" data-mz-no-autofill>
+                            <button type="button" class="mz-pw-toggle" data-mz-pw-toggle aria-label="Show password"><i class="bi bi-eye"></i></button>
+                        </div>
+                        <div class="small text-danger mt-2" data-mz-step-error role="alert" hidden></div>
+                        <button class="btn btn-primary mt-3" type="button" data-mz-step-next hidden>Continue</button>
+                    </div>
+
+                    <div data-mz-step="2" class="mt-3">
+                        <div class="mz-step-done small mb-3" data-mz-step-done hidden>
+                            <i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>Current password confirmed.
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline" data-mz-step-back>Change</button>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="newPassword">New password</label>
+                                <div class="mz-pw">
+                                    <input class="form-control" id="newPassword" name="newPassword" type="password" required
+                                           th:minlength="${minPassword}" autocomplete="new-password" aria-describedby="newPasswordHelp">
+                                    <button type="button" class="mz-pw-toggle" data-mz-pw-toggle aria-label="Show password"><i class="bi bi-eye"></i></button>
+                                </div>
+                                <div class="form-text" id="newPasswordHelp" th:text="'At least ' + ${minPassword} + ' characters.'">At least 6 characters.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="confirmPassword">Confirm new password</label>
+                                <div class="mz-pw">
+                                    <input class="form-control" id="confirmPassword" name="confirmPassword" type="password" required
+                                           th:minlength="${minPassword}" autocomplete="new-password">
+                                    <button type="button" class="mz-pw-toggle" data-mz-pw-toggle aria-label="Show password"><i class="bi bi-eye"></i></button>
+                                </div>
+                                <div class="invalid-feedback">The new passwords don't match.</div>
+                            </div>
+                            <div class="col-12">
+                                <button class="btn btn-primary" type="submit">Update password</button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </section>
+
+            <section class="mz-panel" id="devices">
+                <h2 class="h5 mb-1">Signed-in devices</h2>
+                <p class="small text-muted mb-3" th:text="${sessions <= 1} ? 'You are signed in on this device only.'
+                        : 'You are signed in on ' + ${sessions} + ' browsers or devices, including this one.'"></p>
+                <div class="d-flex flex-wrap gap-2">
+                    <form th:action="@{/account/sign-out-others}" method="post"
+                          data-mz-confirm="You'll stay signed in here. Everywhere else will need to sign in again."
+                          data-mz-confirm-title="Sign out other devices?" data-mz-confirm-ok="Sign them out">
+                        <button class="btn btn-outline-secondary" type="submit" th:disabled="${sessions <= 1}">
+                            <i class="bi bi-phone me-1"></i>Sign out other devices</button>
+                    </form>
+                    <form th:action="@{/logout}" method="post">
+                        <button class="btn btn-outline-danger" type="submit"><i class="bi bi-box-arrow-right me-1"></i>Sign out</button>
+                    </form>
+                </div>
+            </section>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

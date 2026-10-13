@@ -42,11 +42,15 @@ public class Member {
 
     public boolean isCommon() { return kind == MemberKind.COMMON; }
 
+    /** Bought for someone outside the household: delivered, but not added to My medicines. */
+    public boolean isOthers() { return kind == MemberKind.OTHERS; }
+
     /** Name shown in tabs, pickers and lists. */
     public String getLabel() {
         return switch (kind) {
             case SELF -> "Me";
             case COMMON -> "Common (OTC)";
+            case OTHERS -> "Others";
             case FAMILY -> name;
         };
     }
@@ -56,12 +60,14 @@ public class Member {
         return switch (kind) {
             case SELF -> "";
             case COMMON -> " (common)";
+            case OTHERS -> " (for others)";
             case FAMILY -> " (" + name + ")";
         };
     }
 
     public String getInitial() {
         if (kind == MemberKind.COMMON) return "+";
+        if (kind == MemberKind.OTHERS) return "→";
         return name == null || name.isBlank() ? "?" : name.trim().substring(0, 1).toUpperCase();
     }
 }

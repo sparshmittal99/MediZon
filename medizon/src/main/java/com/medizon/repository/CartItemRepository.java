@@ -12,7 +12,6 @@ import java.util.Optional;
 public interface CartItemRepository extends JpaRepository<CartItem, Long> {
     List<CartItem> findByUserOrderByIdAsc(User user);
     Optional<CartItem> findByUserAndMedicine(User user, Medicine medicine);
-    Optional<CartItem> findByIdAndUser(Long id, User user);
     long countByUser(User user);
 
     @Query("select c from CartItem c where c.members is empty")

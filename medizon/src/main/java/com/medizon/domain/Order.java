@@ -48,6 +48,24 @@ public class Order {
     private String shippingAddress;
     private String contactPhone;
 
+    /** Who receives the parcel; the account holder unless the address was for someone else. */
+    @Column(length = 80)
+    private String receiverName;
+
+    /** "Home", "Office" ... of the saved address used. */
+    @Column(length = 40)
+    private String addressLabel;
+
+    /** Billing details copied at checkout: the account's billing address, else the delivery address. */
+    @Column(length = 80)
+    private String billingName;
+
+    @Column(length = 500)
+    private String billingAddress;
+
+    @Column(length = 15)
+    private String billingGstin;
+
     /** State delivered to, snapshotted for the invoice's place of supply (CGST + SGST or IGST). */
     private String shippingState;
 
@@ -62,6 +80,20 @@ public class Order {
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
     private LocalDateTime deliveredAt;
+
+    /** The receiver, falling back to the account holder for orders from before addresses had one. */
+    public String getDeliverTo() {
+        return receiverName != null && !receiverName.isBlank() ? receiverName : user.getFullName();
+    }
+
+    /** Who the invoice is billed to; orders from before billing addresses existed were billed to the account holder. */
+    public String getBillTo() {
+        return billingName != null && !billingName.isBlank() ? billingName : user.getFullName();
+    }
+
+    public String getBillToAddress() {
+        return billingAddress != null && !billingAddress.isBlank() ? billingAddress : shippingAddress;
+    }
 
     public void addItem(OrderItem item) {
         item.setOrder(this);

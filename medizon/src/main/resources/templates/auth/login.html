@@ -12,6 +12,10 @@
         <div th:if="${param.error}" class="alert alert-danger">That email and password don't match. Try again.</div>
         <div th:if="${param.disabled}" class="alert alert-danger">This account has been disabled. Contact MediZon support for help.</div>
         <div th:if="${param.expired}" class="alert alert-warning">You were signed out. Please sign in again.</div>
+        <div th:if="${cartCount != null and cartCount > 0}" class="alert alert-success small">
+            <i class="bi bi-bag-check me-1" aria-hidden="true"></i>
+            Sign in to check out. The <span th:text="${cartCount}"></span> item(s) in your cart stay there.
+        </div>
         <form th:action="@{/login}" method="post">
             <div class="mb-3">
                 <label class="form-label" for="email">Email</label>
@@ -19,7 +23,10 @@
             </div>
             <div class="mb-3">
                 <label class="form-label" for="password">Password</label>
-                <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required>
+                <div class="mz-pw">
+                    <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required>
+                    <button type="button" class="mz-pw-toggle" data-mz-pw-toggle aria-label="Show password"><i class="bi bi-eye"></i></button>
+                </div>
             </div>
             <div class="form-check mb-4">
                 <input class="form-check-input" type="checkbox" id="remember" name="remember-me">

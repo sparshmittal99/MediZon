@@ -26,7 +26,9 @@
                     <td><a class="fw-semibold" th:href="@{/admin/orders/{id}(id=${o.id})}" th:text="${o.orderNumber}"></a>
                         <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Auto</span>
                         <span th:if="${o.prescription != null}" class="mz-rx position-static ms-1">Rx</span></td>
-                    <td><span th:text="${o.user.fullName}"></span><div class="small text-muted" th:text="${o.contactPhone}"></div></td>
+                    <td><span th:text="${o.user.fullName}"></span>
+                        <div th:if="${o.deliverTo != o.user.fullName}" class="small" th:text="'For ' + ${o.deliverTo}"></div>
+                        <div class="small text-muted" th:text="${o.contactPhone}"></div></td>
                     <td class="text-nowrap" th:text="${#temporals.format(o.createdAt, 'd MMM, h:mm a')}"></td>
                     <td th:text="'₹' + ${o.total}"></td>
                     <td class="small" th:text="${o.paymentMethod.name()} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></td>

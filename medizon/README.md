@@ -46,7 +46,7 @@ All settings are in `application.properties` and can be overridden with environm
 | `ASSISTANT_TOKEN` | Optional shared secret; set the same value on both services |
 | `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_USER`, `MAIL_PASSWORD` | Email copies of reminders and alerts (logged only when disabled) |
 | `UPLOAD_DIR` | Where prescription files and return photos are stored |
-| `SELLER_NAME`, `SELLER_GSTIN`, `SELLER_DRUG_LICENSE`, `SELLER_ADDRESS`, `SELLER_STATE`, `SELLER_PHONE`, `SELLER_EMAIL` | Seller details on GST invoices. `SELLER_STATE` decides CGST + SGST (same state as the customer) or IGST |
+| `SELLER_NAME`, `SELLER_GSTIN`, `SELLER_DRUG_LICENSE`, `SELLER_ADDRESS`, `SELLER_STATE`, `SELLER_PHONE`, `SELLER_EMAIL` | Seller details on GST invoices and in the site footer. `SELLER_STATE` decides CGST + SGST (same state as the customer) or IGST. Placeholder values are set in `application.properties` until real ones are given |
 | `BASE_URL` | Used for links inside emails |
 | `MEDIZON_ADMIN_EMAIL`, `MEDIZON_ADMIN_PASSWORD`, `MEDIZON_ADMIN_NAME` | First admin account, created on startup when no admin exists |
 
@@ -56,11 +56,21 @@ All settings are in `application.properties` and can be overridden with environm
 cancel before shipping, buy again, prescription upload, profile and address, notification centre,
 desktop notifications, chat assistant, family members (each with their own medicines, reminders and supply),
 per-device alert settings (everyone, or only some members), choosing who each cart item is for (or the household's
-common OTC shelf), GST tax invoices, and returns with a reason and photos.
+common OTC shelf), GST tax invoices, and returns with a reason and photos. A "Delivers to" location in the header
+(device location, a pin on the map, an address search or a PIN code, geocoded with OpenStreetMap) says whether
+MediZon delivers there. Visitors can fill a cart before signing in; it moves into their account when they sign in
+and "Sign in to checkout" brings them back to checkout. Saved addresses (home, office or a named other place,
+for the customer or for someone else with the receiver's name and phone); checkout and the header picker choose
+between them. Automatic refills go to the address chosen on each reminder, or the default one. One billing address
+(optional, with GSTIN) is set from the account menu; checkout shows it next to the shipping address and the tax
+invoice prints both. Without it, orders are billed to the account holder at the delivery address. In the cart a medicine can also be for "Others"
+(someone outside the family): it's delivered but not added to My medicines. Account settings: change password (current
+password first, then the new one twice) and sign out other devices.
 
 **Pharmacist / admin**: dashboard, customer order pipeline (Placed → Confirmed → Shipped → Delivered / Cancelled),
 prescription review with validity date, GST tax invoices, return review (approve or reject, pickup with optional
-restock, refund), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, medicines sold, HSN summary and returns sheets; CSV), catalog management with stock, low-stock list, customer accounts,
+restock, refund), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, medicines sold, HSN summary and returns sheets; CSV), catalog management with stock, low-stock list, delivery areas (the PIN codes MediZon delivers to; orders to any
+other PIN code are refused, including automatic refills), customer accounts,
 creating other admin accounts, customer feedback, and a chat assistant for store tasks and review insights. Admin accounts are for running the store only; they can't shop, order or set reminders.
 
 ## How reminders and refills work

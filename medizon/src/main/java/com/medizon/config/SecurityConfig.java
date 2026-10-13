@@ -1,5 +1,6 @@
 package com.medizon.config;
 
+import com.medizon.service.CartService;
 import com.medizon.service.UserService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,27 +31,33 @@ public class SecurityConfig {
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, AppUserDetailsService userDetailsService,
-                                           SessionRegistry sessionRegistry, @Lazy UserService userService) throws Exception {
+                                           SessionRegistry sessionRegistry, @Lazy UserService userService,
+                                           @Lazy CartService cartService) throws Exception {
         http
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/", "/medicines", "/medicines/**", "/register", "/login",
                         "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/favicon.ico", "/error").permitAll()
+                // Visitors can fill a cart and pick a delivery location before signing in; checkout needs an account.
+                // Admin accounts are turned away in CartController / CartService.
+                .requestMatchers("/cart", "/cart/add", "/cart/*/remove", "/api/cart", "/api/cart/*", "/api/location/**").permitAll()
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 .requestMatchers("/prescriptions/*/file", "/returns/*/images/*").authenticated()   // owner or admin, checked in the service
                 // Shopping and dose reminders are for customers; admin accounts only run the store.
                 // The assistant API is open to both roles; each role gets its own actions in AssistantTools.
                 .requestMatchers("/cart/**", "/api/cart/**", "/checkout", "/orders/**", "/plans/**",
-                        "/prescriptions/**", "/members/**", "/notifications/settings", "/notifications/devices/**").hasRole("CUSTOMER")
+                        "/prescriptions/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
             .exceptionHandling(ex -> ex.accessDeniedHandler(accessDeniedHandler()))
             .formLogin(form -> form
                 .loginPage("/login")
                 .usernameParameter("email")
-                .successHandler(successHandler(userService))
+                .successHandler(successHandler(userService, cartService))
                 .failureHandler(failureHandler())
                 .permitAll())
             .logout(logout -> logout
                 .logoutSuccessUrl("/?signedOut")
+                // The "Delivers to" location belongs to whoever picked it: signing out goes back to "Select location"
+                .deleteCookies("mz_pin", "mz_loc", "mz_addr", "mz_loc_by")
                 .permitAll())
             .rememberMe(rm -> rm
                 .key("medizon-remember-me")
@@ -63,12 +70,16 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** Admins land on the dashboard; customers go back to what they were doing. */
-    private AuthenticationSuccessHandler successHandler(UserService userService) {
+    /**
+     * Admins land on the dashboard; customers go back to what they were doing (checkout, when they signed in from
+     * the cart). Anything put in the cart before signing in moves into the account's cart.
+     */
+    private AuthenticationSuccessHandler successHandler(UserService userService, CartService cartService) {
         SavedRequestAwareAuthenticationSuccessHandler customer = new SavedRequestAwareAuthenticationSuccessHandler();
         customer.setDefaultTargetUrl("/");
         return (request, response, authentication) -> {
-            userService.recordLogin(authentication.getName());
+            userService.recordLogin(authentication.getName())
+                    .ifPresent(u -> cartService.mergeGuestCart(u, request.getSession(false)));
             boolean admin = authentication.getAuthorities().stream()
                     .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
             if (admin) response.sendRedirect(request.getContextPath() + "/admin");

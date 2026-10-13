@@ -13,6 +13,7 @@ import java.util.Optional;
 public interface MedicationPlanRepository extends JpaRepository<MedicationPlan, Long> {
     List<MedicationPlan> findByUserOrderByActiveDescIdDesc(User user);
     List<MedicationPlan> findByUserAndActiveTrue(User user);
+    List<MedicationPlan> findByRefillAddress(com.medizon.domain.Address address);
     List<MedicationPlan> findByMemberAndMedicine(Member member, Medicine medicine);
     List<MedicationPlan> findByMember(Member member);
     List<MedicationPlan> findByMemberIsNull();

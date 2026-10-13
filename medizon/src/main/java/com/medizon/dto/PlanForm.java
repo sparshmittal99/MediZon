@@ -69,6 +69,9 @@ public class PlanForm {
     @Max(value = 20, message = "At most 20 packs")
     private int reorderPacks = 1;
 
+    /** Saved address automatic refills go to; null means the default address. */
+    private Long refillAddressId;
+
     /** Read-only on the form: this plan was created by a delivery and still needs its schedule. */
     private boolean setupRequired;
 
@@ -113,6 +116,7 @@ public class PlanForm {
         f.setReorderMode(p.getReorderMode());
         f.setReorderThresholdDays(p.getReorderThresholdDays());
         f.setReorderPacks(p.getReorderPacks());
+        f.setRefillAddressId(p.getRefillAddress() == null ? null : p.getRefillAddress().getId());
         f.setSetupRequired(p.isSetupRequired());
         return f;
     }

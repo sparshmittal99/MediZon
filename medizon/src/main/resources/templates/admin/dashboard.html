@@ -12,6 +12,12 @@
         <a th:href="@{/admin/sales}" class="btn btn-outline-primary"><i class="bi bi-graph-up me-1"></i>Sales and returns report</a>
     </div>
 
+    <div th:if="${deliveryAreas == 0}" class="alert alert-warning d-flex flex-wrap align-items-center gap-2 mb-4" role="alert">
+        <i class="bi bi-geo-alt" aria-hidden="true"></i>
+        <span class="flex-grow-1">No delivery areas yet, so customers can't place orders. Add the PIN codes you deliver to.</span>
+        <a th:href="@{/admin/locations}" class="btn btn-sm btn-warning">Add PIN codes</a>
+    </div>
+
     <h2 class="mz-section-title">Today</h2>
     <div class="row row-cols-2 row-cols-lg-4 g-3 mb-4">
         <div class="col"><a th:href="@{/admin/sales(from=${today.day}, to=${today.day})}" class="text-decoration-none text-reset">

@@ -26,15 +26,19 @@ public class OrderService {
     private final NotificationService notifications;
     private final MedicationPlanService planService;
     private final InvoiceService invoiceService;
+    private final DeliveryAreaService deliveryAreas;
+    private final AddressService addressService;
 
-    /** One order line: packs of a medicine and who they're for. */
-    private record Line(Long medicineId, int quantity, Set<Member> members) {}
+    /** One order line: packs of a medicine and how many packs each person gets. */
+    private record Line(Long medicineId, int quantity, Map<Member, Integer> packs) {}
 
     // ------------------------------------------------------------------ customer checkout
 
     @Transactional
-    public Order checkout(User user, PaymentMethod paymentMethod, Long prescriptionId) {
+    public Order checkout(User user, PaymentMethod paymentMethod, Long prescriptionId, Long addressId) {
         if (user.isAdmin()) throw new BusinessException("Admin accounts can't place orders.");
+        if (addressId == null) throw new BusinessException("Choose a delivery address.");
+        Address ship = addressService.get(addressId, user);
         CartSummary cart = cartService.summary(user);
         if (cart.isEmpty()) throw new BusinessException("Your cart is empty.");
 
@@ -51,10 +55,10 @@ public class OrderService {
         List<Line> lines = new ArrayList<>();
         for (CartItem i : cart.getItems()) {
             if (i.getMembers().isEmpty()) throw new BusinessException("Choose who " + i.getMedicine().getName() + " is for.");
-            lines.add(new Line(i.getMedicine().getId(), i.getQuantity(), new HashSet<>(i.getMembers())));
+            lines.add(new Line(i.getMedicine().getId(), i.getQuantity(), i.getAllocation()));
         }
 
-        Order order = createOrder(user, lines, paymentMethod, rx, OrderSource.CUSTOMER);
+        Order order = createOrder(user, lines, paymentMethod, rx, OrderSource.CUSTOMER, ship);
         cartService.clear(user);
         notifications.notify(user, NotificationType.ORDER_UPDATE, "Order placed",
                 "Order " + order.getOrderNumber() + " for ₹" + order.getTotal() + " is placed.",
@@ -68,7 +72,9 @@ public class OrderService {
     public Optional<String> autoReorderBlocker(MedicationPlan plan) {
         User user = plan.getUser();
         Medicine m = plan.getMedicine();
-        if (!user.hasAddress()) return Optional.of("there's no delivery address on your profile");
+        Address ship = refillAddress(plan);
+        if (ship == null) return Optional.of("there's no saved delivery address");
+        if (!deliveryAreas.isServiceable(ship.getPincode())) return Optional.of("we don't deliver to PIN code " + ship.getPincode() + " yet");
         if (!m.isActive()) return Optional.of(m.getName() + " is no longer sold on MediZon");
         if (m.getStock() < plan.getReorderPacks()) return Optional.of(m.getName() + " is out of stock");
         if (m.isExpired()) return Optional.of("the stock of " + m.getName() + " has expired");
@@ -83,9 +89,16 @@ public class OrderService {
         User user = plan.getUser();
         Medicine m = plan.getMedicine();
         Prescription rx = m.isPrescriptionRequired() ? findValidPrescription(user).orElse(null) : null;
-        Set<Member> forWhom = plan.getMember() == null ? Set.of() : Set.of(plan.getMember());
-        return createOrder(user, List.of(new Line(m.getId(), Math.max(1, plan.getReorderPacks()), forWhom)),
-                PaymentMethod.COD, rx, OrderSource.AUTO_REORDER);
+        int packs = Math.max(1, plan.getReorderPacks());
+        Map<Member, Integer> forWhom = plan.getMember() == null ? Map.of() : Map.of(plan.getMember(), packs);
+        return createOrder(user, List.of(new Line(m.getId(), packs, forWhom)),
+                PaymentMethod.COD, rx, OrderSource.AUTO_REORDER, refillAddress(plan));
+    }
+
+    /** The address chosen on the reminder for automatic refills, else the default address. */
+    private Address refillAddress(MedicationPlan plan) {
+        return plan.getRefillAddress() != null ? plan.getRefillAddress()
+                : addressService.defaultFor(plan.getUser()).orElse(null);
     }
 
     private Optional<Prescription> findValidPrescription(User user) {
@@ -95,9 +108,11 @@ public class OrderService {
 
     // ------------------------------------------------------------------ shared core
 
+    /** {@code ship} is the saved address to deliver to; without one, the account's address is used. */
     private Order createOrder(User user, List<Line> lines, PaymentMethod paymentMethod,
-                              Prescription rx, OrderSource source) {
-        if (!user.hasAddress()) throw new BusinessException("Add a delivery address to your profile first.");
+                              Prescription rx, OrderSource source, Address ship) {
+        if (ship == null && !user.hasAddress()) throw new BusinessException("Add a delivery address first.");
+        deliveryAreas.requireServiceable(ship != null ? ship.getPincode() : user.getPincode());
 
         Order order = new Order();
         order.setOrderNumber(newOrderNumber());
@@ -105,9 +120,26 @@ public class OrderService {
         order.setPaymentMethod(paymentMethod);
         order.setSource(source);
         order.setPrescription(rx);
-        order.setShippingAddress(user.getFormattedAddress());
-        order.setContactPhone(user.getPhone());
-        order.setShippingState(user.getState());
+        if (ship != null) {
+            order.setShippingAddress(ship.getFormatted());
+            order.setContactPhone(ship.getReceiverPhone());
+            order.setShippingState(ship.getState());
+            order.setReceiverName(ship.getReceiverName());
+            order.setAddressLabel(ship.getLabel());
+        } else {
+            order.setShippingAddress(user.getFormattedAddress());
+            order.setContactPhone(user.getPhone());
+            order.setShippingState(user.getState());
+            order.setReceiverName(user.getFullName());
+        }
+        if (user.hasBillingAddress()) {
+            order.setBillingName(user.getBilling().getName());
+            order.setBillingAddress(user.getBilling().getFormatted());
+            order.setBillingGstin(user.getBilling().getGstin());
+        } else {
+            order.setBillingName(user.getFullName());   // the buyer, even when the parcel goes to someone else
+            order.setBillingAddress(order.getShippingAddress());
+        }
 
         BigDecimal subtotal = BigDecimal.ZERO;
         for (Line line : lines) {
@@ -130,7 +162,10 @@ public class OrderService {
             item.setHsnCode(m.getHsnCode());
             item.setGstRate(m.getGstRate());
             item.setExpiryDate(m.getExpiryDate());
-            item.getMembers().addAll(line.members());
+            line.packs().forEach((who, n) -> {
+                item.getMembers().add(who);
+                item.getPacks().put(who.getId(), n);
+            });
             order.addItem(item);
             subtotal = subtotal.add(item.getLineTotal());
         }
@@ -196,8 +231,16 @@ public class OrderService {
         int added = 0;
         for (OrderItem i : o.getItems()) {
             try {
-                cartService.add(user, i.getMedicine().getId(), i.getQuantity(),
-                        i.getMembers().stream().filter(x -> !x.isRemoved()).toList());
+                // Same packs for the same people, as far as they're still on the account
+                List<Member> who = i.getSortedMembers().stream().filter(x -> !x.isRemoved()).toList();
+                if (who.isEmpty()) {
+                    cartService.add(user, i.getMedicine().getId(), i.getQuantity());
+                } else {
+                    int[] share = i.shareOf(who, i.getQuantity());
+                    for (int k = 0; k < who.size(); k++) {
+                        if (share[k] > 0) cartService.add(user, i.getMedicine().getId(), share[k], List.of(who.get(k)));
+                    }
+                }
                 added++;
             } catch (BusinessException ignored) {
                 // out of stock or discontinued: skip it

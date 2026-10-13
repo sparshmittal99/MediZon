@@ -84,10 +84,13 @@
 
                 <div class="col-12" data-show-for="DAYS_OF_WEEK">
                     <span class="form-label d-block">On these days</span>
-                    <div class="d-flex flex-wrap gap-2">
+                    <!-- Plain inputs, not th:field: its hidden "_daysOfWeek" marker would sit between each box and its
+                         label and break the :checked + label styling that shows which days are picked. -->
+                    <div class="d-flex flex-wrap gap-2" role="group" aria-label="Days of the week">
                         <th:block th:each="d : ${weekDays}">
-                            <input type="checkbox" class="btn-check" th:field="*{daysOfWeek}" th:value="${d}">
-                            <label class="btn btn-outline-secondary btn-sm mz-day" th:for="${#ids.prev('daysOfWeek')}"
+                            <input type="checkbox" class="btn-check" name="daysOfWeek" th:id="'day-' + ${d}" th:value="${d}"
+                                   th:checked="${form.daysOfWeek != null and form.daysOfWeek.contains(d)}" autocomplete="off">
+                            <label class="btn btn-sm mz-day" th:for="'day-' + ${d}"
                                    th:text="${#strings.capitalize(#strings.toLowerCase(#strings.substring(d.name(), 0, 3)))}">Mon</label>
                         </th:block>
                     </div>
@@ -163,7 +166,7 @@
                 <div class="col-12">
                     <label class="form-label d-block">When supply runs low</label>
                     <div class="form-check" th:each="mode : ${reorderModes}">
-                        <input class="form-check-input" type="radio" th:field="*{reorderMode}" th:value="${mode}">
+                        <input class="form-check-input" type="radio" th:field="*{reorderMode}" th:value="${mode}" data-mz-reorder-mode>
                         <label class="form-check-label" th:for="${#ids.prev('reorderMode')}">
                             <span class="fw-semibold" th:text="${mode.label}"></span>
                             <span class="small text-muted" th:switch="${mode.name()}">
@@ -172,6 +175,25 @@
                                 <span th:case="*">: reminders only.</span>
                             </span>
                         </label>
+                    </div>
+                </div>
+                <div class="col-12" data-mz-refill-address th:hidden="*{reorderMode.name() != 'AUTO'}">
+                    <div class="mz-take-common">
+                        <label class="form-label" for="refillAddressId">Deliver refills to</label>
+                        <th:block th:unless="${#lists.isEmpty(addresses)}">
+                            <select class="form-select" th:field="*{refillAddressId}">
+                                <option value="" th:with="d=${addresses[0]}"
+                                        th:text="'Default address (' + ${d.label} + ', ' + ${d.city} + ')'">Default address</option>
+                                <option th:each="a : ${addresses}" th:value="${a.id}"
+                                        th:text="${a.label} + ': ' + ${a.receiverName} + ', ' + ${a.formatted}"></option>
+                            </select>
+                            <div class="form-text">Pick where this medicine is needed, for example a parent's home.
+                                <a th:href="@{/addresses/new}">Add a new address</a></div>
+                        </th:block>
+                        <div th:if="${#lists.isEmpty(addresses)}" class="small">
+                            You haven't saved an address yet, so automatic refills can't be placed.
+                            <a th:href="@{/addresses/new}">Add an address</a>
+                        </div>
                     </div>
                 </div>
             </div>

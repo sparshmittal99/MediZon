@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${form.id == null} ? 'Add address' : 'Edit address')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" style="max-width: 760px">
+    <a th:href="${fromCheckout} ? @{/checkout} : @{/addresses}" class="small">
+        <i class="bi bi-arrow-left"></i> <span th:text="${fromCheckout} ? 'Checkout' : 'Saved addresses'">Saved addresses</span></a>
+    <h1 class="mz-page-title mt-2 mb-4" th:text="${form.id == null} ? 'Add a delivery address' : 'Edit address'">Add a delivery address</h1>
+
+    <form th:action="@{/addresses/save}" th:object="${form}" method="post" novalidate data-mz-address-form
+          th:attr="data-my-name=${me.fullName}, data-my-phone=${me.phone} ?: ''">
+        <input type="hidden" th:field="*{id}">
+        <input type="hidden" name="returnTo" value="checkout" th:if="${fromCheckout}">
+
+        <section class="mz-panel mb-4">
+            <h2 class="h5 mb-3">Who is this order for?</h2>
+            <div class="mz-choice-row" role="radiogroup" aria-label="Who the order is for">
+                <label class="mz-choice">
+                    <input type="radio" th:field="*{forSomeoneElse}" value="false" data-mz-for-whom>
+                    <span><i class="bi bi-person" aria-hidden="true"></i><strong>Myself</strong><small>Delivered to you</small></span>
+                </label>
+                <label class="mz-choice">
+                    <input type="radio" th:field="*{forSomeoneElse}" value="true" data-mz-for-whom>
+                    <span><i class="bi bi-gift" aria-hidden="true"></i><strong>Someone else</strong><small>Family, a friend, a patient</small></span>
+                </label>
+            </div>
+
+            <h3 class="h6 mt-4 mb-3" data-mz-receiver-title
+                th:text="*{forSomeoneElse} ? 'Receiver\'s details' : 'Your details'">Your details</h3>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="receiverName" data-mz-receiver-name-label
+                           th:text="*{forSomeoneElse} ? 'Receiver\'s name' : 'Your name'">Your name</label>
+                    <input class="form-control" th:field="*{receiverName}" th:errorclass="is-invalid" autocomplete="name">
+                    <div class="invalid-feedback" th:errors="*{receiverName}"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="receiverPhone" data-mz-receiver-phone-label
+                           th:text="*{forSomeoneElse} ? 'Receiver\'s mobile number' : 'Your mobile number'">Your mobile number</label>
+                    <input class="form-control" type="tel" th:field="*{receiverPhone}" th:errorclass="is-invalid" autocomplete="tel" inputmode="tel">
+                    <div class="form-text">The delivery partner calls this number.</div>
+                    <div class="invalid-feedback" th:errors="*{receiverPhone}"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mz-panel mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <h2 class="h5 mb-0">Address</h2>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-mz-address-gps>
+                    <i class="bi bi-crosshair me-1"></i>Use my current location</button>
+            </div>
+            <div class="small mb-3" data-mz-address-gps-msg role="status" aria-live="polite" hidden></div>
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label" for="addressLine">Flat, house no., floor, building</label>
+                    <input class="form-control" th:field="*{addressLine}" th:errorclass="is-invalid" autocomplete="address-line1">
+                    <div class="invalid-feedback" th:errors="*{addressLine}"></div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="area">Street, area or locality</label>
+                    <input class="form-control" th:field="*{area}" autocomplete="address-line2">
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="landmark">Landmark <span class="text-muted fw-normal">(optional)</span></label>
+                    <input class="form-control" th:field="*{landmark}" placeholder="Near City Hospital">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label" for="city">City</label>
+                    <input class="form-control" th:field="*{city}" th:errorclass="is-invalid" autocomplete="address-level2">
+                    <div class="invalid-feedback" th:errors="*{city}"></div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="state">State</label>
+                    <input class="form-control" th:field="*{state}" autocomplete="address-level1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="pincode">PIN code</label>
+                    <input class="form-control" th:field="*{pincode}" th:errorclass="is-invalid" inputmode="numeric" maxlength="7"
+                           autocomplete="postal-code" data-mz-address-pin>
+                    <div class="invalid-feedback" th:errors="*{pincode}"></div>
+                </div>
+                <div class="col-12"><div class="small" data-mz-address-pin-msg aria-live="polite"></div></div>
+            </div>
+        </section>
+
+        <section class="mz-panel mb-4">
+            <h2 class="h5 mb-3">Save address as</h2>
+            <div class="mz-segmented" role="radiogroup" aria-label="Address type">
+                <th:block th:each="t : ${types}">
+                    <input type="radio" class="btn-check" th:field="*{type}" th:value="${t}" data-mz-address-type>
+                    <label class="btn btn-sm mz-day" th:for="${#ids.prev('type')}">
+                        <i class="bi me-1" th:classappend="${t.icon}" aria-hidden="true"></i><span th:text="${t.label}">Home</span></label>
+                </th:block>
+            </div>
+            <div class="mt-3" data-mz-address-custom th:hidden="*{type.name() != 'OTHER'}">
+                <label class="form-label" for="customLabel">Name this address</label>
+                <input class="form-control" th:field="*{customLabel}" th:errorclass="is-invalid" placeholder="Mom's place, Clinic ..." maxlength="40">
+                <div class="invalid-feedback" th:errors="*{customLabel}"></div>
+            </div>
+            <div class="form-check mt-3">
+                <input class="form-check-input" type="checkbox" th:field="*{makeDefault}">
+                <label class="form-check-label" th:for="${#ids.prev('makeDefault')}">Make this my default address
+                    <span class="d-block small text-muted">Checkout starts on it and automatic refills go there.</span></label>
+            </div>
+        </section>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit" th:text="${form.id == null} ? 'Save address' : 'Update address'">Save address</button>
+            <a th:href="${fromCheckout} ? @{/checkout} : @{/addresses}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

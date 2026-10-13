@@ -7,10 +7,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Entity
@@ -53,12 +50,27 @@ public class OrderItem {
             joinColumns = @JoinColumn(name = "order_item_id"), inverseJoinColumns = @JoinColumn(name = "member_id"))
     private Set<Member> members = new HashSet<>();
 
+    /** Packs per member id as ordered; empty on orders from before per-person packs (shared evenly). */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "order_item_packs", joinColumns = @JoinColumn(name = "order_item_id"))
+    @MapKeyColumn(name = "member_id")
+    @Column(name = "packs")
+    private Map<Long, Integer> packs = new HashMap<>();
+
+    /** {@code total} (units or packs) shared between {@code targets} in proportion to the packs each was ordered. */
+    public int[] shareOf(List<Member> targets, int total) {
+        return Shares.split(total, targets.stream().mapToInt(m -> packs.getOrDefault(m.getId(), 0)).toArray());
+    }
+
     /** Members in a stable order (account holder first, common last). */
     public List<Member> getSortedMembers() {
         return members.stream().sorted(Comparator.comparing(Member::getKind).thenComparing(Member::getId)).toList();
     }
 
+    /** "Me (2), Asha (1)", or just the names when packs per person weren't recorded or one person had them all. */
     public String getMembersLabel() {
-        return getSortedMembers().stream().map(Member::getLabel).collect(Collectors.joining(", "));
+        List<Member> who = getSortedMembers();
+        if (who.size() < 2 || packs.isEmpty()) return who.stream().map(Member::getLabel).collect(Collectors.joining(", "));
+        return who.stream().map(m -> m.getLabel() + " (" + packs.getOrDefault(m.getId(), 0) + ")").collect(Collectors.joining(", "));
     }
 }

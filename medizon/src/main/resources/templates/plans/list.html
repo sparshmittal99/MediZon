@@ -174,6 +174,10 @@
                         <span th:text="${p.reorderMode.label}"></span>
                         <span th:if="${p.reorderMode.name() != 'OFF'}" class="text-muted fw-normal"
                               th:text="'at ' + ${p.reorderThresholdDays} + ' days, ' + ${p.reorderPacks} + ' pack(s)'"></span>
+                        <div th:if="${p.reorderMode.name() == 'AUTO'}" class="small text-muted fw-normal mt-1">
+                            <i class="bi bi-geo-alt me-1" aria-hidden="true"></i><span
+                                th:text="${p.refillAddress != null} ? 'To ' + ${p.refillAddress.label} + ', ' + ${p.refillAddress.city} : 'To your default address'"></span>
+                        </div>
                         <div th:if="${p.reorderPending}" class="small text-muted fw-normal mt-1">
                             <span th:text="${p.reorderMode.name() == 'AUTO'} ? 'Refill ordered' : 'Refill alert sent'"></span>
                             <span th:if="${p.lastReorderAt != null}" th:text="' on ' + ${#temporals.format(p.lastReorderAt, 'd MMM')}"></span>

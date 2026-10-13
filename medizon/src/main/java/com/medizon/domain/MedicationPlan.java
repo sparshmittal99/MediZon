@@ -102,6 +102,10 @@ public class MedicationPlan {
     /** Packs to order on refill. */
     private int reorderPacks = 1;
 
+    /** Where automatic refills are delivered; empty means the default address. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Address refillAddress;
+
     /** True once an alert was sent or an auto-order placed; cleared when new stock arrives. */
     private boolean reorderPending;
 

@@ -10,19 +10,50 @@
     <div class="row g-4">
         <div class="col-lg-7">
             <section class="mz-panel mb-4">
-                <div class="d-flex justify-content-between align-items-baseline">
-                    <h2 class="h5">Delivery address</h2>
-                    <a th:href="@{/profile}" class="small">Edit</a>
+                <div class="d-flex justify-content-between align-items-baseline mb-3">
+                    <h2 class="h5 mb-0">Shipping address</h2>
+                    <a th:href="@{/addresses}" class="small">Manage addresses</a>
                 </div>
-                <p th:if="${me.hasAddress()}" class="mb-0">
-                    <span class="fw-semibold" th:text="${me.fullName}"></span><br>
-                    <span th:text="${me.formattedAddress}"></span><br>
-                    <span class="text-muted" th:text="${me.phone}"></span>
-                </p>
-                <div th:unless="${me.hasAddress()}" class="alert alert-warning mb-0">
-                    Add a delivery address before placing the order.
-                    <a th:href="@{/profile}" class="alert-link">Add address</a>
+                <div th:if="${#lists.isEmpty(addresses)}" class="alert alert-warning small">Add a delivery address to place the order.</div>
+                <div class="d-grid gap-2" role="radiogroup" aria-label="Delivery address">
+                    <label th:each="a : ${addresses}" class="mz-addr-pick"
+                           th:classappend="${!serviceable.get(a.id)} ? 'is-off'">
+                        <!-- the order form is further down; form= ties the choice to it -->
+                        <input type="radio" name="addressId" form="placeOrder" th:value="${a.id}"
+                               th:checked="${a.id == selectedAddress}" th:disabled="${!serviceable.get(a.id)}" required>
+                        <span class="mz-addr-pick-body">
+                            <span class="d-flex flex-wrap align-items-center gap-2">
+                                <i class="bi" th:classappend="${a.type.icon}" aria-hidden="true"></i>
+                                <strong th:text="${a.label}">Home</strong>
+                                <span th:if="${a.defaultAddress}" class="badge text-bg-light">Default</span>
+                                <span th:if="${a.forSomeoneElse}" class="badge text-bg-light">Someone else</span>
+                                <span th:unless="${serviceable.get(a.id)}" class="badge text-bg-danger">We don't deliver here yet</span>
+                            </span>
+                            <span class="d-block small fw-semibold mt-1" th:text="${a.receiverName} + ' · ' + ${a.receiverPhone}"></span>
+                            <span class="d-block small text-muted" th:text="${a.formatted}"></span>
+                            <a class="small" th:href="@{/addresses/{id}/edit(id=${a.id}, returnTo='checkout')}">Edit</a>
+                        </span>
+                    </label>
+                    <a th:href="@{/addresses/new(returnTo='checkout')}" class="mz-addr-pick mz-addr-add text-decoration-none">
+                        <i class="bi bi-plus-lg" aria-hidden="true"></i><strong>Add a new address</strong>
+                    </a>
                 </div>
+            </section>
+
+            <section class="mz-panel mb-4">
+                <div class="d-flex justify-content-between align-items-baseline mb-2">
+                    <h2 class="h5 mb-0">Billing address</h2>
+                    <a th:href="@{/billing-address(returnTo='checkout')}" class="small"
+                       th:text="${me.hasBillingAddress()} ? 'Change' : 'Add billing address'">Change</a>
+                </div>
+                <div th:if="${me.hasBillingAddress()}" class="small">
+                    <div class="fw-semibold" th:text="${me.billing.name}"></div>
+                    <div class="text-muted" th:text="${me.billing.formatted}"></div>
+                    <div th:if="${me.billing.gstin != null}"><strong>GSTIN:</strong> <span th:text="${me.billing.gstin}"></span></div>
+                </div>
+                <p th:unless="${me.hasBillingAddress()}" class="small text-muted mb-0">
+                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Same as shipping address. The invoice is billed to
+                    <strong th:text="${me.fullName}"></strong> at the address above.</p>
             </section>
 
             <!-- Prescription upload lives outside the order form (forms can't nest) -->
@@ -72,7 +103,7 @@
                     <span>
                         <span th:text="${i.quantity} + ' × ' + ${i.medicine.name}"></span>
                         <span class="d-block text-muted" th:if="${!#lists.isEmpty(i.sortedMembers)}"
-                              th:text="'For ' + ${#strings.listJoin(i.sortedMembers.![label], ', ')}"></span>
+                              th:text="'For ' + ${i.allocationLabel}"></span>
                         <span class="d-block text-danger" th:if="${#lists.isEmpty(i.sortedMembers)}">Choose who it's for in the cart</span>
                     </span>
                     <span th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></span>
@@ -85,7 +116,7 @@
                 <div class="d-flex justify-content-between fw-bold fs-5 mb-3"><span>Total</span>
                     <span th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
                 <button form="placeOrder" class="btn btn-primary w-100" type="submit"
-                        th:disabled="${!me.hasAddress() or (cart.prescriptionRequired and #lists.isEmpty(prescriptions))}">Place order</button>
+                        th:disabled="${selectedAddress == null or (cart.prescriptionRequired and #lists.isEmpty(prescriptions))}">Place order</button>
             </div>
         </div>
     </div>

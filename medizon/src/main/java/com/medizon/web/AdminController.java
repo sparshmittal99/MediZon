@@ -49,6 +49,7 @@ public class AdminController {
     private final ReturnService returnService;
     private final SalesReportService salesReport;
     private final SalesExcelService salesExcel;
+    private final DeliveryAreaService deliveryAreas;
     private final CurrentUser currentUser;
 
     /** The image is chosen through upload / link fields, never posted directly. */
@@ -67,6 +68,7 @@ public class AdminController {
         model.addAttribute("activePlans", planRepository.countByActiveTrue());
         model.addAttribute("recentOrders", orderRepository.findTop8ByUserRoleOrderByCreatedAtDesc(Role.CUSTOMER));
         model.addAttribute("lowStock", medicineService.lowStock(MedicineService.LOW_STOCK_BELOW));
+        model.addAttribute("deliveryAreas", deliveryAreas.activeCount());
 
         // people and traffic
         LocalDate today = LocalDate.now();
@@ -258,6 +260,39 @@ public class AdminController {
         ra.addFlashAttribute("success", n == 0 ? u.getFullName() + " wasn't signed in."
                 : u.getFullName() + " was signed out of " + n + " session" + (n == 1 ? "." : "s."));
         return "redirect:/admin/users";
+    }
+
+    // ---------------------------------------------------------------- delivery areas
+
+    @GetMapping("/locations")
+    public String locations(Model model) {
+        model.addAttribute("pincodes", deliveryAreas.all());
+        model.addAttribute("activeCount", deliveryAreas.activeCount());
+        model.addAttribute("active", "locations");
+        return "admin/locations";
+    }
+
+    @PostMapping("/locations")
+    public String addLocations(@RequestParam String pincodes, @RequestParam(required = false) String area,
+                               @RequestParam(required = false) String city, @RequestParam(required = false) String state,
+                               RedirectAttributes ra) {
+        int n = deliveryAreas.add(pincodes, area, city, state);
+        ra.addFlashAttribute("success", n == 1 ? "PIN code saved. Customers there can now order." : n + " PIN codes saved. Customers there can now order.");
+        return "redirect:/admin/locations";
+    }
+
+    @PostMapping("/locations/{id}/active")
+    public String setLocationActive(@PathVariable Long id, @RequestParam boolean active, RedirectAttributes ra) {
+        ServiceablePincode p = deliveryAreas.setActive(id, active);
+        ra.addFlashAttribute("success", active ? "Delivering to " + p.getPincode() + " again." : "Deliveries to " + p.getPincode() + " paused.");
+        return "redirect:/admin/locations";
+    }
+
+    @PostMapping("/locations/{id}/delete")
+    public String deleteLocation(@PathVariable Long id, RedirectAttributes ra) {
+        ServiceablePincode p = deliveryAreas.delete(id);
+        ra.addFlashAttribute("success", p.getPincode() + " removed from delivery areas.");
+        return "redirect:/admin/locations";
     }
 
     // ---------------------------------------------------------------- reviews

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Billing address')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" style="max-width: 760px">
+    <a th:href="${fromCheckout} ? @{/checkout} : @{/account}" class="small">
+        <i class="bi bi-arrow-left"></i> <span th:text="${fromCheckout} ? 'Checkout' : 'Account settings'">Account settings</span></a>
+    <h1 class="mz-page-title mt-2 mb-1">Billing address</h1>
+    <p class="text-muted mb-4">The name and address printed on your tax invoices. It isn't used for delivery: orders go to the
+        address you choose at checkout. Without a billing address, orders are billed to the address they're delivered to.</p>
+
+    <div th:if="${me.hasBillingAddress()}" class="mz-addr-card is-default mb-4">
+        <div class="mz-addr-icon" aria-hidden="true"><i class="bi bi-receipt"></i></div>
+        <div class="flex-grow-1 min-w-0">
+            <div class="fw-semibold" th:text="${me.billing.name}"></div>
+            <div class="small text-muted" th:text="${me.billing.formatted}"></div>
+            <div class="small" th:if="${me.billing.gstin != null}"><strong>GSTIN:</strong> <span th:text="${me.billing.gstin}"></span></div>
+        </div>
+        <form th:action="@{/billing-address/remove}" method="post"
+              data-mz-confirm="Orders will be billed to the address they're delivered to."
+              data-mz-confirm-title="Remove billing address?" data-mz-confirm-ok="Remove">
+            <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
+        </form>
+    </div>
+
+    <form th:action="@{/billing-address}" th:object="${form}" method="post" class="mz-panel" novalidate>
+        <input type="hidden" name="returnTo" value="checkout" th:if="${fromCheckout}">
+        <h2 class="h5 mb-3" th:text="${me.hasBillingAddress()} ? 'Change billing address' : 'Add a billing address'">Add a billing address</h2>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="name">Name on the invoice</label>
+                <input class="form-control" th:field="*{name}" th:errorclass="is-invalid" autocomplete="name">
+                <div class="form-text">Your name, or your business's name.</div>
+                <div class="invalid-feedback" th:errors="*{name}"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="gstin">GSTIN <span class="text-muted fw-normal">(optional)</span></label>
+                <input class="form-control text-uppercase" th:field="*{gstin}" th:errorclass="is-invalid" maxlength="15"
+                       placeholder="27ABCDE1234F1Z5">
+                <div class="form-text">For business purchases.</div>
+                <div class="invalid-feedback" th:errors="*{gstin}"></div>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="addressLine">Address</label>
+                <input class="form-control" th:field="*{addressLine}" th:errorclass="is-invalid" autocomplete="billing street-address"
+                       placeholder="Flat, building, street, area">
+                <div class="invalid-feedback" th:errors="*{addressLine}"></div>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label" for="city">City</label>
+                <input class="form-control" th:field="*{city}" th:errorclass="is-invalid" autocomplete="billing address-level2">
+                <div class="invalid-feedback" th:errors="*{city}"></div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="state">State</label>
+                <input class="form-control" th:field="*{state}" th:errorclass="is-invalid" autocomplete="billing address-level1">
+                <div class="invalid-feedback" th:errors="*{state}"></div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="pincode">PIN code</label>
+                <input class="form-control" th:field="*{pincode}" th:errorclass="is-invalid" inputmode="numeric" maxlength="7"
+                       autocomplete="billing postal-code">
+                <div class="invalid-feedback" th:errors="*{pincode}"></div>
+            </div>
+        </div>
+        <button class="btn btn-primary mt-4" type="submit">Save billing address</button>
+    </form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

@@ -37,6 +37,10 @@ public class User {
     private String state;
     private String pincode;
 
+    /** Where invoices are billed; empty means "bill to the delivery address". Set from the account menu. */
+    @Embedded
+    private BillingAddress billing;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     /** Admins can disable an account; a disabled user can't sign in and is signed out everywhere. */
@@ -59,6 +63,8 @@ public class User {
                 .filter(User::notBlank)
                 .collect(Collectors.joining(", "));
     }
+
+    public boolean hasBillingAddress() { return billing != null && billing.isSet(); }
 
     public String getFirstName() {
         return fullName == null ? "" : fullName.trim().split("\\s+")[0];

@@ -37,6 +37,7 @@ public class MedicationPlanService {
     private final MedicineRepository medicines;
     private final NotificationService notifications;
     private final MemberService memberService;
+    private final AddressService addressService;
 
     // ------------------------------------------------------------------ CRUD
 
@@ -58,6 +59,7 @@ public class MedicationPlanService {
         if (p.getId() == null) p.setUser(user);
 
         Member member = memberService.get(form.getMemberId(), user);
+        if (member.isOthers()) throw new BusinessException("Choose a family member or the common shelf.");
         Medicine m = medicines.findById(form.getMedicineId())
                 .orElseThrow(() -> new BusinessException("Choose a medicine."));
         boolean duplicate = plans.findByMemberAndMedicine(member, m).stream().anyMatch(o -> !o.getId().equals(p.getId()));
@@ -114,6 +116,8 @@ public class MedicationPlanService {
         p.setReorderMode(form.getReorderMode());
         p.setReorderThresholdDays(form.getReorderThresholdDays());
         p.setReorderPacks(form.getReorderPacks());
+        p.setRefillAddress(form.getReorderMode() == ReorderMode.AUTO
+                ? addressService.find(form.getRefillAddressId(), user).orElse(null) : null);
         if (p.isSetupRequired()) {          // first schedule for a delivered medicine switches it on
             p.setSetupRequired(false);
             p.setActive(true);
@@ -386,9 +390,10 @@ public class MedicationPlanService {
         for (OrderItem item : order.getItems()) {
             Medicine m = item.getMedicine();
             List<Member> targets = targets(item, user);
-            int[] shares = split(item.getQuantity() * m.getUnitsPerPack(), targets.size());
+            int[] shares = item.shareOf(targets, item.getQuantity() * m.getUnitsPerPack());
             for (int i = 0; i < targets.size(); i++) {
                 Member member = targets.get(i);
+                if (member.isOthers()) continue;   // bought for someone outside the household: nothing to track
                 Optional<MedicationPlan> existing = planFor(member, m);
                 if (existing.isPresent()) {
                     MedicationPlan p = existing.get();
@@ -401,7 +406,7 @@ public class MedicationPlanService {
                 p.setMember(member);
                 p.setMedicine(m);
                 p.addSupply(shares[i], item.getExpiryDate());
-                p.setReorderPacks(Math.max(1, item.getQuantity() / targets.size()));
+                p.setReorderPacks(Math.max(1, shares[i] / Math.max(1, m.getUnitsPerPack())));
                 if (member.isCommon()) {
                     // Common medicines go straight onto the shelf; there's nothing to set up
                     p.setReorderMode(ReorderMode.OFF);
@@ -442,9 +447,10 @@ public class MedicationPlanService {
     public void onItemsReturned(OrderItem item, int packs) {
         Medicine m = item.getMedicine();
         List<Member> targets = targets(item, item.getOrder().getUser());
-        int[] shares = split(packs * m.getUnitsPerPack(), targets.size());
+        int[] shares = item.shareOf(targets, packs * m.getUnitsPerPack());
         for (int i = 0; i < targets.size(); i++) {
             int share = shares[i];
+            if (targets.get(i).isOthers()) continue;
             planFor(targets.get(i), m).ifPresent(p -> p.setUnitsRemaining(Math.max(0, p.getUnitsRemaining() - share)));
         }
     }
@@ -461,10 +467,4 @@ public class MedicationPlanService {
                 .min(Comparator.comparing((MedicationPlan p) -> !p.isActive()).thenComparing(MedicationPlan::getId));
     }
 
-    /** {@code total} split into {@code parts} whole shares; the first ones get the remainder. */
-    private static int[] split(int total, int parts) {
-        int[] out = new int[parts];
-        for (int i = 0; i < parts; i++) out[i] = total / parts + (i < total % parts ? 1 : 0);
-        return out;
-    }
 }

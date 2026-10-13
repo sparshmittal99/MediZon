@@ -44,8 +44,14 @@
 
         <section class="mz-invoice-parties">
             <div>
-                <h2>Billed and shipped to</h2>
-                <div class="fw-semibold" th:text="${o.user.fullName}"></div>
+                <h2>Billing address</h2>
+                <div class="fw-semibold" th:text="${o.billTo}"></div>
+                <div th:text="${o.billToAddress}"></div>
+                <div th:if="${o.billingGstin}"><strong>GSTIN:</strong> <span th:text="${o.billingGstin}"></span></div>
+            </div>
+            <div>
+                <h2>Shipping address</h2>
+                <div class="fw-semibold" th:text="${o.deliverTo}"></div>
                 <div th:text="${o.shippingAddress}"></div>
                 <div th:if="${o.contactPhone}" th:text="'Phone: ' + ${o.contactPhone}"></div>
             </div>
