@@ -13,7 +13,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -36,6 +40,28 @@ public class MedicineService {
     public List<Medicine> featured() { return medicines.findTop8ByActiveTrueOrderByIdDesc(); }
 
     public List<Medicine> allActive() { return medicines.findByActiveTrueOrderByNameAsc(); }
+
+    /** In-stock medicines with the biggest discounts first, for the home page's deals card. */
+    public List<Medicine> deals(int limit) {
+        return medicines.findByActiveTrueOrderByNameAsc().stream()
+                .filter(m -> m.getDiscountPercent() > 0 && m.isInStock())
+                .sorted(Comparator.comparingInt(Medicine::getDiscountPercent).reversed())
+                .limit(limit).toList();
+    }
+
+    /** A few medicines from each category, fullest categories first, for the home page's shelves. */
+    public Map<String, List<Medicine>> shelves(int maxShelves, int perShelf) {
+        Map<String, List<Medicine>> byCategory = new LinkedHashMap<>();
+        for (Medicine m : medicines.findByActiveTrueOrderByNameAsc()) {
+            if (m.getCategory() != null) byCategory.computeIfAbsent(m.getCategory(), c -> new ArrayList<>()).add(m);
+        }
+        Map<String, List<Medicine>> shelves = new LinkedHashMap<>();
+        byCategory.entrySet().stream()
+                .sorted(Comparator.comparingInt((Map.Entry<String, List<Medicine>> e) -> e.getValue().size()).reversed())
+                .limit(maxShelves)
+                .forEach(e -> shelves.put(e.getKey(), e.getValue().subList(0, Math.min(perShelf, e.getValue().size()))));
+        return shelves;
+    }
 
     public List<Medicine> all() { return medicines.findAll(Sort.by("name")); }
 

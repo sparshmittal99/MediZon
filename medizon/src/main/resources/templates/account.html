@@ -48,8 +48,7 @@
             </section>
 
             <section class="mz-panel mb-4" id="password">
-                <h2 class="h5 mb-1">Change password</h2>
-                <p class="small text-muted mb-3">After the change, you'll stay signed in here and be signed out on your other devices.</p>
+                <h2 class="h5 mb-3">Change password</h2>
                 <!-- Two steps: confirm the current password, then choose the new one. Without JavaScript all fields show. -->
                 <form th:action="@{/account/password}" method="post" autocomplete="off" data-mz-password-form>
                     <ol class="mz-steps small mb-3" aria-label="Steps">

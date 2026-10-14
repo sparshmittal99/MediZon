@@ -61,7 +61,6 @@
             <div class="col-md-3">
                 <label class="form-label" for="expiryDate">Expiry date</label>
                 <input class="form-control" type="date" th:field="*{expiryDate}">
-                <div class="form-text">Of the batch in stock. Expired stock can't be ordered.</div>
             </div>
             <div class="col-md-3">
                 <label class="form-label" for="strength">Strength</label>
@@ -77,9 +76,6 @@
                 <input class="form-control" type="number" step="0.01" min="0" max="40" th:field="*{gstRate}" list="gstRates" th:errorclass="is-invalid">
                 <datalist id="gstRates"><option value="0"><option value="5"><option value="12"><option value="18"></datalist>
                 <div class="invalid-feedback" th:errors="*{gstRate}"></div>
-            </div>
-            <div class="col-12">
-                <div class="form-text mt-0">Prices include GST. Invoices work out the tax inside the price from this rate and HSN code.</div>
             </div>
 
             <div class="col-12" data-mz-image-picker>
@@ -141,6 +137,7 @@
         <button class="btn btn-primary mt-4" type="submit">Save medicine</button>
     </form>
 </main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
 <th:block th:replace="~{fragments/layout :: scripts}"></th:block>
 </body>
 </html>

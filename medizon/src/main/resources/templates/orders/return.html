@@ -8,8 +8,7 @@
 <main class="container mz-page" style="max-width: 820px">
     <a th:href="@{/orders/{id}(id=${o.id})}" class="small"><i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
     <h1 class="mz-page-title mt-2">Return items</h1>
-    <p class="text-muted mb-4" th:text="'Returns are accepted until ' + ${#temporals.format(returnBy, 'd MMMM yyyy')}
-            + '. A pharmacist reviews each request; once approved we pick the packs up and refund you.'"></p>
+    <p class="text-muted mb-4" th:text="'Return by ' + ${#temporals.format(returnBy, 'd MMMM yyyy')}"></p>
 
     <form th:action="@{/orders/{id}/return(id=${o.id})}" method="post" enctype="multipart/form-data" novalidate>
         <section class="mz-panel-flush mb-4">
@@ -59,8 +58,6 @@
             <div class="mz-qty-error small" data-mz-photo-error role="alert" hidden></div>
         </section>
 
-        <p class="small text-muted">Opened strips and medicines kept in the fridge can only be returned if they were damaged, wrong or expired on arrival.
-            Delivery charges aren't refunded.</p>
         <div class="d-flex gap-2">
             <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Request return</button>
             <a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-outline-secondary">Cancel</a>

@@ -7,9 +7,8 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <h1 class="mz-page-title mb-1">Returns</h1>
-    <p class="text-muted small mb-3">Review each request and its photos, then move approved returns through pickup and refund.</p>
-    <div class="d-flex flex-wrap gap-2 mb-4">
+    <h1 class="mz-page-title mb-3">Returns</h1>
+    <div class="mz-chip-scroll mb-4">
         <a class="mz-chip" th:classappend="${selected == null} ? 'active'" th:href="@{/admin/returns}">All</a>
         <a th:each="s : ${statuses}" class="mz-chip" th:classappend="${s == selected} ? 'active'"
            th:href="@{/admin/returns(status=${s})}">
@@ -37,6 +36,7 @@
         </div>
     </div>
 </main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
 <th:block th:replace="~{fragments/layout :: scripts}"></th:block>
 </body>
 </html>

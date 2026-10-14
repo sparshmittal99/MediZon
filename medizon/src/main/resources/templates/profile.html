@@ -6,8 +6,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page" style="max-width: 760px">
-    <h1 class="mz-page-title">Profile and addresses</h1>
-    <p class="text-muted mb-4">Your name and mobile number, and where your orders go.</p>
+    <h1 class="mz-page-title mb-4">Profile and addresses</h1>
 
     <form th:action="@{/profile}" th:object="${form}" method="post" class="mz-panel" novalidate>
         <input type="hidden" name="returnTo" th:if="${param.returnTo}" th:value="${param.returnTo}">

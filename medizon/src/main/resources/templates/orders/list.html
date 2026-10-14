@@ -35,11 +35,9 @@
                     <span th:case="*">No cancelled orders.</span>
                 </p>
             </div>
-            <p class="small text-muted mb-2" th:if="${tab == 'pending' and !#lists.isEmpty(orders)}">
-                Placed, confirmed and shipped orders. You can cancel an order until it ships.</p>
             <div th:unless="${#lists.isEmpty(orders)}" class="mz-panel-flush">
                 <div class="table-responsive">
-                    <table class="table align-middle mb-0">
+                    <table class="table align-middle mb-0 mz-table-stack">
                         <thead><tr>
                             <th>Order</th><th>Placed</th>
                             <th th:text="${tab == 'completed'} ? 'Delivered' : (${tab == 'cancelled'} ? 'Cancelled' : 'Items')">Items</th>
@@ -52,19 +50,19 @@
                                 <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Auto refill</span>
                                 <div class="small text-muted" th:text="${o.itemCount} + ' pack(s)'" th:unless="${tab == 'pending'}"></div>
                             </td>
-                            <td th:text="${#temporals.format(o.createdAt, 'd MMM yyyy')}"></td>
-                            <td th:switch="${tab}">
+                            <td data-label="Placed" th:text="${#temporals.format(o.createdAt, 'd MMM yyyy')}"></td>
+                            <td th:switch="${tab}" th:attr="data-label=${tab == 'completed'} ? 'Delivered' : (${tab == 'cancelled'} ? 'Cancelled' : 'Items')">
                                 <span th:case="'completed'" th:text="${o.deliveredAt != null} ? ${#temporals.format(o.deliveredAt, 'd MMM yyyy')} : '-'"></span>
                                 <span th:case="'cancelled'" th:text="${#temporals.format(o.updatedAt, 'd MMM yyyy')}"></span>
                                 <span th:case="*" th:text="${o.itemCount} + ' pack(s)'"></span>
                             </td>
-                            <td th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td>
-                            <td>
+                            <td data-label="Total" th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td>
+                            <td data-label="Status">
                                 <span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
                                 <a th:if="${ret != null}" th:href="@{/orders(tab='returns')}" class="d-block small mt-1"
                                    th:text="${ret.status.name() == 'REFUNDED'} ? 'Returned, refunded' : (${ret.open} ? 'Return in progress' : 'Return ' + ${#strings.toLowerCase(ret.status.label)})"></a>
                             </td>
-                            <td class="text-end text-nowrap">
+                            <td class="text-end text-nowrap mz-td-actions">
                                 <a th:if="${o.invoiceAvailable}" th:href="@{/orders/{id}/invoice(id=${o.id})}" class="btn btn-sm btn-link">Invoice</a>
                                 <a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-sm btn-outline-primary">View</a>
                             </td>
@@ -79,12 +77,11 @@
         <th:block th:if="${tab == 'returns'}">
             <div th:if="${#lists.isEmpty(returns)}" class="mz-panel mz-empty">
                 <i class="bi bi-arrow-return-left"></i>
-                <p class="mb-1">No returns.</p>
-                <p class="small mb-0">Something wrong with a delivered order? Open it from Completed and choose Return items within 7 days of delivery.</p>
+                <p class="mb-0">No returns.</p>
             </div>
             <div th:unless="${#lists.isEmpty(returns)}" class="mz-panel-flush">
                 <div class="table-responsive">
-                    <table class="table align-middle mb-0">
+                    <table class="table align-middle mb-0 mz-table-stack">
                         <thead><tr><th>Return</th><th>Order</th><th>Items</th><th>Requested</th><th>Refund</th><th>Status</th></tr></thead>
                         <tbody>
                         <tr th:each="r : ${returns}">
@@ -92,13 +89,13 @@
                                 <span class="fw-semibold" th:text="${r.returnNumber}"></span>
                                 <div class="small text-muted" th:text="${r.reason.label}"></div>
                             </td>
-                            <td><a th:href="@{/orders/{id}(id=${r.order.id})}" th:text="${r.order.orderNumber}"></a></td>
-                            <td class="small">
+                            <td data-label="Order"><a th:href="@{/orders/{id}(id=${r.order.id})}" th:text="${r.order.orderNumber}"></a></td>
+                            <td class="small" data-label="Items">
                                 <div th:each="ri : ${r.items}" th:text="${ri.quantity} + ' × ' + ${ri.orderItem.medicineName}"></div>
                             </td>
-                            <td th:text="${#temporals.format(r.createdAt, 'd MMM yyyy')}"></td>
-                            <td th:text="'₹' + ${r.refundAmount}"></td>
-                            <td><span class="badge" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span>
+                            <td data-label="Requested" th:text="${#temporals.format(r.createdAt, 'd MMM yyyy')}"></td>
+                            <td data-label="Refund" th:text="'₹' + ${r.refundAmount}"></td>
+                            <td data-label="Status"><span class="badge" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span>
                                 <div th:if="${r.adminNote}" class="small text-muted mt-1" th:text="${r.adminNote}"></div></td>
                         </tr>
                         </tbody>

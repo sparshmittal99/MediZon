@@ -29,7 +29,7 @@
 
     <div class="row g-4">
         <div class="col-lg-8">
-            <div class="mz-panel-flush mb-4">
+            <div class="mz-panel-flush table-responsive mb-4">
                 <table class="table align-middle mb-0">
                     <thead><tr><th>Medicine</th><th>Ordered</th><th>Returning</th><th class="text-end">Refund</th></tr></thead>
                     <tbody>
@@ -91,7 +91,6 @@
                     <label class="form-check-label small" for="restock">Packs are sealed and fit to sell: add them back to stock</label>
                 </div>
                 <button class="btn btn-primary w-100" type="submit">Mark picked up</button>
-                <p class="small text-muted mt-2 mb-0">This also takes the packs out of the customer's supply count at home.</p>
             </form>
 
             <!-- Picked up: refund -->
@@ -105,6 +104,7 @@
         </div>
     </div>
 </main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
 <th:block th:replace="~{fragments/layout :: scripts}"></th:block>
 </body>
 </html>

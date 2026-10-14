@@ -22,9 +22,7 @@
 
     <div class="collapse" id="mzNewAdmin">
         <div class="mz-panel mb-4">
-            <h2 class="h6 mb-1">Create an admin account</h2>
-            <p class="small text-muted mb-3">Admin accounts manage orders, prescriptions, the catalog and users. They can't shop or place orders,
-                and customer accounts can't be turned into admins, so use an email that isn't already registered.</p>
+            <h2 class="h6 mb-3">Create an admin account</h2>
             <form th:action="@{/admin/users/admins}" method="post" class="row g-3" autocomplete="off">
                 <div class="col-md-4">
                     <label class="form-label small" for="adminName">Full name</label>
@@ -110,8 +108,9 @@
             </table>
         </div>
     </div>
-    <p class="small text-muted mt-3 mb-0" th:text="${#lists.size(users)} + ' user(s) shown. Disabled accounts keep their orders and history.'"></p>
+    <p class="small text-muted mt-3 mb-0" th:text="${#lists.size(users)} + ' user(s) shown'"></p>
 </main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
 <th:block th:replace="~{fragments/layout :: scripts}"></th:block>
 </body>
 </html>

@@ -8,10 +8,9 @@
 <main class="container mz-page">
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
         <div>
-            <h1 class="mz-page-title">My medicines</h1>
-            <p class="text-muted mb-0">Dose reminders, what's left at home, and how each one gets refilled, for everyone in the family.</p>
+            <h1 class="mz-page-title mb-0">My medicines</h1>
         </div>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="mz-page-actions">
             <a th:href="@{/notifications/settings}" class="btn btn-outline-primary"><i class="bi bi-bell me-1"></i>Alerts on this device</a>
             <a th:href="@{/members}" class="btn btn-outline-primary"><i class="bi bi-people me-1"></i>Family</a>
             <a th:href="${selected != null} ? @{/plans/new(memberId=${selected.id})} : @{/plans/new}" class="btn btn-primary">
@@ -20,7 +19,7 @@
     </div>
 
     <!-- Member tabs -->
-    <nav class="mz-member-tabs mb-4" aria-label="Family members">
+    <nav class="mz-member-tabs mz-chip-scroll mb-4" aria-label="Family members">
         <a class="mz-chip" th:classappend="${selected == null} ? 'active'" th:href="@{/plans}"
            th:attr="aria-current=${selected == null} ? 'page'">Everyone</a>
         <a th:each="m : ${members}" class="mz-chip" th:classappend="${selected != null and selected.id == m.id} ? 'active'"
@@ -202,10 +201,6 @@
             </div>
         </div>
     </section>
-
-    <p class="small text-muted mt-4">Each reminder counts the dose as taken and deducts it from what's at home; tap Skip and it's added back.
-        Delivered orders top up the count of the person each medicine was bought for. Common (OTC) medicines sit on the shelf
-        with no reminders; add one to a person's list and what their doses need moves across.</p>
 </main>
 
 <footer th:replace="~{fragments/layout :: footer}"></footer>

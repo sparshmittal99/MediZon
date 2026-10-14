@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('Help & FAQ')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<section class="mz-help-hero">
+    <div class="container">
+        <h1 class="mz-page-title">How can we help?</h1>
+        <div class="mz-hero-search mz-help-search mt-3" role="search">
+            <i class="bi bi-search ms-2 align-self-center text-muted" aria-hidden="true"></i>
+            <input class="form-control" id="mzHelpSearch" name="helpQ" type="search" placeholder="Search questions, e.g. refund, reminder, prescription"
+                   aria-label="Search help" data-mz-help-search>
+        </div>
+        <!-- Jump to a topic -->
+        <nav class="mz-chip-scroll mt-3" aria-label="Help topics" data-mz-help-topics>
+            <a class="mz-chip" th:each="t : ${ {'start','orders','rx','medicines','refills','family','returns','payments','account','admin'} }"
+               th:href="'#help-' + ${t}" th:attr="data-mz-help-topic=${t}"
+               th:text="${t == 'start'} ? 'Getting started' : (${t == 'orders'} ? 'Orders & delivery' : (${t == 'rx'} ? 'Prescriptions'
+                   : (${t == 'medicines'} ? 'Reminders' : (${t == 'refills'} ? 'Refills' : (${t == 'family'} ? 'Family'
+                   : (${t == 'returns'} ? 'Returns & refunds' : (${t == 'payments'} ? 'Payments & invoices'
+                   : (${t == 'account'} ? 'Account & alerts' : 'Running the store'))))))))">Topic</a>
+        </nav>
+    </div>
+</section>
+
+<main class="container mz-page">
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="mz-panel mz-empty" data-mz-help-empty hidden>
+                <i class="bi bi-search"></i>
+                <p class="mb-0">No questions match that search. Try another word, or contact us.</p>
+            </div>
+
+            <!-- Customers and visitors -->
+            <th:block sec:authorize="!hasRole('ADMIN')">
+                <section class="mz-faq-group" id="help-start">
+                    <h2 class="mz-faq-title"><i class="bi bi-rocket-takeoff" aria-hidden="true"></i>Getting started</h2>
+                    <div class="mz-faq">
+                        <details class="mz-faq-item">
+                            <summary>What is MediZon?</summary>
+                            <div>An online pharmacy that also looks after your medicines once they arrive. You order from a licensed
+                                pharmacy, get a reminder when each dose is due, and MediZon tracks what's left at home so you can refill
+                                before you run out, either yourself or automatically.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Do I need an account to shop?</summary>
+                            <div>You can browse, search and fill a cart without one. Create a free account to check out; your cart is kept
+                                when you sign in or sign up.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How do I check that you deliver to my area?</summary>
+                            <div>Tap <strong>Select location</strong> at the top of any page. Use your current location, pick a saved
+                                address, enter a PIN code, search for an address or drop a pin on the map. The header then shows
+                                <em>Delivers to</em> or <em>We don't deliver to</em> for that place.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>What is the MediZon Assistant?</summary>
+                            <div>A chat helper for signed-in users (the chat button at the bottom right). Ask it to find a medicine, add
+                                it to your cart, check today's doses or track an order. Its answers are general guidance and don't
+                                replace advice from your doctor or pharmacist.</div>
+                        </details>
+                    </div>
+                </section>
+
+                <section class="mz-faq-group" id="help-orders">
+                    <h2 class="mz-faq-title"><i class="bi bi-truck" aria-hidden="true"></i>Orders &amp; delivery</h2>
+                    <div class="mz-faq">
+                        <details class="mz-faq-item">
+                            <summary>How much is delivery?</summary>
+                            <div th:text="'Delivery is free on orders of ₹' + ${freeAbove} + ' or more. Smaller orders have a ₹' + ${deliveryFee} + ' delivery charge.'"></div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How do I track my order?</summary>
+                            <div>Open <strong>Orders</strong>. Pending shows everything placed, confirmed or shipped; open an order to see
+                                each step. You also get a notification each time the status changes.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Can I cancel an order?</summary>
+                            <div>Yes, until it ships. Open the order from <strong>Orders</strong> and choose Cancel. Once it has shipped,
+                                you can request a return after delivery instead.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Can I send medicines to someone else's address?</summary>
+                            <div th:text="'Yes. Save their address (you can keep up to ' + ${maxAddresses} + ') with their name and phone number, and choose it at checkout. The delivery partner calls the number on the address.'"></div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Who is each medicine in my cart for?</summary>
+                            <div>Each cart line has a <strong>For</strong> row. Pick yourself, a family member, the household shelf for
+                                common (OTC) medicines, or <em>Others</em> for someone outside your family. With several packs, give each
+                                person their own count. When the order is delivered, the packs are added to that person's supply.</div>
+                        </details>
+                    </div>
+                </section>
+
+                <section class="mz-faq-group" id="help-rx">
+                    <h2 class="mz-faq-title"><i class="bi bi-file-earmark-medical" aria-hidden="true"></i>Prescriptions</h2>
+                    <div class="mz-faq">
+                        <details class="mz-faq-item">
+                            <summary>Which medicines need a prescription?</summary>
+                            <div>Medicines marked <span class="mz-rx position-static">Rx</span> need a valid prescription from a doctor.
+                                Common (OTC) medicines don't.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How do I upload a prescription?</summary>
+                            <div>Go to <strong>Prescriptions</strong> in your account menu, or upload one at checkout. JPG, PNG or PDF up
+                                to 5 MB; the doctor's name, date and signature must be visible.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How long does approval take?</summary>
+                            <div>A pharmacist reviews each upload, usually within a few hours. You get a notification when it's approved
+                                or if anything needs fixing, with the pharmacist's note.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Do automatic refills of Rx medicines need a prescription?</summary>
+                            <div>Yes. Automatic refills of prescription medicines use your approved prescription while it's valid.
+                                Upload a new one before it expires to keep refills going.</div>
+                        </details>
+                    </div>
+                </section>
+
+                <section class="mz-faq-group" id="help-medicines">
+                    <h2 class="mz-faq-title"><i class="bi bi-alarm" aria-hidden="true"></i>My medicines &amp; reminders</h2>
+                    <div class="mz-faq">
+                        <details class="mz-faq-item">
+                            <summary>How do dose reminders work?</summary>
+                            <div>Add a medicine in <strong>My medicines</strong> with the dose and the times you take it: every day,
+                                on chosen days of the week, or on specific dates. When a dose is due you get a reminder on this site,
+                                as a desktop alert and by email.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How does MediZon know how much is left at home?</summary>
+                            <div>Each reminder counts the dose as taken and deducts it from what's at home. Tap <strong>Skip</strong>
+                                and it's added back. Delivered orders top up the count of the person each medicine was bought for.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>I received an order. Why does it ask me to set reminders?</summary>
+                            <div>Delivered medicines are added to the person's supply but stay off until you add dose times and days.
+                                Open <strong>My medicines</strong> and set them from the list at the top.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>What is the household shelf?</summary>
+                            <div>Common (OTC) medicines kept at home for anyone who needs them, like a pain reliever or antacid. They
+                                have no reminders. Add one to a person's list and what their doses need moves across.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Will I be told when a medicine is about to expire?</summary>
+                            <div>Yes. Each medicine shows its expiry date, and you get an alert when stock at home expires within 30
+                                days or has expired.</div>
+                        </details>
+                    </div>
+                </section>
+
+                <section class="mz-faq-group" id="help-refills">
+                    <h2 class="mz-faq-title"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>Refills</h2>
+                    <div class="mz-faq">
+                        <details class="mz-faq-item">
+                            <summary>What refill options are there?</summary>
+                            <div>For each medicine choose <strong>Alert me, I'll order</strong>, <strong>Order automatically</strong>,
+                                or <strong>No refill alerts</strong>. You also set how many days of supply should trigger it.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Where do automatic refills go?</summary>
+                            <div>To your default address, or to the address you picked for that medicine (for example, a parent's
+                                home). The order shows <em>Placed by auto refill</em> and you can cancel it until it ships.</div>
+                        </details>
+                    </div>
+                </section>
+
+                <section class="mz-faq-group" id="help-family">
+                    <h2 class="mz-faq-title"><i class="bi bi-people" aria-hidden="true"></i>Family</h2>
+                    <div class="mz-faq">
+                        <details class="mz-faq-item">
+                            <summary>Can I manage medicines for my family?</summary>
+                            <div th:text="'Yes. Add up to ' + ${maxFamily} + ' family members under Family members. Each person gets their own reminders and supply count, and you choose who a medicine is for when you order it.'"></div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Can each phone show only some people's reminders?</summary>
+                            <div>Yes. Open <strong>Alerts on this device</strong> on that phone or computer and choose everyone or only
+                                some members. Order, prescription and return updates always show. To change another device, open the
+                                page on that device.</div>
+                        </details>
+                    </div>
+                </section>
+
+                <section class="mz-faq-group" id="help-returns">
+                    <h2 class="mz-faq-title"><i class="bi bi-arrow-return-left" aria-hidden="true"></i>Returns &amp; refunds</h2>
+                    <div class="mz-faq">
+                        <details class="mz-faq-item">
+                            <summary>How do I return a medicine?</summary>
+                            <div th:text="'Open the delivered order from Orders and choose Return items within ' + ${returnDays} + ' days of delivery. Pick the packs, give a reason and add 1 to ' + ${maxReturnImages} + ' clear photos showing the medicine and its batch / expiry label.'"></div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>What can be returned?</summary>
+                            <div>Damaged, wrong or expired medicines. Opened strips and medicines kept in the fridge can only be returned
+                                if they were damaged, wrong or expired on arrival.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>When will I get my refund?</summary>
+                            <div>A pharmacist reviews each request. Once approved we pick the packs up and refund the medicines' price.
+                                Delivery charges aren't refunded. Follow progress in <strong>Orders → Returns</strong>.</div>
+                        </details>
+                    </div>
+                </section>
+
+                <section class="mz-faq-group" id="help-payments">
+                    <h2 class="mz-faq-title"><i class="bi bi-credit-card" aria-hidden="true"></i>Payments &amp; invoices</h2>
+                    <div class="mz-faq">
+                        <details class="mz-faq-item">
+                            <summary>How can I pay?</summary>
+                            <div>Cash on delivery, UPI, or a debit / credit card.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Where do I find my tax invoice?</summary>
+                            <div>Open the order from <strong>Orders</strong> and choose <strong>Invoice</strong>. Prices include GST and the
+                                invoice shows the tax inside each price. Print it or save it as a PDF.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>What is the billing address for?</summary>
+                            <div>The name, address and GSTIN (for business purchases) printed on your invoices. It isn't used for
+                                delivery. Without one, orders are billed to the address they're delivered to.</div>
+                        </details>
+                    </div>
+                </section>
+
+                <section class="mz-faq-group" id="help-account">
+                    <h2 class="mz-faq-title"><i class="bi bi-person-gear" aria-hidden="true"></i>Account &amp; alerts</h2>
+                    <div class="mz-faq">
+                        <details class="mz-faq-item">
+                            <summary>How do I change my password?</summary>
+                            <div>Open <strong>Account settings → Change password</strong>, confirm your current password, then choose a new
+                                one. You stay signed in on this device and are signed out everywhere else.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>I'm not getting desktop alerts. What should I check?</summary>
+                            <div>Desktop alerts need your browser's permission for this site. Check the site settings in your browser and
+                                allow notifications. Dose reminder emails go to the account's email address for everyone in the family.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Can I change the language?</summary>
+                            <div>Yes. Choose a language from the selector at the bottom of any page. English, Hindi and other Indian
+                                languages are available.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Is MediZon's information medical advice?</summary>
+                            <div>No. Information on MediZon, including answers from the assistant, is general guidance and doesn't replace
+                                advice from your doctor or pharmacist. <strong>In an emergency, call 112.</strong></div>
+                        </details>
+                    </div>
+                </section>
+            </th:block>
+
+            <!-- Store staff -->
+            <th:block sec:authorize="hasRole('ADMIN')">
+                <section class="mz-faq-group" id="help-admin">
+                    <h2 class="mz-faq-title"><i class="bi bi-shop" aria-hidden="true"></i>Running the store</h2>
+                    <div class="mz-faq">
+                        <details class="mz-faq-item">
+                            <summary>How do I process customer orders?</summary>
+                            <div>Open <strong>Orders</strong>, filter by status and move each order along as it's confirmed, shipped and
+                                delivered. Marking an order delivered adds its packs to the customer's supply at home.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How do returns work?</summary>
+                            <div>Review each request and its photos in <strong>Returns</strong>, then move approved returns through pickup
+                                and refund. Marking a return picked up also takes the packs out of the customer's supply count.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How are sales and revenue counted?</summary>
+                            <div>Sales are what customers paid (GST and delivery included) on orders that weren't cancelled, counted on
+                                the day the order was placed. Refunds count on the day they were paid; net revenue is sales minus refunds.
+                                The Excel export always includes a Summary sheet.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How do delivery areas work?</summary>
+                            <div>Customers can only order to the PIN codes in <strong>Delivery areas</strong>. Add one or many at once,
+                                separated by commas, spaces or new lines. The header's location picker checks them.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How are product prices and tax set?</summary>
+                            <div>Prices include GST. Invoices work out the tax inside each price from the medicine's GST rate and HSN code.
+                                Expired stock can't be ordered.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How do I add another admin?</summary>
+                            <div>In <strong>Users</strong>, create an admin with an email that isn't already registered. Admin accounts
+                                manage orders, prescriptions, the catalog and users; they can't shop. Customer accounts can't be turned
+                                into admins. Disabled accounts keep their orders and history.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>What counts as a visit?</summary>
+                            <div>One browser session per day. Admin pages aren't counted.</div>
+                        </details>
+                    </div>
+                </section>
+            </th:block>
+        </div>
+
+        <!-- Contact -->
+        <aside class="col-lg-4">
+            <div class="mz-panel mz-help-contact">
+                <h2 class="h5 mb-1">Still need help?</h2>
+                <p class="text-muted small mb-3">Our pharmacy team is happy to help.</p>
+                <div class="d-grid gap-2">
+                    <a th:if="${seller != null and !#strings.isEmpty(seller.phone)}" class="mz-contact-row"
+                       th:href="'tel:' + ${#strings.replace(seller.phone, ' ', '')}">
+                        <i class="bi bi-telephone" aria-hidden="true"></i>
+                        <span><span class="d-block small text-muted">Call us</span><strong th:text="${seller.phone}"></strong></span>
+                    </a>
+                    <a th:if="${seller != null and !#strings.isEmpty(seller.email)}" class="mz-contact-row" th:href="'mailto:' + ${seller.email}">
+                        <i class="bi bi-envelope" aria-hidden="true"></i>
+                        <span><span class="d-block small text-muted">Email us</span><strong th:text="${seller.email}"></strong></span>
+                    </a>
+                    <button sec:authorize="isAuthenticated()" type="button" class="mz-contact-row" data-mz-ask="I need help">
+                        <i class="bi bi-chat-dots" aria-hidden="true"></i>
+                        <span><span class="d-block small text-muted">Chat</span><strong>Ask the MediZon Assistant</strong></span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

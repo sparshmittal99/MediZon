@@ -6,8 +6,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <h1 class="mz-page-title">Prescriptions</h1>
-    <p class="text-muted mb-4">Needed for Rx medicines and for automatic refills of them. A pharmacist reviews each upload.</p>
+    <h1 class="mz-page-title mb-4">Prescriptions</h1>
 
     <div class="row g-4">
         <div class="col-lg-4">
@@ -35,7 +34,7 @@
                 <p class="mb-0">No prescriptions uploaded yet.</p>
             </div>
             <div th:unless="${#lists.isEmpty(prescriptions)}" class="mz-panel-flush">
-                <table class="table align-middle mb-0">
+                <table class="table align-middle mb-0 mz-table-stack">
                     <thead><tr><th>Prescription</th><th>Status</th><th>Valid until</th><th></th></tr></thead>
                     <tbody>
                     <tr th:each="p : ${prescriptions}">
@@ -44,10 +43,10 @@
                             <div class="small text-muted" th:text="'Uploaded ' + ${#temporals.format(p.uploadedAt, 'd MMM yyyy')}"></div>
                             <div th:if="${p.reviewerNote}" class="small" th:text="'Pharmacist: ' + ${p.reviewerNote}"></div>
                         </td>
-                        <td><span class="badge" th:classappend="${p.status.badge}" th:text="${p.status.label}"></span>
+                        <td data-label="Status"><span class="badge" th:classappend="${p.status.badge}" th:text="${p.status.label}"></span>
                             <span th:if="${p.status.name() == 'APPROVED' and !p.valid}" class="badge text-bg-secondary">Expired</span></td>
-                        <td th:text="${p.validUntil != null} ? ${#temporals.format(p.validUntil, 'd MMM yyyy')} : '-'"></td>
-                        <td class="text-end"><a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">View</a></td>
+                        <td data-label="Valid until" th:text="${p.validUntil != null} ? ${#temporals.format(p.validUntil, 'd MMM yyyy')} : '-'"></td>
+                        <td class="text-end mz-td-actions"><a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">View</a></td>
                     </tr>
                     </tbody>
                 </table>

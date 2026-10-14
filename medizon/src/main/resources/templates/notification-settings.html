@@ -7,9 +7,7 @@
 
 <main class="container mz-page" style="max-width: 820px">
     <a th:href="@{/notifications}" class="small"><i class="bi bi-arrow-left"></i> Notifications</a>
-    <h1 class="mz-page-title mt-2">Alerts on this device</h1>
-    <p class="text-muted mb-4">Each phone or computer you sign in on can follow everyone, or only some family members.
-        Order, prescription and return updates always show.</p>
+    <h1 class="mz-page-title mt-2 mb-4">Alerts on this device</h1>
 
     <form th:action="@{/notifications/settings}" method="post" class="mz-panel mb-4" data-mz-device-form>
         <input type="hidden" name="deviceId" th:value="${here.id}">
@@ -45,7 +43,6 @@
             <button type="button" class="btn btn-outline-primary" data-mz-enable-alerts>
                 <i class="bi bi-bell me-1"></i>Turn on desktop alerts</button>
         </div>
-        <p class="small text-muted mt-3 mb-0">Desktop alerts also need your browser's permission. Dose reminder emails go to the account's email address for everyone.</p>
     </form>
 
     <section th:unless="${#lists.isEmpty(others)}">
@@ -67,7 +64,6 @@
                 </form>
             </div>
         </div>
-        <p class="small text-muted mt-2">To change what another device shows, open this page on that device.</p>
     </section>
 </main>
 

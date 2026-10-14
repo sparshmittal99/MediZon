@@ -1,112 +1,208 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head th:replace="~{fragments/layout :: head('Online pharmacy')}"></head>
-<body>
+<body class="mz-home">
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
-<section class="mz-hero">
-    <div class="container">
-        <div class="row align-items-center g-5">
-            <div class="col-lg-6">
-                <h1 class="mz-display mb-3">Your medicines, delivered and remembered.</h1>
-                <p class="lead mb-4">Order from a licensed pharmacy, get a reminder when each dose is due,
-                    and refill before you run out, by yourself or automatically.</p>
-                <form class="mz-hero-search" th:action="@{/medicines}" method="get" role="search">
-                    <input class="form-control" name="q" type="search" placeholder="Try paracetamol, metformin or vitamin D" aria-label="Search medicines">
-                    <button class="btn btn-primary" type="submit">Search</button>
-                </form>
-                <div class="d-flex flex-wrap gap-2 mt-3">
-                    <a th:each="c, s : ${categories}" th:if="${s.index < 6}" class="mz-chip"
-                       th:href="@{/medicines(category=${c})}" th:text="${c}">Category</a>
+<!-- Banners -->
+<section class="mz-hero-banners" aria-label="Offers and features">
+    <div id="mzBanners" class="carousel slide" data-bs-ride="carousel" data-bs-interval="6000">
+        <div class="carousel-indicators">
+            <button type="button" data-bs-target="#mzBanners" data-bs-slide-to="0" class="active" aria-current="true" aria-label="Offers"></button>
+            <button type="button" data-bs-target="#mzBanners" data-bs-slide-to="1" aria-label="Reminders"></button>
+            <button type="button" data-bs-target="#mzBanners" data-bs-slide-to="2" aria-label="Delivery"></button>
+            <button type="button" data-bs-target="#mzBanners" data-bs-slide-to="3" aria-label="Prescriptions"></button>
+        </div>
+        <div class="carousel-inner">
+            <div class="carousel-item active">
+                <div class="mz-banner mz-banner-deals">
+                    <div class="container mz-banner-row">
+                        <div class="mz-banner-copy">
+                            <span class="mz-banner-kicker">Medicine deals</span>
+                            <h2 class="mz-banner-title" th:text="${#lists.isEmpty(deals)} ? 'Everyday low prices on medicines'
+                                    : 'Up to ' + ${deals[0].discountPercent} + '% off on medicines'">Up to 30% off on medicines</h2>
+                            <p class="mz-banner-sub">Genuine medicines from a licensed pharmacy.</p>
+                            <a th:href="@{/medicines}" class="btn mz-banner-btn">Shop deals</a>
+                        </div>
+                        <div class="mz-banner-art" aria-hidden="true">
+                            <span class="mz-art-tag" th:text="${#lists.isEmpty(deals)} ? 'Save' : ${deals[0].discountPercent} + '%'">30%</span>
+                            <i class="bi bi-capsule-pill mz-art-a"></i><i class="bi bi-capsule mz-art-b"></i><i class="bi bi-droplet-half mz-art-c"></i>
+                        </div>
+                    </div>
                 </div>
             </div>
+            <div class="carousel-item">
+                <div class="mz-banner mz-banner-remind">
+                    <div class="container mz-banner-row">
+                        <div class="mz-banner-copy">
+                            <span class="mz-banner-kicker">Dose reminders</span>
+                            <h2 class="mz-banner-title">Your medicines, delivered and remembered</h2>
+                            <p class="mz-banner-sub">A reminder for every dose, and a refill before you run out.</p>
+                            <a sec:authorize="isAuthenticated()" th:href="@{/plans}" class="btn mz-banner-btn">Set reminders</a>
+                            <a sec:authorize="!isAuthenticated()" th:href="@{/register}" class="btn mz-banner-btn">Get started</a>
+                        </div>
+                        <div class="mz-banner-art" aria-hidden="true">
+                            <span class="mz-art-tag"><i class="bi bi-alarm"></i></span>
+                            <i class="bi bi-bell mz-art-a"></i><i class="bi bi-arrow-repeat mz-art-b"></i><i class="bi bi-calendar-check mz-art-c"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="carousel-item">
+                <div class="mz-banner mz-banner-delivery">
+                    <div class="container mz-banner-row">
+                        <div class="mz-banner-copy">
+                            <span class="mz-banner-kicker">Free delivery</span>
+                            <h2 class="mz-banner-title" th:text="'Free delivery on orders of ₹' + ${freeDeliveryAbove} + ' or more'">Free delivery</h2>
+                            <p class="mz-banner-sub">Pay by UPI, card or cash on delivery.</p>
+                            <a th:href="@{/medicines}" class="btn mz-banner-btn">Start shopping</a>
+                        </div>
+                        <div class="mz-banner-art" aria-hidden="true">
+                            <span class="mz-art-tag"><i class="bi bi-truck"></i></span>
+                            <i class="bi bi-box-seam mz-art-a"></i><i class="bi bi-geo-alt mz-art-b"></i><i class="bi bi-house-heart mz-art-c"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="carousel-item">
+                <div class="mz-banner mz-banner-rx">
+                    <div class="container mz-banner-row">
+                        <div class="mz-banner-copy">
+                            <span class="mz-banner-kicker">Prescriptions</span>
+                            <h2 class="mz-banner-title">Upload a prescription, a pharmacist checks it</h2>
+                            <p class="mz-banner-sub">Usually approved within a few hours.</p>
+                            <a sec:authorize="isAuthenticated()" th:href="@{/prescriptions}" class="btn mz-banner-btn">Upload now</a>
+                            <a sec:authorize="!isAuthenticated()" th:href="@{/login}" class="btn mz-banner-btn">Sign in to upload</a>
+                        </div>
+                        <div class="mz-banner-art" aria-hidden="true">
+                            <span class="mz-art-tag">Rx</span>
+                            <i class="bi bi-file-earmark-medical mz-art-a"></i><i class="bi bi-patch-check mz-art-b"></i><i class="bi bi-person-check mz-art-c"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button class="carousel-control-prev" type="button" data-bs-target="#mzBanners" data-bs-slide="prev">
+            <i class="bi bi-chevron-left" aria-hidden="true"></i><span class="visually-hidden">Previous</span></button>
+        <button class="carousel-control-next" type="button" data-bs-target="#mzBanners" data-bs-slide="next">
+            <i class="bi bi-chevron-right" aria-hidden="true"></i><span class="visually-hidden">Next</span></button>
+    </div>
+</section>
 
-            <div class="col-lg-6">
-                <!-- Signed in: today's real schedule -->
-                <div class="mz-pack" sec:authorize="isAuthenticated()">
-                    <div class="mz-pack-head">
-                        <h2>Today's doses</h2>
-                        <a th:href="@{/plans}" class="small">Manage medicines</a>
-                    </div>
-                    <div th:if="${#lists.isEmpty(doses)}" class="mz-empty py-4">
-                        <i class="bi bi-alarm"></i>
-                        <p class="mb-3">No doses scheduled today.</p>
-                        <a th:href="@{/plans/new}" class="btn btn-primary btn-sm">Add a medicine</a>
-                    </div>
-                    <ol class="mz-strip" th:unless="${#lists.isEmpty(doses)}">
-                        <li th:each="d : ${doses}" class="mz-slot" th:classappend="'is-' + ${d.state}">
-                            <span class="mz-bubble" aria-hidden="true">
-                                <i class="bi" th:classappend="${d.state == 'taken'} ? 'bi-check-lg' : (${d.state == 'skipped'} ? 'bi-dash-lg' : ${d.plan.medicine.icon})"></i>
-                            </span>
+<!-- Cards over the banner's lower edge -->
+<main class="container mz-home-cards">
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-4 g-3">
+
+        <!-- Signed in: today's doses -->
+        <div class="col" sec:authorize="isAuthenticated()">
+            <section class="mz-card">
+                <h2 class="mz-card-title">Today's doses</h2>
+                <div th:if="${#lists.isEmpty(doses)}" class="mz-card-empty">
+                    <i class="bi bi-alarm" aria-hidden="true"></i>
+                    <p>No doses scheduled today.</p>
+                    <a th:href="@{/plans/new}" class="btn btn-primary btn-sm">Add a medicine</a>
+                </div>
+                <ol class="mz-dose-list" th:unless="${#lists.isEmpty(doses)}">
+                    <li th:each="d, s : ${doses}" th:if="${s.index < 4}" class="mz-dose" th:classappend="'is-' + ${d.state}">
+                        <span class="mz-bubble" aria-hidden="true">
+                            <i class="bi" th:classappend="${d.state == 'taken'} ? 'bi-check-lg' : (${d.state == 'skipped'} ? 'bi-dash-lg' : ${d.plan.medicine.icon})"></i>
+                        </span>
+                        <span class="mz-dose-text">
                             <span class="mz-slot-time" th:text="${#temporals.format(d.time, 'h:mm a')}">8:00 AM</span>
                             <span class="mz-slot-name" th:text="${d.plan.title}">Medicine</span>
-                            <form th:if="${d.answerable}" th:action="@{/plans/{id}/dose(id=${d.plan.id})}" method="post">
-                                <input type="hidden" name="time" th:value="${#temporals.format(d.time, 'HH:mm')}">
-                                <input type="hidden" name="returnTo" value="/">
-                                <button class="btn btn-primary" name="status" value="TAKEN">Taken</button>
-                                <button class="btn btn-outline-secondary" name="status" value="SKIPPED">Skip</button>
-                            </form>
-                        </li>
-                    </ol>
-                    <div th:unless="${#lists.isEmpty(lowPlans)}" class="mz-low-banner mt-3 d-flex align-items-center justify-content-between gap-3">
-                        <span><i class="bi bi-exclamation-triangle me-1"></i>
-                            <strong th:text="${#lists.size(lowPlans)}">1</strong> medicine(s) running low.</span>
-                        <a th:href="@{/plans}" class="btn btn-amber btn-sm">Refill</a>
-                    </div>
+                        </span>
+                        <form th:if="${d.answerable}" th:action="@{/plans/{id}/dose(id=${d.plan.id})}" method="post" class="mz-dose-act">
+                            <input type="hidden" name="time" th:value="${#temporals.format(d.time, 'HH:mm')}">
+                            <input type="hidden" name="returnTo" value="/">
+                            <button class="btn btn-primary btn-sm" name="status" value="TAKEN">Taken</button>
+                            <button class="btn btn-outline-secondary btn-sm" name="status" value="SKIPPED" aria-label="Skip"><i class="bi bi-x-lg"></i></button>
+                        </form>
+                    </li>
+                </ol>
+                <div th:unless="${#lists.isEmpty(lowPlans)}" class="mz-low-banner mt-3 d-flex align-items-center justify-content-between gap-2">
+                    <span class="small"><i class="bi bi-exclamation-triangle me-1"></i>
+                        <strong th:text="${#lists.size(lowPlans)}">1</strong> running low</span>
+                    <a th:href="@{/plans}" class="btn btn-amber btn-sm">Refill</a>
                 </div>
+                <a th:href="@{/plans}" class="mz-card-link">See all your medicines</a>
+            </section>
+        </div>
 
-                <!-- Signed out: what the schedule looks like -->
-                <div class="mz-pack" sec:authorize="!isAuthenticated()">
-                    <div class="mz-pack-head">
-                        <h2>A day of reminders</h2>
-                        <span class="small text-muted">Example</span>
-                    </div>
-                    <ol class="mz-strip">
-                        <li class="mz-slot is-taken"><span class="mz-bubble"><i class="bi bi-check-lg"></i></span>
-                            <span class="mz-slot-time">8:30 AM</span><span class="mz-slot-name">Metformin 500 mg</span></li>
-                        <li class="mz-slot is-taken"><span class="mz-bubble"><i class="bi bi-check-lg"></i></span>
-                            <span class="mz-slot-time">9:00 AM</span><span class="mz-slot-name">Telmisartan 40 mg</span></li>
-                        <li class="mz-slot is-pending"><span class="mz-bubble"><i class="bi bi-capsule-pill"></i></span>
-                            <span class="mz-slot-time">2:00 PM</span><span class="mz-slot-name">Vitamin D3</span></li>
-                        <li class="mz-slot is-upcoming"><span class="mz-bubble"><i class="bi bi-capsule-pill"></i></span>
-                            <span class="mz-slot-time">8:30 PM</span><span class="mz-slot-name">Metformin 500 mg</span></li>
-                    </ol>
-                    <p class="small text-muted mt-3 mb-0">MediZon counts what's left after each dose and tells you, or orders for you,
-                        a few days before you run out.</p>
+        <!-- Signed out: sign in -->
+        <div class="col" sec:authorize="!isAuthenticated()">
+            <section class="mz-card mz-card-signin">
+                <h2 class="mz-card-title">Sign in for the full experience</h2>
+                <ul class="mz-perks">
+                    <li><i class="bi bi-alarm" aria-hidden="true"></i>Reminders for every dose</li>
+                    <li><i class="bi bi-arrow-repeat" aria-hidden="true"></i>Refills before you run out</li>
+                    <li><i class="bi bi-people" aria-hidden="true"></i>Medicines for the whole family</li>
+                </ul>
+                <a th:href="@{/login}" class="btn btn-primary w-100">Sign in securely</a>
+                <a th:href="@{/register}" class="mz-card-link">New here? Create an account</a>
+            </section>
+        </div>
+
+        <!-- Top deals -->
+        <div class="col" th:unless="${#lists.isEmpty(deals)}">
+            <section class="mz-card">
+                <h2 class="mz-card-title">Top deals on medicines</h2>
+                <div class="mz-tiles">
+                    <th:block th:each="m : ${deals}"><a th:replace="~{fragments/layout :: tile(${m})}"></a></th:block>
                 </div>
+                <a th:href="@{/medicines}" class="mz-card-link">See all deals</a>
+            </section>
+        </div>
+
+        <!-- A shelf per category -->
+        <div class="col" th:each="shelf : ${shelves}">
+            <section class="mz-card">
+                <h2 class="mz-card-title" th:text="${shelf.key}">Category</h2>
+                <div class="mz-tiles">
+                    <th:block th:each="m : ${shelf.value}"><a th:replace="~{fragments/layout :: tile(${m})}"></a></th:block>
+                </div>
+                <a th:href="@{/medicines(category=${shelf.key})}" class="mz-card-link" th:text="'See more in ' + ${shelf.key}">See more</a>
+            </section>
+        </div>
+
+        <!-- Prescription upload -->
+        <div class="col">
+            <section class="mz-card mz-card-promo">
+                <h2 class="mz-card-title">Have a prescription?</h2>
+                <div class="mz-promo-art" aria-hidden="true"><i class="bi bi-file-earmark-medical"></i><span>Rx</span></div>
+                <p class="small text-muted mb-3">Upload it once; a pharmacist checks it before we dispatch.</p>
+                <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/prescriptions}" class="btn btn-outline-primary w-100">Upload prescription</a>
+                <a sec:authorize="!isAuthenticated()" th:href="@{/login}" class="btn btn-outline-primary w-100">Sign in to upload</a>
+            </section>
+        </div>
+    </div>
+
+    <!-- Recently added: a row that scrolls sideways -->
+    <section class="mz-card mz-rail-card mt-3" th:unless="${#lists.isEmpty(featured)}">
+        <div class="d-flex justify-content-between align-items-baseline mb-3">
+            <h2 class="mz-card-title mb-0">Recently added</h2>
+            <a th:href="@{/medicines}" class="small">See all</a>
+        </div>
+        <div class="mz-rail">
+            <div class="mz-rail-item" th:each="m : ${featured}">
+                <div th:replace="~{fragments/layout :: medCard(${m})}"></div>
             </div>
         </div>
-    </div>
-</section>
+    </section>
 
-<section class="container mz-page">
-    <h2 class="h4 mb-4">How refills work</h2>
-    <div class="row g-4 mz-steps mb-5">
-        <div class="col-md-4 mz-step">
-            <h3>Order once</h3>
-            <p>Upload your prescription for Rx medicines. A pharmacist checks it before we dispatch.</p>
-        </div>
-        <div class="col-md-4 mz-step">
-            <h3>Set your schedule</h3>
-            <p>Add dose times. Delivered packs are added to your supply at home automatically.</p>
-        </div>
-        <div class="col-md-4 mz-step">
-            <h3>Never run out</h3>
-            <p>When supply drops to your limit, we alert you to reorder, or place the order for you.</p>
-        </div>
-    </div>
-
-    <div class="d-flex justify-content-between align-items-baseline mb-3">
-        <h2 class="h4 mb-0">Recently added</h2>
-        <a th:href="@{/medicines}">Browse all medicines</a>
-    </div>
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
-        <div class="col" th:each="m : ${featured}">
-            <div th:replace="~{fragments/layout :: medCard(${m})}"></div>
-        </div>
-    </div>
-</section>
+    <!-- How it works -->
+    <section class="mz-card mt-3">
+        <h2 class="mz-card-title">How MediZon works</h2>
+        <ol class="mz-how">
+            <li><i class="bi bi-bag-check" aria-hidden="true"></i><span><strong>Order once</strong>
+                A pharmacist checks prescriptions before we dispatch.</span></li>
+            <li><i class="bi bi-alarm" aria-hidden="true"></i><span><strong>Set your schedule</strong>
+                Delivered packs are added to your supply at home.</span></li>
+            <li><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span><strong>Never run out</strong>
+                We alert you to reorder, or order for you.</span></li>
+        </ol>
+    </section>
+</main>
 
 <footer th:replace="~{fragments/layout :: footer}"></footer>
 <th:block th:replace="~{fragments/layout :: scripts}"></th:block>

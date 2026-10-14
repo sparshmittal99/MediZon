@@ -10,9 +10,7 @@
       th:with="kind=${#strings.toLowerCase(p.kind.name())}, todayDate=${#temporals.createToday()}">
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
         <div>
-            <h1 class="mz-page-title mb-1">Sales and returns</h1>
-            <p class="text-muted small mb-0">Sales are what customers paid (GST and delivery included) on orders that weren't cancelled,
-                counted on the day the order was placed. Refunds count on the day they were paid; net revenue is sales minus refunds.</p>
+            <h1 class="mz-page-title mb-0">Sales and returns</h1>
         </div>
     </div>
 
@@ -97,7 +95,7 @@
                     </th:block>
                 </th:block>
                 <h2 class="h6 mb-1">Excel workbook (.xlsx)</h2>
-                <p class="small text-muted mb-3">Always includes a Summary sheet with sales, returns, net revenue and GST totals. Add:</p>
+                <p class="small text-muted mb-3">Summary sheet, plus:</p>
                 <div class="row row-cols-1 row-cols-md-2 g-2 mb-3">
                     <div class="col" th:each="sec : ${sections}">
                         <div class="form-check">
@@ -211,6 +209,7 @@
         </div>
     </div>
 </main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
 <th:block th:replace="~{fragments/layout :: scripts}"></th:block>
 </body>
 </html>

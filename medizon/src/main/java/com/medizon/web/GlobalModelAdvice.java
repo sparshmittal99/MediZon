@@ -32,11 +32,15 @@ public class GlobalModelAdvice {
     private final InvoiceService invoiceService;
     private final DeliveryLocations deliveryLocations;
     private final AddressService addressService;
+    private final MedicineService medicineService;
 
     @ModelAttribute
     public void common(Model model, HttpServletRequest request, HttpServletResponse response) {
         model.addAttribute("seller", invoiceService.seller());
+        model.addAttribute("freeDeliveryAbove", CartService.FREE_DELIVERY_ABOVE);
         Optional<User> signedIn = currentUser.find();
+        // Shop by category: the header's category bar and the "All" menu
+        if (signedIn.map(u -> !u.isAdmin()).orElse(true)) model.addAttribute("navCategories", medicineService.categories());
         if (signedIn.isEmpty()) {
             HttpSession session = request.getSession(false);
             model.addAttribute("cartCount", cartService.guestCount(session));

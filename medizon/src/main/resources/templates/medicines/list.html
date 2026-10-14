@@ -11,7 +11,7 @@
         <p class="text-muted mb-0" th:text="${results.totalElements} + ' medicine(s)'">0</p>
     </div>
 
-    <div class="d-flex flex-wrap gap-2 mb-4">
+    <div class="mz-chip-scroll mb-4">
         <a class="mz-chip" th:classappend="${category == ''} ? 'active'" th:href="@{/medicines(q=${q})}">All</a>
         <a th:each="c : ${categories}" class="mz-chip" th:classappend="${c == category} ? 'active'"
            th:href="@{/medicines(q=${q},category=${c})}" th:text="${c}">Category</a>

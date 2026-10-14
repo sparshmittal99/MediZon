@@ -7,9 +7,7 @@
 
 <main class="container mz-page" style="max-width: 900px">
     <a th:href="@{/plans}" class="small"><i class="bi bi-arrow-left"></i> My medicines</a>
-    <h1 class="mz-page-title mt-2">Family members</h1>
-    <p class="text-muted mb-4">Manage medicines for the people you look after. Each person gets their own reminders and supply count,
-        and you choose who a medicine is for when you order it.</p>
+    <h1 class="mz-page-title mt-2 mb-4">Family members</h1>
 
     <div class="row g-3 mb-4">
         <div class="col-md-6" th:each="m : ${people}">

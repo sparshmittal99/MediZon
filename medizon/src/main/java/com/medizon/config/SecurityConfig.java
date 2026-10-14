@@ -35,7 +35,7 @@ public class SecurityConfig {
                                            @Lazy CartService cartService) throws Exception {
         http
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/medicines", "/medicines/**", "/register", "/login",
+                .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/register", "/login",
                         "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/favicon.ico", "/error").permitAll()
                 // Visitors can fill a cart and pick a delivery location before signing in; checkout needs an account.
                 // Admin accounts are turned away in CartController / CartService.

@@ -18,7 +18,7 @@
         <div class="col-lg-8">
             <div class="mz-panel-flush">
                 <div class="table-responsive">
-                    <table class="table align-middle mb-0">
+                    <table class="table align-middle mb-0 mz-table-stack mz-cart-table">
                         <thead><tr><th>Medicine</th><th style="width: 9rem">Packs</th><th class="text-end">Amount</th><th></th></tr></thead>
                         <tbody>
                         <tr th:each="i : ${cart.items}" data-mz-cart-row>
@@ -43,12 +43,12 @@
                                     <div class="mz-qty-error small" role="alert" hidden></div>
                                 </div>
                             </td>
-                            <td>
+                            <td class="mz-cart-qty">
                                 <div th:replace="~{fragments/layout :: cartStepper(${i.medicine}, false)}"></div>
                             </td>
-                            <td class="text-end fw-semibold" data-mz-line-total
+                            <td class="text-end fw-semibold mz-cart-amount" data-mz-line-total
                                 th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></td>
-                            <td class="text-end">
+                            <td class="text-end mz-cart-remove">
                                 <form th:action="@{/cart/{id}/remove(id=${i.medicine.id})}" method="post">
                                     <button class="btn btn-sm btn-link text-danger" type="submit" aria-label="Remove"><i class="bi bi-trash"></i></button>
                                 </form>
@@ -72,8 +72,6 @@
                 <div class="d-flex justify-content-between fw-bold fs-5 mb-3"><span>Total</span>
                     <span data-mz-total th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
                 <th:block th:unless="${guest}">
-                    <p class="small text-muted" th:if="${#lists.size(people) == 1}">
-                        Buying for family? <a th:href="@{/members}">Add family members</a> and choose who each medicine is for.</p>
                 </th:block>
                 <div class="mz-rx-note small mb-3" data-mz-rx-note th:hidden="${!cart.prescriptionRequired}">
                     Some items need a prescription. You'll choose or upload one at checkout.

@@ -34,7 +34,7 @@
 
     <div class="row g-4">
         <div class="col-lg-8">
-            <div class="mz-panel-flush">
+            <div class="mz-panel-flush table-responsive">
                 <table class="table align-middle mb-0">
                     <thead><tr><th>Medicine</th><th>Price</th><th>Packs</th><th class="text-end">Amount</th></tr></thead>
                     <tbody>
@@ -107,8 +107,7 @@
 
             <form th:if="${!adminView and review == null and o.status.name() == 'DELIVERED'}"
                   th:action="@{/orders/{id}/review(id=${o.id})}" method="post" class="mz-panel mt-4">
-                <h2 class="h5 mb-1">How was your order?</h2>
-                <p class="text-muted small mb-3">Your rating helps us improve delivery and service.</p>
+                <h2 class="h5 mb-3">How was your order?</h2>
                 <fieldset class="mb-3">
                     <legend class="form-label fs-6">Rating</legend>
                     <div class="mz-star-input">
@@ -168,7 +167,6 @@
                     </select>
                     <button class="btn btn-primary" type="submit">Save</button>
                 </div>
-                <p class="small text-muted mt-2 mb-0">Marking delivered adds these packs to the customer's supply at home.</p>
             </form>
         </div>
     </div>

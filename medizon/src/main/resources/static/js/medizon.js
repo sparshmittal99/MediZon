@@ -883,4 +883,73 @@
             }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
         });
     });
+
+    // ---- phones: highlight the tab bar entry for this section ----
+    document.querySelectorAll('.mz-tabbar [data-mz-tab]').forEach(tab => {
+        const path = location.pathname.slice(base.length) || '/';
+        const on = tab.dataset.mzTab.split(' ').some(p => p === '/' ? path === '/' : path === p || path.startsWith(p + '/'));
+        tab.classList.toggle('active', on);
+        if (on) tab.setAttribute('aria-current', 'page');
+    });
+
+    // ---- language: the footer picker translates the whole site through Google's website translator ----
+    // The choice lives in Google's own "googtrans" cookie; its script is only loaded once a language other than English is picked.
+    (function () {
+        const picker = document.querySelector('[data-mz-lang]');
+        const match = document.cookie.match(/(?:^|;\s*)googtrans=\/[^/;]*\/([^;]+)/);
+        const lang = match ? decodeURIComponent(match[1]) : 'en';
+        if (picker) {
+            picker.value = [...picker.options].some(o => o.value === lang) ? lang : 'en';
+            picker.addEventListener('change', () => {
+                const host = location.hostname;
+                // Google may have written the cookie on the bare host or the dotted domain: clear every copy
+                ['', host, '.' + host].forEach(d => {
+                    document.cookie = 'googtrans=; path=/; max-age=0' + (d ? '; domain=' + d : '');
+                });
+                if (picker.value !== 'en') document.cookie = 'googtrans=/en/' + picker.value + '; path=/; max-age=31536000; samesite=lax';
+                location.reload();
+            });
+        }
+        if (lang === 'en') return;
+        const holder = document.createElement('div');
+        holder.id = 'mzTranslate';
+        holder.hidden = true;
+        document.body.appendChild(holder);
+        window.mzTranslateInit = () => new google.translate.TranslateElement({ pageLanguage: 'en', autoDisplay: false }, 'mzTranslate');
+        const script = document.createElement('script');
+        script.src = 'https://translate.google.com/translate_a/element.js?cb=mzTranslateInit';
+        script.async = true;
+        document.body.appendChild(script);
+    })();
+
+    // ---- help centre: filter questions as you type; topic chips only for sections on this page ----
+    (function () {
+        const search = document.querySelector('[data-mz-help-search]');
+        if (!search) return;
+        const groups = [...document.querySelectorAll('.mz-faq-group')];
+        const empty = document.querySelector('[data-mz-help-empty]');
+        document.querySelectorAll('[data-mz-help-topic]').forEach(chip => {
+            if (!document.getElementById('help-' + chip.dataset.mzHelpTopic)) chip.remove();
+        });
+        // A link to a topic (from the footer) opens its first answer
+        const target = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+        if (target && target.classList.contains('mz-faq-group')) target.querySelector('details')?.setAttribute('open', '');
+
+        search.addEventListener('input', () => {
+            const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+            let shown = 0;
+            groups.forEach(g => {
+                let inGroup = 0;
+                g.querySelectorAll('.mz-faq-item').forEach(item => {
+                    const hit = words.every(w => item.textContent.toLowerCase().includes(w));
+                    item.hidden = !hit;
+                    if (words.length) item.open = hit && inGroup === 0;   // open the best (first) answer in each group
+                    if (hit) inGroup++;
+                });
+                g.hidden = inGroup === 0;
+                shown += inGroup;
+            });
+            if (empty) empty.hidden = shown > 0;
+        });
+    })();
 })();

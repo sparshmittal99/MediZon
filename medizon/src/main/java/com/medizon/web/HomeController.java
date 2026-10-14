@@ -21,7 +21,8 @@ public class HomeController {
     public String home(Model model) {
         if (currentUser.find().map(User::isAdmin).orElse(false)) return "redirect:/admin";
         model.addAttribute("featured", medicineService.featured());
-        model.addAttribute("categories", medicineService.categories());
+        model.addAttribute("deals", medicineService.deals(4));
+        model.addAttribute("shelves", medicineService.shelves(5, 4));
         currentUser.find().ifPresent(u -> {
             model.addAttribute("doses", planService.todaysDoses(u));
             model.addAttribute("lowPlans", planService.forUser(u).stream()
