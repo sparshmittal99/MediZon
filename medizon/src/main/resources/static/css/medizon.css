@@ -207,6 +207,28 @@ a { text-underline-offset: 2px; }
 .mz-facts { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1.25rem; margin: 0; }
 .mz-facts dt { color: var(--mz-muted); font-weight: 500; }
 .mz-facts dd { margin: 0; }
+/* Returnable or not, on the product page */
+.mz-return-policy { display: flex; align-items: center; gap: .5rem; font-size: .92rem; }
+.mz-return-policy i { font-size: 1.05rem; }
+.mz-return-policy.is-yes { color: var(--mz-green-ink); }
+.mz-return-policy.is-no { color: var(--mz-muted); }
+
+/* Delivery date on the product page */
+.mz-delivery { display: flex; gap: .85rem; align-items: flex-start; padding: .9rem 1rem; border: 1px solid var(--mz-line); border-radius: .9rem; background: #fff; }
+.mz-delivery-ico { flex: none; display: flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; border-radius: 50%;
+    background: var(--mz-mint); color: var(--mz-green); font-size: 1.2rem; }
+.mz-delivery-ico.is-fast { background: var(--mz-amber-soft); color: #B86E00; }
+.mz-delivery-ico.is-off { background: #FBEFEF; color: var(--mz-red); }
+.mz-delivery-head { font-weight: 800; color: var(--mz-green-ink); }
+.mz-delivery-head.is-fast { color: #8A5300; }
+.mz-delivery-head.is-off { color: var(--mz-red); }
+.mz-delivery-dates { font-size: .95rem; }
+.mz-delivery-cutoff { font-size: .85rem; font-weight: 600; color: #B86E00; }
+.mz-delivery-to { display: inline-flex; align-items: center; gap: .35rem; margin-top: .3rem; padding: 0; border: 0; background: none;
+    color: var(--mz-muted); font-size: .85rem; text-align: left; }
+.mz-delivery-change { color: var(--bs-link-color); font-weight: 600; }
+.mz-delivery-to:hover .mz-delivery-change { text-decoration: underline; }
+
 .mz-rx-note { background: #FBEFEF; border: 1px solid #EFCFCF; border-radius: .7rem; padding: .8rem 1rem; color: #7A2626; }
 
 /* ---------- Plans (my medicines) ---------- */
@@ -564,11 +586,15 @@ a { text-underline-offset: 2px; }
     .mz-invoice-meta { justify-content: start; }
 }
 @media print {
-    @page { size: A4; margin: 12mm; }
+    /* No page margin: browsers then leave out their own header and footer (date, title, URL, page number).
+       The 12 mm margin moves inside the invoice and repeats on every printed page. */
+    @page { size: A4; margin: 0; }
     body { background: #fff; }
+    /* Print the logo and shading as they look on screen; browsers drop background colours by default */
+    .mz-invoice, .mz-invoice * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .mz-nav, .mz-locbar, .mz-catbar, .mz-subnav, .mz-footer, .mz-tabbar, .mz-bot, .mz-toasts, .mz-flash, .mz-no-print { display: none !important; }
     .mz-page { padding: 0; max-width: none !important; }
-    .mz-invoice { border: 0; border-radius: 0; padding: 0; }
+    .mz-invoice { border: 0; border-radius: 0; padding: 12mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
     .mz-invoice-parties { grid-template-columns: repeat(3, 1fr); }
     .mz-invoice-foot { grid-template-columns: 1fr 16rem; }
     .table-responsive { overflow: visible; }

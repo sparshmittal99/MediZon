@@ -111,6 +111,7 @@ public class OrderController {
         model.addAttribute("review", reviewService.forOrder(o).orElse(null));
         model.addAttribute("returns", returnService.forOrder(o));
         model.addAttribute("returnBlocker", returnService.blocker(o).orElse(null));
+        model.addAttribute("hasReturnable", returnService.hasReturnableItems(o));
         model.addAttribute("returnBy", returnService.returnBy(o));
         model.addAttribute("adminView", false);
         return "orders/detail";

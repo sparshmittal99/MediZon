@@ -275,8 +275,8 @@ public class AdminController {
     @PostMapping("/locations")
     public String addLocations(@RequestParam String pincodes, @RequestParam(required = false) String area,
                                @RequestParam(required = false) String city, @RequestParam(required = false) String state,
-                               RedirectAttributes ra) {
-        int n = deliveryAreas.add(pincodes, area, city, state);
+                               @RequestParam(required = false) Integer extraDeliveryDays, RedirectAttributes ra) {
+        int n = deliveryAreas.add(pincodes, area, city, state, extraDeliveryDays);
         ra.addFlashAttribute("success", n == 1 ? "PIN code saved. Customers there can now order." : n + " PIN codes saved. Customers there can now order.");
         return "redirect:/admin/locations";
     }
@@ -285,6 +285,15 @@ public class AdminController {
     public String setLocationActive(@PathVariable Long id, @RequestParam boolean active, RedirectAttributes ra) {
         ServiceablePincode p = deliveryAreas.setActive(id, active);
         ra.addFlashAttribute("success", active ? "Delivering to " + p.getPincode() + " again." : "Deliveries to " + p.getPincode() + " paused.");
+        return "redirect:/admin/locations";
+    }
+
+    @PostMapping("/locations/{id}/delivery-days")
+    public String setLocationDeliveryDays(@PathVariable Long id, @RequestParam int extraDeliveryDays, RedirectAttributes ra) {
+        ServiceablePincode p = deliveryAreas.setExtraDeliveryDays(id, extraDeliveryDays);
+        ra.addFlashAttribute("success", p.getExtraDeliveryDays() == 0
+                ? p.getPincode() + " now gets each product's own delivery time."
+                : p.getPincode() + " now adds " + p.getExtraDeliveryDays() + " day(s) to every delivery.");
         return "redirect:/admin/locations";
     }
 

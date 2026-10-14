@@ -2,7 +2,11 @@ package com.medizon.web;
 
 import com.medizon.domain.Medicine;
 import com.medizon.service.BusinessException;
+import com.medizon.service.CurrentUser;
+import com.medizon.service.DeliveryTimeService;
 import com.medizon.service.MedicineService;
+import com.medizon.service.ReturnService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -15,6 +19,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class MedicineController {
 
     private final MedicineService medicineService;
+    private final DeliveryTimeService deliveryTimes;
+    private final DeliveryLocations deliveryLocations;
+    private final CurrentUser currentUser;
 
     @GetMapping("/medicines")
     public String list(@RequestParam(defaultValue = "") String q,
@@ -29,10 +36,16 @@ public class MedicineController {
     }
 
     @GetMapping("/medicines/{id}")
-    public String detail(@PathVariable Long id, Model model) {
+    public String detail(@PathVariable Long id, Model model, HttpServletRequest request) {
         Medicine m = medicineService.get(id);
         if (!m.isActive()) throw new BusinessException(m.getName() + " is no longer sold.");
         model.addAttribute("m", m);
+        model.addAttribute("returnDays", ReturnService.RETURN_WINDOW_DAYS);
+        // When it would arrive at the "Delivers to" location
+        deliveryLocations.current(request, currentUser.find().orElse(null))
+                .filter(DeliveryLocations.Location::isServiceable)
+                .flatMap(l -> deliveryTimes.estimate(m, l.getPincode()))
+                .ifPresent(e -> model.addAttribute("delivery", e));
         return "medicines/detail";
     }
 }

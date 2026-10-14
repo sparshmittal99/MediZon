@@ -14,10 +14,12 @@
     <div class="mz-panel-flush">
         <div class="table-responsive">
             <table class="table align-middle mb-0">
-                <thead><tr><th>Medicine</th><th>Category</th><th>Price</th><th>Stock</th><th>Expiry</th><th>Rx</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Medicine</th><th>Category</th><th>Price</th><th>Stock</th><th>Expiry</th><th>Delivery</th><th>Rx</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                 <tr th:each="m : ${medicines}" th:classappend="${!m.active} ? 'text-muted'">
-                    <td><span class="fw-semibold" th:text="${m.name}"></span><div class="small text-muted" th:text="${m.manufacturer}"></div></td>
+                    <td><span class="fw-semibold" th:text="${m.name}"></span>
+                        <span th:unless="${m.returnable}" class="badge text-bg-light border ms-1">Non-returnable</span>
+                        <div class="small text-muted" th:text="${m.manufacturer}"></div></td>
                     <td th:text="${m.category}"></td>
                     <td th:text="'₹' + ${m.price}"></td>
                     <td th:text="${m.stock}" th:classappend="${m.stock < 50} ? 'text-danger fw-semibold'"></td>
@@ -27,6 +29,10 @@
                               th:classappend="${m.expired} ? 'text-danger fw-semibold' : (${m.expiringSoon} ? 'text-warning-emphasis fw-semibold')"></span>
                         <span th:if="${m.expired}" class="badge text-bg-danger ms-1">Expired</span>
                         <span th:if="${m.expiringSoon}" class="badge text-bg-warning ms-1">Soon</span>
+                    </td>
+                    <td class="text-nowrap" th:with="lo=${m.deliveryMinDays ?: 3}, hi=${m.deliveryMaxDays ?: 5}">
+                        <span th:if="${hi == 0}" class="badge text-bg-warning">Same day</span>
+                        <span th:unless="${hi == 0}" th:text="${lo == hi} ? (${lo} + (${lo == 1} ? ' day' : ' days')) : (${lo} + '–' + ${hi} + ' days')"></span>
                     </td>
                     <td th:text="${m.prescriptionRequired} ? 'Yes' : 'No'"></td>
                     <td><span class="badge" th:classappend="${m.active} ? 'text-bg-success' : 'text-bg-secondary'" th:text="${m.active} ? 'Listed' : 'Hidden'"></span></td>

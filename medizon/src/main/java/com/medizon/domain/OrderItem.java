@@ -41,6 +41,12 @@ public class OrderItem {
     @Column(precision = 5, scale = 2)
     private BigDecimal gstRate;
 
+    /**
+     * Whether the medicine was returnable when ordered, so later catalog changes don't alter what was promised.
+     * Null on orders from before returnability existed: those follow the medicine's current setting.
+     */
+    private Boolean returnableAtOrder;
+
     /** Expiry of the batch sold, snapshotted at order time; carried to the supply at home on delivery. */
     private LocalDate expiryDate;
 
@@ -60,6 +66,10 @@ public class OrderItem {
     /** {@code total} (units or packs) shared between {@code targets} in proportion to the packs each was ordered. */
     public int[] shareOf(List<Member> targets, int total) {
         return Shares.split(total, targets.stream().mapToInt(m -> packs.getOrDefault(m.getId(), 0)).toArray());
+    }
+
+    public boolean isReturnable() {
+        return returnableAtOrder != null ? returnableAtOrder : medicine.isReturnable();
     }
 
     /** Members in a stable order (account holder first, common last). */

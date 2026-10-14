@@ -23,17 +23,21 @@
                           placeholder="400050, 400051, 400052"></textarea>
                 <div class="form-text">One or many: separate them with commas, spaces or new lines.</div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small" for="area">Area <span class="text-muted fw-normal">(optional)</span></label>
                 <input id="area" name="area" class="form-control" placeholder="Bandra West">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small" for="city">City <span class="text-muted fw-normal">(optional)</span></label>
                 <input id="city" name="city" class="form-control" placeholder="Mumbai">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small" for="state">State <span class="text-muted fw-normal">(optional)</span></label>
                 <input id="state" name="state" class="form-control" placeholder="Maharashtra">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small" for="extraDeliveryDays">Extra delivery days</label>
+                <input id="extraDeliveryDays" name="extraDeliveryDays" type="number" min="0" max="30" value="0" class="form-control">
             </div>
             <div class="col-12">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1"></i>Add to delivery areas</button>
@@ -48,13 +52,20 @@
     <div th:unless="${#lists.isEmpty(pincodes)}" class="mz-panel-flush">
         <div class="table-responsive">
             <table class="table align-middle mb-0">
-                <thead><tr><th>PIN code</th><th>Area</th><th>City</th><th>State</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+                <thead><tr><th>PIN code</th><th>Area</th><th>City</th><th>State</th><th>Extra delivery days</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
                 <tbody>
                 <tr th:each="p : ${pincodes}" th:classappend="${!p.active} ? 'mz-user-off'">
                     <td class="fw-semibold" style="font-variant-numeric: tabular-nums" th:text="${p.pincode}"></td>
                     <td th:text="${p.area} ?: '—'"></td>
                     <td th:text="${p.city} ?: '—'"></td>
                     <td th:text="${p.state} ?: '—'"></td>
+                    <td>
+                        <form th:action="@{/admin/locations/{id}/delivery-days(id=${p.id})}" method="post" class="d-flex gap-1" style="max-width: 9rem">
+                            <input class="form-control form-control-sm" type="number" min="0" max="30" name="extraDeliveryDays"
+                                   th:id="'days' + ${p.id}" th:value="${p.extraDeliveryDays}" th:attr="aria-label='Extra delivery days for ' + ${p.pincode}">
+                            <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                        </form>
+                    </td>
                     <td>
                         <span th:if="${p.active}" class="badge text-bg-success">Delivering</span>
                         <span th:unless="${p.active}" class="badge text-bg-secondary">Paused</span>

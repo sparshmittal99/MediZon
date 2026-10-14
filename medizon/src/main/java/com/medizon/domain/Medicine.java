@@ -78,7 +78,21 @@ public class Medicine {
 
     private boolean active = true;
 
+    /** Can customers send it back after delivery? Admins set it; the product page shows it. */
+    @Column(columnDefinition = "boolean not null default true")
+    private boolean returnable = true;
+
     private String imageUrl;
+
+    /**
+     * How long delivery takes once ordered, in days: 0 to 0 is same-day delivery. The PIN code can add days on top
+     * ({@link ServiceablePincode#getExtraDeliveryDays()}). Empty until set; DeliveryTimeService fills it in.
+     */
+    @Min(value = 0, message = "Use 0 or more days") @Max(value = 30, message = "Use 30 days or fewer")
+    private Integer deliveryMinDays;
+
+    @Min(value = 0, message = "Use 0 or more days") @Max(value = 30, message = "Use 30 days or fewer")
+    private Integer deliveryMaxDays;
 
     public int getDiscountPercent() {
         if (mrp == null || price == null || mrp.compareTo(price) <= 0) return 0;

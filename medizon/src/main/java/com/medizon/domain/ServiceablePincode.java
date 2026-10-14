@@ -25,6 +25,10 @@ public class ServiceablePincode {
 
     private String state;
 
+    /** Days added to every product's delivery time here, for areas further from the pharmacy. 0 keeps same-day delivery. */
+    @Column(columnDefinition = "integer not null default 0")
+    private int extraDeliveryDays;
+
     /** Paused PIN codes stay listed but aren't delivered to. */
     @Column(columnDefinition = "boolean not null default true")
     private boolean active = true;

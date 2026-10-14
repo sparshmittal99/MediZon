@@ -41,6 +41,7 @@
                     <tr th:each="i : ${o.items}">
                         <td>
                             <span th:text="${i.medicineName}"></span>
+                            <span th:unless="${i.returnable}" class="badge text-bg-light border ms-1">Non-returnable</span>
                             <!-- Who it's for is the customer's business; admins only see the medicines -->
                             <div th:if="${!adminView and !#lists.isEmpty(i.sortedMembers)}" class="small text-muted"
                                  th:text="'For ' + ${i.membersLabel}"></div>
@@ -82,12 +83,14 @@
                 <p class="small mb-0 fw-semibold" th:text="(${r.status.name() == 'REFUNDED'} ? 'Refunded ' : 'Refund ') + '₹' + ${r.refundAmount}"></p>
             </section>
 
-            <div th:if="${!adminView and o.status.name() == 'DELIVERED'}" class="mz-panel mt-4 d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div th:if="${!adminView and hasReturnable and o.status.name() == 'DELIVERED'}" class="mz-panel mt-4 d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
                     <h2 class="h6 mb-0">Something wrong with your order?</h2>
                     <div class="small text-muted" th:if="${returnBlocker == null}"
                          th:text="'Return damaged, wrong or expired medicines until ' + ${#temporals.format(returnBy, 'd MMM yyyy')} + '.'"></div>
                     <div class="small text-muted" th:if="${returnBlocker != null}" th:text="${returnBlocker}"></div>
+                    <div class="small text-muted" th:with="fixed=${o.items.?[!returnable]}" th:unless="${#lists.isEmpty(fixed)}"
+                         th:text="'Not returnable: ' + ${#strings.listJoin(fixed.![medicineName], ', ')}"></div>
                 </div>
                 <a th:if="${returnBlocker == null}" th:href="@{/orders/{id}/return(id=${o.id})}" class="btn btn-outline-primary">
                     <i class="bi bi-arrow-return-left me-1"></i>Return items</a>

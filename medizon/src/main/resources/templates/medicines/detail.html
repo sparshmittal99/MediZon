@@ -32,11 +32,54 @@
             </div>
             <p class="small text-muted mb-4" th:text="'Pack of ' + ${m.unitsPerPack} + ' ' + ${m.unitLabel} + ', inclusive of all taxes'"></p>
 
+            <!-- When it arrives at the "Delivers to" location; the page reloads when the location changes (medizon.js) -->
+            <div class="mz-delivery mb-4" sec:authorize="!hasRole('ADMIN')" th:if="${m.inStock and !m.expired}" data-mz-delivery>
+                <th:block th:if="${delivery != null}">
+                    <i class="bi mz-delivery-ico" th:classappend="${delivery.sameDay} ? 'bi-lightning-charge-fill is-fast' : 'bi-truck'" aria-hidden="true"></i>
+                    <div class="min-w-0">
+                        <div class="mz-delivery-head" th:classappend="${delivery.sameDay} ? 'is-fast'" th:text="${delivery.headline}">Delivery in 3–5 days</div>
+                        <div class="mz-delivery-dates">
+                            <span th:text="${delivery.sameDay} ? 'Get it ' : 'Arrives '"></span><strong th:text="${delivery.dates}">Fri, 17 Oct – Mon, 20 Oct</strong>
+                        </div>
+                        <div class="mz-delivery-cutoff" th:if="${delivery.orderWithinText != null}" th:text="${delivery.orderWithinText}"></div>
+                        <button type="button" class="mz-delivery-to" data-bs-toggle="modal" data-bs-target="#mzLocModal">
+                            <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                            <span th:text="'Deliver to ' + (${deliverTo.label != null} ? ${deliverTo.label} + ' ' : '') + ${deliverTo.pincode}">Deliver to 400050</span>
+                            <span class="mz-delivery-change">Change</span>
+                        </button>
+                    </div>
+                </th:block>
+                <th:block th:if="${delivery == null and deliverTo != null and !deliverTo.serviceable}">
+                    <i class="bi bi-geo-alt mz-delivery-ico is-off" aria-hidden="true"></i>
+                    <div class="min-w-0">
+                        <div class="mz-delivery-head is-off" th:text="'We don’t deliver to ' + ${deliverTo.pincode} + ' yet'">We don't deliver here yet</div>
+                        <button type="button" class="mz-delivery-to" data-bs-toggle="modal" data-bs-target="#mzLocModal">
+                            <span class="mz-delivery-change">Try another PIN code</span>
+                        </button>
+                    </div>
+                </th:block>
+                <th:block th:if="${delivery == null and deliverTo == null}">
+                    <i class="bi bi-truck mz-delivery-ico" aria-hidden="true"></i>
+                    <div class="min-w-0">
+                        <div class="mz-delivery-head">Check delivery date</div>
+                        <button type="button" class="mz-delivery-to" data-bs-toggle="modal" data-bs-target="#mzLocModal">
+                            <i class="bi bi-geo-alt" aria-hidden="true"></i><span class="mz-delivery-change">Enter your PIN code</span>
+                        </button>
+                    </div>
+                </th:block>
+            </div>
+
             <p class="mz-expiry mb-3" th:if="${m.expiryDate != null}"
                th:classappend="${m.expired} ? 'is-expired'">
                 <i class="bi" th:classappend="${m.expired} ? 'bi-exclamation-triangle' : 'bi-calendar-check'" aria-hidden="true"></i>
                 <span th:if="${!m.expired}" th:text="'Expiry ' + ${#temporals.format(m.expiryDate, 'MMM yyyy')} + ' or later'"></span>
                 <span th:if="${m.expired}">Current stock has expired, so it can't be ordered right now.</span>
+            </p>
+
+            <p class="mz-return-policy mb-3" th:classappend="${m.returnable} ? 'is-yes' : 'is-no'">
+                <i class="bi" th:classappend="${m.returnable} ? 'bi-arrow-return-left' : 'bi-x-circle'" aria-hidden="true"></i>
+                <span th:if="${m.returnable}"><strong>Returnable</strong> within [[${returnDays}]] days of delivery</span>
+                <span th:unless="${m.returnable}"><strong>Non-returnable</strong></span>
             </p>
 
             <div th:if="${m.prescriptionRequired}" class="mz-rx-note mb-4">
@@ -72,6 +115,7 @@
                 <dt>Category</dt><dd th:text="${m.category}">-</dd>
                 <dt>Availability</dt><dd th:text="${m.expired} ? 'Unavailable' : (${m.inStock} ? 'In stock' : 'Out of stock')">-</dd>
                 <dt>Expiry</dt><dd th:text="${m.expiryDate != null} ? ${#temporals.format(m.expiryDate, 'MMM yyyy')} : 'Shown on the pack'">-</dd>
+                <dt>Returns</dt><dd th:text="${m.returnable} ? 'Returnable within ' + ${returnDays} + ' days of delivery' : 'Non-returnable'">-</dd>
             </dl>
         </div>
     </div>

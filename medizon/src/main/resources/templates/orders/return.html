@@ -16,7 +16,7 @@
                 <table class="table align-middle mb-0">
                     <thead><tr><th>Medicine</th><th>Price paid</th><th style="width: 9rem">Packs to return</th></tr></thead>
                     <tbody>
-                    <tr th:each="i : ${o.items}" th:with="left=${returnable.get(i.id)}">
+                    <tr th:each="i : ${o.items}" th:if="${i.returnable}" th:with="left=${returnable.get(i.id)}">
                         <td>
                             <span class="fw-semibold" th:text="${i.medicineName}"></span>
                             <div class="small text-muted" th:if="${!#lists.isEmpty(i.sortedMembers)}" th:text="'For ' + ${i.membersLabel}"></div>
@@ -36,6 +36,8 @@
                     </tbody>
                 </table>
             </div>
+            <p class="small text-muted px-3 py-2 mb-0 border-top" th:with="fixed=${o.items.?[!returnable]}" th:unless="${#lists.isEmpty(fixed)}"
+               th:text="'Not returnable: ' + ${#strings.listJoin(fixed.![medicineName], ', ')}"></p>
         </section>
 
         <section class="mz-panel mb-4">

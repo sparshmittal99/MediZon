@@ -625,6 +625,12 @@
             result.hidden = false;
         }
 
+        // A product page shows when it arrives at this location: refresh it once the picker closes
+        let locationChanged = false;
+        modal.addEventListener('hidden.bs.modal', () => {
+            if (locationChanged && document.querySelector('[data-mz-delivery]')) location.reload();
+        });
+
         function updateHeader(data) {
             document.querySelectorAll('[data-mz-loc]').forEach(btn => {
                 btn.classList.toggle('is-off', !data.serviceable);
@@ -633,6 +639,7 @@
                 btn.setAttribute('aria-label', 'Change delivery location');
             });
             modal.dataset.pincode = data.pincode;
+            locationChanged = true;
         }
 
         /** Checks and remembers a PIN code, or a saved address when {@code addressId} is given. */

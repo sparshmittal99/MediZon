@@ -61,7 +61,7 @@ public class DeliveryAreaService {
      * each; PIN codes already listed are updated and switched back on. Returns how many were added or updated.
      */
     @Transactional
-    public int add(String text, String area, String city, String state) {
+    public int add(String text, String area, String city, String state, Integer extraDeliveryDays) {
         Set<String> found = new LinkedHashSet<>();
         if (text != null) {
             Matcher m = PIN_IN_TEXT.matcher(text);
@@ -78,6 +78,7 @@ public class DeliveryAreaService {
             if (blankToNull(area) != null) s.setArea(area.trim());
             if (blankToNull(city) != null) s.setCity(city.trim());
             if (blankToNull(state) != null) s.setState(state.trim());
+            if (extraDeliveryDays != null) s.setExtraDeliveryDays(checkDays(extraDeliveryDays));
             s.setActive(true);
             saved.add(s);
         }
@@ -90,6 +91,19 @@ public class DeliveryAreaService {
         ServiceablePincode s = get(id);
         s.setActive(active);
         return s;
+    }
+
+    /** Days added to every product's delivery time at this PIN code. */
+    @Transactional
+    public ServiceablePincode setExtraDeliveryDays(Long id, int days) {
+        ServiceablePincode s = get(id);
+        s.setExtraDeliveryDays(checkDays(days));
+        return s;
+    }
+
+    private static int checkDays(int days) {
+        if (days < 0 || days > 30) throw new BusinessException("Extra delivery days must be between 0 and 30.");
+        return days;
     }
 
     @Transactional

@@ -162,6 +162,7 @@ public class OrderService {
             item.setHsnCode(m.getHsnCode());
             item.setGstRate(m.getGstRate());
             item.setExpiryDate(m.getExpiryDate());
+            item.setReturnableAtOrder(m.isReturnable());
             line.packs().forEach((who, n) -> {
                 item.getMembers().add(who);
                 item.getPacks().put(who.getId(), n);

@@ -87,6 +87,7 @@ public class MedicineService {
             next = validLink(imageLink.trim());
         }
         m.setImageUrl(next);
+        DeliveryTimeService.normalize(m);
         Medicine saved = medicines.save(m);
         if (current != null && !current.equals(next)) fileStorage.deleteMedicineImage(current);
         return saved;

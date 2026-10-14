@@ -40,8 +40,14 @@ public class ReturnService {
         return o.getDeliveredAt() == null ? null : o.getDeliveredAt().toLocalDate().plusDays(RETURN_WINDOW_DAYS);
     }
 
+    /** Does the order have anything that can be returned at all? Orders of only non-returnable items have no return option. */
+    public boolean hasReturnableItems(Order o) {
+        return o.getItems().stream().anyMatch(OrderItem::isReturnable);
+    }
+
     /** Why the order can't be returned right now, or empty if it can. */
     public Optional<String> blocker(Order o) {
+        if (!hasReturnableItems(o)) return Optional.of("The items in this order can't be returned.");
         if (o.getStatus() != OrderStatus.DELIVERED) return Optional.of("Returns open once the order is delivered.");
         if (LocalDate.now().isAfter(returnBy(o))) {
             return Optional.of("The return window closed on " + returnBy(o).format(DateTimeFormatter.ofPattern("d MMM yyyy")) + ".");
@@ -49,12 +55,21 @@ public class ReturnService {
         if (returns.findByOrderOrderByCreatedAtDesc(o).stream().anyMatch(ReturnRequest::isOpen)) {
             return Optional.of("A return for this order is already in progress.");
         }
-        if (returnable(o).values().stream().allMatch(q -> q == 0)) return Optional.of("Everything in this order has been returned.");
+        if (returnable(o).values().stream().allMatch(q -> q == 0)) return Optional.of("Everything returnable in this order has been returned.");
         return Optional.empty();
     }
 
-    /** Packs of each order line (by id) that can still be returned. */
+    /** Packs of each returnable order line (by id) that can still be returned. Non-returnable lines are left out. */
     public Map<Long, Integer> returnable(Order o) {
+        Map<Long, Integer> out = new LinkedHashMap<>();
+        remaining(o).forEach((id, left) -> {
+            if (o.getItems().stream().anyMatch(i -> i.getId().equals(id) && i.isReturnable())) out.put(id, left);
+        });
+        return out;
+    }
+
+    /** Packs of every order line (by id) not yet returned, returnable or not. */
+    private Map<Long, Integer> remaining(Order o) {
         Map<Long, Integer> out = new LinkedHashMap<>();
         for (OrderItem i : o.getItems()) {
             long done = returns.returnedQuantity(i, ReturnStatus.REJECTED);
@@ -93,6 +108,7 @@ public class ReturnService {
             if (qty <= 0) continue;
             OrderItem item = byId.get(itemIds.get(k));
             if (item == null) throw new BusinessException("That item isn't part of this order.");
+            if (!item.isReturnable()) throw new BusinessException(item.getMedicineName() + " can't be returned.");
             if (qty > left.getOrDefault(item.getId(), 0)) {
                 throw new BusinessException("You can return at most " + left.get(item.getId()) + " pack(s) of " + item.getMedicineName() + ".");
             }
@@ -190,7 +206,7 @@ public class ReturnService {
         ReturnRequest r = move(id, ReturnStatus.REFUNDED);
         r.setRefundedAt(LocalDateTime.now());
         Order o = r.getOrder();
-        if (returnable(o).values().stream().allMatch(q -> q == 0)) o.setPaymentStatus(PaymentStatus.REFUNDED);
+        if (remaining(o).values().stream().allMatch(q -> q == 0)) o.setPaymentStatus(PaymentStatus.REFUNDED);
         notifyCustomer(r, "Refund processed", "₹" + r.getRefundAmount() + " for return " + r.getReturnNumber()
                 + " is refunded" + (o.getPaymentMethod() == PaymentMethod.COD ? "." : " to your " + o.getPaymentMethod().getLabel() + ".")
                 + " It can take 5 to 7 working days to show up.");
