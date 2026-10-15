@@ -67,7 +67,9 @@ public class PlanController {
                           Model model) {
         User user = currentUser.get();
         PlanForm form = new PlanForm();
-        form.setMemberId(memberId != null ? memberService.get(memberId, user).getId() : memberService.self(user).getId());
+        form.setMemberId(memberId != null ? memberService.get(memberId, user).getId()
+                : medicineId != null ? planService.suggestedMember(user, medicineId).orElse(memberService.self(user).getId())
+                : memberService.self(user).getId());
         if (medicineId != null) {
             Medicine m = medicineService.get(medicineId);
             form.setMedicineId(m.getId());
@@ -86,13 +88,32 @@ public class PlanController {
 
     private String showForm(PlanForm form, Model model) {
         model.addAttribute("form", form);
-        addFormOptions(model);
+        addFormOptions(model, form);
         return "plans/form";
     }
 
-    private void addFormOptions(Model model) {
-        model.addAttribute("medicines", medicineService.allActive());
-        model.addAttribute("members", memberService.all(currentUser.get()));
+    /**
+     * The medicine picker only offers what reached the household: medicines delivered for the chosen person, plus the
+     * common (OTC) medicines. Each option lists who may take it ({@code data-members}); the page narrows the list
+     * when "Taken by" changes. A plan being edited keeps its own medicine.
+     */
+    private void addFormOptions(Model model, PlanForm form) {
+        User user = currentUser.get();
+        Map<Long, Set<Long>> delivered = planService.deliveredFor(user);
+        Long commonId = memberService.common(user).getId();
+        List<Member> members = memberService.all(user);
+        List<Medicine> medicines = medicineService.allActive().stream()
+                .filter(m -> delivered.containsKey(m.getId()) || m.getId().equals(form.getMedicineId())).toList();
+        Map<Long, String> takers = new HashMap<>();
+        for (Medicine m : medicines) {
+            takers.put(m.getId(), members.stream()
+                    .filter(who -> MedicationPlanService.canTrack(who, m.getId(), delivered, commonId)
+                            || (m.getId().equals(form.getMedicineId()) && who.getId().equals(form.getMemberId())))
+                    .map(who -> who.getId().toString()).collect(Collectors.joining(" ")));
+        }
+        model.addAttribute("medicines", medicines);
+        model.addAttribute("medicineTakers", takers);
+        model.addAttribute("members", members);
         model.addAttribute("reorderModes", ReorderMode.values());
         model.addAttribute("scheduleTypes", ScheduleType.values());
         model.addAttribute("weekDays", DayOfWeek.values());
@@ -105,7 +126,7 @@ public class PlanController {
                        RedirectAttributes ra) {
         if (result.hasErrors()) {
             while (form.getTimes().size() < 4) form.getTimes().add("");
-            addFormOptions(model);
+            addFormOptions(model, form);
             return "plans/form";
         }
         MedicationPlanService.Saved saved = planService.saveReporting(currentUser.get(), form);

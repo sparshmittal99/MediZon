@@ -49,6 +49,8 @@ All settings are in `application.properties` and can be overridden with environm
 | `SELLER_NAME`, `SELLER_GSTIN`, `SELLER_DRUG_LICENSE`, `SELLER_ADDRESS`, `SELLER_STATE`, `SELLER_PHONE`, `SELLER_EMAIL` | Seller details on GST invoices and in the site footer. `SELLER_STATE` decides CGST + SGST (same state as the customer) or IGST. Placeholder values are set in `application.properties` until real ones are given |
 | `BASE_URL` | Used for links inside emails |
 | `MEDIZON_ADMIN_EMAIL`, `MEDIZON_ADMIN_PASSWORD`, `MEDIZON_ADMIN_NAME` | First admin account, created on startup when no admin exists |
+| `MONITORING_TOKEN` | Lets a Prometheus scraper read `/actuator/prometheus` with `Authorization: Bearer <token>` (admins can always) |
+| `SLOW_REQUEST_MS`, `SLOW_QUERY_MS` | Requests (default 1000 ms) and database queries (default 500 ms) slower than this are logged |
 
 ## Features
 
@@ -113,6 +115,20 @@ creating other admin accounts, customer feedback, and a chat assistant for store
 - Each reminder becomes an in-app notification (bell), a desktop notification (the browser polls `/api/notifications/poll` every 30 s), and an email if mail is enabled.
   Each browser has an `mz_device` cookie; a device that follows only some members doesn't pop up or count the others' alerts.
 
+## Monitoring
+
+**Admin > Monitoring** shows the health of each part (database, disk, assistant service, database pool), errors and
+performance, with no outside service needed:
+
+- **Errors** are grouped like an issue tracker: unhandled request exceptions, anything logged at ERROR (scheduled jobs
+  included) and JavaScript errors from shoppers' browsers. Each group shows how often it happened, where, for whom and
+  the latest stack trace; resolve it and it reopens if it comes back. Every log line and the error page carry a
+  request id, so a reference a customer quotes leads straight to the error.
+- **Performance**: response times per endpoint (average, p95, max), slow requests, page load times measured in
+  browsers, background job timings, memory and CPU, and the assistant service's own timings and errors.
+- `/actuator/health` is public for load balancers (a stopped assistant shows as DEGRADED but the shop stays UP);
+  `/actuator/prometheus` feeds Grafana or any Prometheus-compatible tool.
+
 ## Invoices and returns
 
 - Prices are GST-inclusive. When an order ships it gets the next invoice number of the financial year
@@ -120,6 +136,9 @@ creating other admin accounts, customer feedback, and a chat assistant for store
   medicine in the catalog). Delivery is taxed at the main item's rate as a composite supply. It prints Bill to (the
   billing address and GSTIN, or the buyer) and Ship to (the receiver and delivery address), both copied onto the order
   at checkout. Print or save it as PDF from the browser.
+- Bills are rounded to the nearest rupee when the order is placed; the difference is shown as "Round off" in the cart,
+  at checkout, on the order and on the invoice. Reports keep it as its own ledger line, outside taxable value and GST.
+  Orders placed before rounding keep their paise.
 - Every order, including automatic refills, must go to a PIN code listed and active under **Admin > Delivery areas**;
   `OrderService.createOrder` checks it, so checkout and refills follow the same rule.
 - Customers can ask to return delivered items for 7 days, with a reason and 1 to 3 photos. An admin approves or

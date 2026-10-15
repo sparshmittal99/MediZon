@@ -42,6 +42,9 @@ public class Order {
 
     @Column(precision = 10, scale = 2) private BigDecimal subtotal = BigDecimal.ZERO;
     @Column(precision = 10, scale = 2) private BigDecimal deliveryFee = BigDecimal.ZERO;
+    /** Paise added or taken off to bring the bill to whole rupees; included in {@link #total}. Zero on older orders. */
+    @Column(precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 0")
+    private BigDecimal roundOff = BigDecimal.ZERO;
     @Column(precision = 10, scale = 2) private BigDecimal total = BigDecimal.ZERO;
 
     @Column(length = 500)
@@ -119,4 +122,8 @@ public class Order {
     public int getItemCount() {
         return items.stream().mapToInt(OrderItem::getQuantity).sum();
     }
+
+    public boolean isRounded() { return roundOff != null && roundOff.signum() != 0; }
+
+    public String getRoundOffLabel() { return RoundOff.label(roundOff); }
 }

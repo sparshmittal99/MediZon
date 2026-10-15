@@ -68,6 +68,8 @@ public class CartApi {
         out.put("subtotal", money(c.getSubtotal()));
         out.put("delivery", c.getDeliveryFee().signum() == 0 ? "Free" : "₹" + c.getDeliveryFee().toPlainString());
         out.put("freeDelivery", c.getDeliveryFee().signum() == 0);
+        out.put("roundOff", c.getRoundOffLabel());
+        out.put("rounded", c.getRoundOff().signum() != 0);
         out.put("total", money(c.getTotal()));
         out.put("prescriptionRequired", c.isPrescriptionRequired());
         out.put("empty", c.isEmpty());

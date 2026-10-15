@@ -1,6 +1,7 @@
 package com.medizon.dto;
 
 import com.medizon.domain.Order;
+import com.medizon.domain.RoundOff;
 import lombok.Value;
 
 import java.math.BigDecimal;
@@ -28,8 +29,17 @@ public class Invoice {
     BigDecimal sgstTotal;
     BigDecimal igstTotal;
     BigDecimal taxTotal;
+    /** Taxable value plus tax, before rounding. */
+    BigDecimal invoiceValue;
+    /** Paise added or taken off to reach whole rupees; zero on orders from before rounding. */
+    BigDecimal roundOff;
+    /** What the customer pays: the invoice value plus the round off. */
     BigDecimal grandTotal;
     String amountInWords;
+
+    public boolean isRounded() { return roundOff.signum() != 0; }
+
+    public String getRoundOffLabel() { return RoundOff.label(roundOff); }
 
     @Value
     public static class Seller {

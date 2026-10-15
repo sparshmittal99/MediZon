@@ -2,10 +2,13 @@ package com.medizon.config;
 
 import com.medizon.service.CartService;
 import com.medizon.service.UserService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.session.SessionRegistry;
@@ -15,10 +18,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.AccessDeniedHandlerImpl;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 @Configuration
 @EnableWebSecurity
@@ -32,11 +39,18 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, AppUserDetailsService userDetailsService,
                                            SessionRegistry sessionRegistry, @Lazy UserService userService,
-                                           @Lazy CartService cartService) throws Exception {
+                                           @Lazy CartService cartService,
+                                           @Value("${medizon.monitoring.token:}") String monitoringToken) throws Exception {
         http
             .authorizeHttpRequests(auth -> auth
+                // Monitoring: health for load balancers and uptime checks; Prometheus with a bearer token or as an admin
+                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                .requestMatchers("/actuator/prometheus").access(adminOrToken(monitoringToken))
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
+                // Browsers report JavaScript errors and page load times, signed in or not
+                .requestMatchers("/api/monitoring/**").permitAll()
                 .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/register", "/login",
-                        "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/favicon.ico", "/error").permitAll()
+                        "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png", "/error").permitAll()
                 // Visitors can fill a cart and pick a delivery location before signing in; checkout needs an account.
                 // Admin accounts are turned away in CartController / CartService.
                 .requestMatchers("/cart", "/cart/add", "/cart/*/remove", "/api/cart", "/api/cart/*", "/api/location/**").permitAll()
@@ -47,6 +61,8 @@ public class SecurityConfig {
                 .requestMatchers("/cart/**", "/api/cart/**", "/checkout", "/orders/**", "/plans/**",
                         "/prescriptions/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
+            // sendBeacon can't send the CSRF header; these endpoints only record telemetry
+            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**"))
             .exceptionHandling(ex -> ex.accessDeniedHandler(accessDeniedHandler()))
             .formLogin(form -> form
                 .loginPage("/login")
@@ -84,6 +100,19 @@ public class SecurityConfig {
                     .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
             if (admin) response.sendRedirect(request.getContextPath() + "/admin");
             else customer.onAuthenticationSuccess(request, response, authentication);
+        };
+    }
+
+    /** Admins, or a scraper sending "Authorization: Bearer <MONITORING_TOKEN>" when a token is set. */
+    private static AuthorizationManager<RequestAuthorizationContext> adminOrToken(String token) {
+        byte[] expected = ("Bearer " + token).getBytes(StandardCharsets.UTF_8);
+        return (authentication, ctx) -> {
+            String header = ctx.getRequest().getHeader("Authorization");
+            boolean tokenOk = !token.isBlank() && header != null
+                    && MessageDigest.isEqual(expected, header.getBytes(StandardCharsets.UTF_8));
+            boolean admin = authentication.get() != null && authentication.get().getAuthorities().stream()
+                    .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+            return new AuthorizationDecision(tokenOk || admin);
         };
     }
 

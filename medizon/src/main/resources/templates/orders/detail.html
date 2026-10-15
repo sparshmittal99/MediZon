@@ -53,6 +53,7 @@
                     </tbody>
                     <tfoot>
                     <tr><td colspan="3" class="text-end text-muted">Delivery</td><td class="text-end" th:text="'₹' + ${o.deliveryFee}"></td></tr>
+                    <tr th:if="${o.rounded}"><td colspan="3" class="text-end text-muted">Round off</td><td class="text-end" th:text="${o.roundOffLabel}"></td></tr>
                     <tr><td colspan="3" class="text-end fw-bold">Total</td>
                         <td class="text-end fw-bold" th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td></tr>
                     </tfoot>

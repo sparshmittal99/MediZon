@@ -68,6 +68,8 @@
                     <span data-mz-delivery th:text="${cart.deliveryFee.signum() == 0} ? 'Free' : ('₹' + ${cart.deliveryFee})"></span></div>
                 <p class="small text-muted" data-mz-free-note th:hidden="${cart.deliveryFee.signum() == 0}"
                    th:text="'Free delivery on orders of ₹' + ${freeAbove} + ' or more.'"></p>
+                <div class="d-flex justify-content-between mb-2 text-muted small" data-mz-round-off th:hidden="${cart.roundOff.signum() == 0}">
+                    <span>Round off</span><span data-mz-round-off-value th:text="${cart.roundOffLabel}"></span></div>
                 <hr>
                 <div class="d-flex justify-content-between fw-bold fs-5 mb-3"><span>Total</span>
                     <span data-mz-total th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>

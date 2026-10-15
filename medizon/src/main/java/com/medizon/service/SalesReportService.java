@@ -125,13 +125,15 @@ public class SalesReportService {
         jdbc.query("""
                 select cast(created_at as date) as day, count(*) as orders,
                        count(*) filter (where status = 'CANCELLED') as cancelled,
-                       coalesce(sum(total) filter (where status <> 'CANCELLED'), 0) as sales
+                       coalesce(sum(total) filter (where status <> 'CANCELLED'), 0) as sales,
+                       coalesce(sum(round_off) filter (where status <> 'CANCELLED'), 0) as round_off
                 from orders where created_at >= ? and created_at < ? group by 1""",
                 rs -> {
                     SalesDay d = days.computeIfAbsent(rs.getDate("day").toLocalDate(), SalesDay::new);
                     d.setOrders(rs.getLong("orders"));
                     d.setCancelled(rs.getLong("cancelled"));
                     d.setSales(rs.getBigDecimal("sales"));
+                    d.setRoundOff(rs.getBigDecimal("round_off"));
                 }, start, end);
 
         jdbc.query("""
@@ -163,7 +165,7 @@ public class SalesReportService {
     /** The table as CSV, oldest first, for spreadsheets and accounts. */
     public String csv(List<SalesDay> rows, SalesDay total) {
         StringBuilder out = new StringBuilder((rows.isEmpty() || !rows.get(0).isMonthly() ? "Date" : "Month")
-                + ",Orders placed,Cancelled,Packs sold,Sales (INR),Returns requested,Refunds paid,Refunded (INR),Net revenue (INR)\n");
+                + ",Orders placed,Cancelled,Packs sold,Sales (INR),Round off (INR),Returns requested,Refunds paid,Refunded (INR),Net revenue (INR)\n");
         rows.forEach(d -> line(out, d.isMonthly() ? d.getMonth().toString() : d.getDay().toString(), d));
         line(out, "Total", total);
         return out.toString();
@@ -171,7 +173,7 @@ public class SalesReportService {
 
     private static void line(StringBuilder out, String label, SalesDay d) {
         out.append(String.join(",", label, String.valueOf(d.getOrders()), String.valueOf(d.getCancelled()),
-                String.valueOf(d.getPacks()), money(d.getSales()), String.valueOf(d.getReturns()),
+                String.valueOf(d.getPacks()), money(d.getSales()), money(d.getRoundOff()), String.valueOf(d.getReturns()),
                 String.valueOf(d.getRefundCount()), money(d.getRefunds()), money(d.getNet()))).append('\n');
     }
 

@@ -4,6 +4,7 @@ import com.medizon.domain.Medicine;
 import com.medizon.service.BusinessException;
 import com.medizon.service.CurrentUser;
 import com.medizon.service.DeliveryTimeService;
+import com.medizon.service.MedicationPlanService;
 import com.medizon.service.MedicineService;
 import com.medizon.service.ReturnService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,6 +23,7 @@ public class MedicineController {
     private final DeliveryTimeService deliveryTimes;
     private final DeliveryLocations deliveryLocations;
     private final CurrentUser currentUser;
+    private final MedicationPlanService planService;
 
     @GetMapping("/medicines")
     public String list(@RequestParam(defaultValue = "") String q,
@@ -41,6 +43,10 @@ public class MedicineController {
         if (!m.isActive()) throw new BusinessException(m.getName() + " is no longer sold.");
         model.addAttribute("m", m);
         model.addAttribute("returnDays", ReturnService.RETURN_WINDOW_DAYS);
+        // Dose reminders are offered once the medicine has been delivered for someone in the household (not "Others")
+        currentUser.find().filter(u -> !u.isAdmin())
+                .flatMap(u -> planService.suggestedMember(u, m.getId()))
+                .ifPresent(memberId -> model.addAttribute("reminderMemberId", memberId));
         // When it would arrive at the "Delivers to" location
         deliveryLocations.current(request, currentUser.find().orElse(null))
                 .filter(DeliveryLocations.Location::isServiceable)

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Monitoring')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div class="d-flex align-items-center gap-2">
+            <h1 class="mz-page-title mb-0">Monitoring</h1>
+            <span class="badge" th:classappend="${overall == 'UP'} ? 'text-bg-success' : 'text-bg-danger'"
+                  th:text="${overall == 'UP'} ? 'All systems up' : 'Status: ' + ${overall}">Up</span>
+        </div>
+        <div class="d-flex gap-2">
+            <a th:href="@{/actuator/prometheus}" class="btn btn-link btn-sm" title="Metrics for Prometheus / Grafana">Prometheus metrics</a>
+            <a th:href="@{/admin/monitoring}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</a>
+        </div>
+    </div>
+
+    <!-- Headline numbers since the app started -->
+    <div class="row row-cols-2 row-cols-lg-5 g-3 mb-4">
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${#numbers.formatInteger(totals.count, 1, 'COMMA')}">0</div>
+            <div class="mz-stat-label">Requests served</div><div class="mz-stat-sub" th:text="'Since start, ' + ${uptime} + ' ago'"></div></div></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${#numbers.formatDecimal(totals.avgMs, 1, 0)} + ' ms'">0</div>
+            <div class="mz-stat-label">Average response</div><div class="mz-stat-sub" th:text="${slowRequests.size()} + ' slower than ' + ${slowMs} + ' ms'"></div></div></div>
+        <div class="col"><div class="mz-stat" th:classappend="${totals.errors > 0} ? 'is-attention'">
+            <div class="mz-stat-value" th:text="${#numbers.formatDecimal(totals.errorRate, 1, 2)} + '%'">0</div>
+            <div class="mz-stat-label">Server error rate</div><div class="mz-stat-sub" th:text="${#numbers.formatInteger(totals.errors, 1)} + ' failed request(s)'"></div></div></div>
+        <div class="col"><a href="#errors" class="text-decoration-none text-reset"><div class="mz-stat" th:classappend="${openErrors > 0} ? 'is-attention'">
+            <div class="mz-stat-value" th:text="${openErrors}">0</div><div class="mz-stat-label">Open errors</div>
+            <div class="mz-stat-sub" th:text="${errorsToday} + ' seen in the last 24 hours'"></div></div></a></div>
+        <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${#numbers.formatDecimal(system.heapUsed / 1048576, 1, 0)} + ' MB'">0</div>
+            <div class="mz-stat-label">Memory in use</div>
+            <div class="mz-stat-sub" th:text="'of ' + ${#numbers.formatDecimal(system.heapMax / 1048576, 1, 0)} + ' MB · CPU ' + ${#numbers.formatDecimal(system.cpu * 100, 1, 0)} + '%'"></div></div></div>
+    </div>
+
+    <!-- Health checks -->
+    <h2 class="mz-section-title">Health</h2>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-3 mb-4">
+        <div class="col" th:each="c : ${checks}">
+            <div class="mz-panel h-100 py-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong th:text="${c.name == 'db'} ? 'Database' : (${c.name == 'diskSpace'} ? 'Disk space' : (${c.name == 'assistant'} ? 'Assistant service' : ${#strings.capitalize(c.name)}))">db</strong>
+                    <span class="badge" th:classappend="${c.up} ? 'text-bg-success' : (${c.down} ? 'text-bg-danger' : 'text-bg-warning')" th:text="${c.status}">UP</span>
+                </div>
+                <div class="small text-muted text-break">
+                    <th:block th:if="${c.name == 'diskSpace' and c.details['free'] != null}"
+                              th:text="${#numbers.formatDecimal(c.details['free'] / 1073741824.0, 1, 1)} + ' GB free of ' + ${#numbers.formatDecimal(c.details['total'] / 1073741824.0, 1, 1)} + ' GB'"></th:block>
+                    <th:block th:if="${c.name == 'db'}" th:text="${c.details['database']}"></th:block>
+                    <th:block th:if="${c.name == 'assistant'}"
+                              th:text="${c.details['responseMs'] != null} ? 'Answered in ' + ${c.details['responseMs']} + ' ms' : 'Not answering: ' + ${c.details['error']}"></th:block>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="mz-panel h-100 py-3">
+                <div class="d-flex justify-content-between align-items-center mb-1"><strong>Database pool</strong>
+                    <span class="badge" th:classappend="${system.dbPending > 0} ? 'text-bg-warning' : 'text-bg-success'"
+                          th:text="${system.dbPending > 0} ? 'BUSY' : 'OK'">OK</span></div>
+                <div class="small text-muted"
+                     th:text="${#numbers.formatInteger(system.dbActive, 1)} + ' in use, ' + ${#numbers.formatInteger(system.dbIdle, 1)} + ' idle of ' + ${#numbers.formatInteger(system.dbMax, 1)} + ' · ' + ${#numbers.formatInteger(system.dbPending, 1)} + ' waiting · ' + ${#numbers.formatDecimal(system.dbAcquireMs, 1, 1)} + ' ms to get one'"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Errors, grouped -->
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2" id="errors">
+        <h2 class="mz-section-title mb-0">Errors</h2>
+        <div class="d-flex align-items-center gap-2">
+            <ul class="nav nav-pills nav-sm">
+                <li class="nav-item"><a class="nav-link py-1" th:classappend="${errorsView == 'open'} ? 'active'" th:href="@{/admin/monitoring(errorsView='open')} + '#errors'">Open</a></li>
+                <li class="nav-item"><a class="nav-link py-1" th:classappend="${errorsView == 'resolved'} ? 'active'" th:href="@{/admin/monitoring(errorsView='resolved')} + '#errors'">Resolved</a></li>
+            </ul>
+            <form th:if="${errorsView == 'open' and !#lists.isEmpty(errors)}" th:action="@{/admin/monitoring/errors/resolve-all}" method="post"
+                  data-mz-confirm="Any that happen again will reopen." data-mz-confirm-title="Mark every open error as resolved?" data-mz-confirm-ok="Resolve all">
+                <button class="btn btn-outline-secondary btn-sm" type="submit">Resolve all</button>
+            </form>
+        </div>
+    </div>
+    <div th:if="${#lists.isEmpty(errors)}" class="mz-panel mz-empty mb-4"><i class="bi bi-check2-circle"></i>
+        <p class="mb-0" th:text="${errorsView == 'open'} ? 'No open errors.' : 'Nothing resolved yet.'">No open errors.</p></div>
+    <div th:unless="${#lists.isEmpty(errors)}" class="mz-panel-flush mb-4">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>Error</th><th>Where</th><th class="text-end">Times</th><th>Last seen</th><th></th></tr></thead>
+                <tbody>
+                <tr th:each="e : ${errors}">
+                    <td style="min-width: 22rem">
+                        <span class="badge text-bg-light border me-1" th:text="${e.source.label}">Server</span>
+                        <strong class="text-break" th:text="${#strings.substring(e.type, e.type.lastIndexOf('.') + 1)}">NullPointerException</strong>
+                        <div class="small text-break" th:text="${e.message}">message</div>
+                        <details class="small mt-1" th:if="${e.stackTrace != null}">
+                            <summary class="text-muted">Stack trace</summary>
+                            <pre class="mz-stack mb-0" th:text="${e.stackTrace}"></pre>
+                        </details>
+                    </td>
+                    <td class="small">
+                        <div><code th:text="${e.location}">Class.method:42</code></div>
+                        <div class="text-muted text-break" th:if="${e.path != null}" th:text="${e.method != null ? e.method + ' ' : ''} + ${e.path}"></div>
+                        <div class="text-muted" th:if="${e.lastUser != null}" th:text="'User: ' + ${e.lastUser}"></div>
+                        <div class="text-muted" th:if="${e.lastRequestId != null}">Ref <code th:text="${e.lastRequestId}"></code></div>
+                    </td>
+                    <td class="text-end fw-semibold" th:text="${e.occurrences}">1</td>
+                    <td class="small text-nowrap">
+                        <div th:text="${#temporals.format(e.lastSeen, 'd MMM, HH:mm:ss')}"></div>
+                        <div class="text-muted" th:text="'First ' + ${#temporals.format(e.firstSeen, 'd MMM, HH:mm')}"></div>
+                    </td>
+                    <td class="text-end">
+                        <form th:unless="${e.resolved}" th:action="@{/admin/monitoring/errors/{id}/resolve(id=${e.id})}" method="post">
+                            <button class="btn btn-sm btn-outline-success" type="submit">Resolve</button></form>
+                        <form th:if="${e.resolved}" th:action="@{/admin/monitoring/errors/{id}/reopen(id=${e.id})}" method="post">
+                            <button class="btn btn-sm btn-outline-secondary" type="submit">Reopen</button></form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Server performance per endpoint -->
+    <h2 class="mz-section-title">Server response times</h2>
+    <p class="small text-muted mb-2">Busiest endpoints first (by total time). Counts are since the app started; p95 and max cover the last few minutes.</p>
+    <div th:if="${#lists.isEmpty(endpoints)}" class="mz-panel mz-empty mb-4"><i class="bi bi-speedometer2"></i><p class="mb-0">No requests yet.</p></div>
+    <div th:unless="${#lists.isEmpty(endpoints)}" class="mz-panel-flush mb-4">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0 mz-num-table small">
+                <thead><tr><th>Endpoint</th><th class="text-end">Requests</th><th class="text-end">Avg</th><th class="text-end">p95</th>
+                    <th class="text-end">Max</th><th class="text-end">Server errors</th></tr></thead>
+                <tbody>
+                <tr th:each="ep : ${endpoints}">
+                    <td class="text-break"><span class="text-muted" th:text="${ep.method}">GET</span> <code th:text="${ep.uri}">/</code></td>
+                    <td class="text-end" th:text="${ep.count}"></td>
+                    <td class="text-end" th:text="${#numbers.formatDecimal(ep.avgMs, 1, 0)} + ' ms'"></td>
+                    <td class="text-end" th:classappend="${ep.p95Ms >= slowMs} ? 'text-danger fw-semibold'" th:text="${#numbers.formatDecimal(ep.p95Ms, 1, 0)} + ' ms'"></td>
+                    <td class="text-end" th:text="${#numbers.formatDecimal(ep.maxMs, 1, 0)} + ' ms'"></td>
+                    <td class="text-end" th:classappend="${ep.serverErrors > 0} ? 'text-danger fw-semibold'" th:text="${ep.serverErrors}"></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Slow requests -->
+        <div class="col-xl-6">
+            <h2 class="mz-section-title" th:text="'Slow requests (over ' + ${slowMs} + ' ms)'">Slow requests</h2>
+            <div th:if="${#lists.isEmpty(slowRequests)}" class="mz-panel mz-empty"><i class="bi bi-lightning-charge"></i><p class="mb-0">None since the app started.</p></div>
+            <div th:unless="${#lists.isEmpty(slowRequests)}" class="mz-panel-flush">
+                <div class="table-responsive" style="max-height: 24rem">
+                    <table class="table align-middle mb-0 mz-num-table small">
+                        <thead><tr><th>When</th><th>Request</th><th class="text-end">Time</th><th class="text-end">Status</th></tr></thead>
+                        <tbody>
+                        <tr th:each="s : ${slowRequests}">
+                            <td class="text-nowrap" th:text="${#temporals.format(s.at, 'd MMM HH:mm:ss')}"></td>
+                            <td class="text-break"><span class="text-muted" th:text="${s.method}"></span> <code th:text="${s.path}"></code>
+                                <div class="text-muted" th:text="(${s.user} ?: 'Visitor') + ' · ref ' + ${s.requestId}"></div></td>
+                            <td class="text-end fw-semibold" th:text="${s.millis} + ' ms'"></td>
+                            <td class="text-end" th:text="${s.status}"></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!-- Page load times measured in browsers -->
+        <div class="col-xl-6">
+            <h2 class="mz-section-title">Page load in shoppers' browsers</h2>
+            <div th:if="${#lists.isEmpty(pages)}" class="mz-panel mz-empty"><i class="bi bi-window"></i><p class="mb-0">No page loads measured yet.</p></div>
+            <div th:unless="${#lists.isEmpty(pages)}" class="mz-panel-flush">
+                <div class="table-responsive" style="max-height: 24rem">
+                    <table class="table align-middle mb-0 mz-num-table small">
+                        <thead><tr><th>Page</th><th class="text-end">Loads</th><th class="text-end" title="Time to first byte">TTFB</th>
+                            <th class="text-end">Ready</th><th class="text-end">Loaded</th><th class="text-end">p95</th></tr></thead>
+                        <tbody>
+                        <tr th:each="pg : ${pages}">
+                            <td class="text-break"><code th:text="${pg.page}"></code></td>
+                            <td class="text-end" th:text="${pg.count}"></td>
+                            <td class="text-end" th:text="${#numbers.formatDecimal(pg.ttfbMs, 1, 0)} + ' ms'"></td>
+                            <td class="text-end" th:text="${#numbers.formatDecimal(pg.domReadyMs, 1, 0)} + ' ms'"></td>
+                            <td class="text-end fw-semibold" th:text="${#numbers.formatDecimal(pg.loadMs, 1, 0)} + ' ms'"></td>
+                            <td class="text-end" th:text="${#numbers.formatDecimal(pg.loadP95Ms, 1, 0)} + ' ms'"></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Scheduled jobs -->
+        <div class="col-xl-6">
+            <h2 class="mz-section-title">Background jobs</h2>
+            <div th:if="${#lists.isEmpty(jobs)}" class="mz-panel mz-empty"><i class="bi bi-clock-history"></i><p class="mb-0">No job has run yet.</p></div>
+            <div th:unless="${#lists.isEmpty(jobs)}" class="mz-panel-flush">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0 mz-num-table small">
+                        <thead><tr><th>Job</th><th class="text-end">Runs</th><th class="text-end">Failed</th><th class="text-end">Avg</th><th class="text-end">Max</th></tr></thead>
+                        <tbody>
+                        <tr th:each="j : ${jobs}">
+                            <td><code th:text="${j.name}"></code></td>
+                            <td class="text-end" th:text="${j.count}"></td>
+                            <td class="text-end" th:classappend="${j.failures > 0} ? 'text-danger fw-semibold'" th:text="${j.failures}"></td>
+                            <td class="text-end" th:text="${#numbers.formatDecimal(j.avgMs, 1, 0)} + ' ms'"></td>
+                            <td class="text-end" th:text="${#numbers.formatDecimal(j.maxMs, 1, 0)} + ' ms'"></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!-- The Python assistant service -->
+        <div class="col-xl-6">
+            <h2 class="mz-section-title">Assistant service</h2>
+            <div th:if="${assistant == null}" class="mz-panel mz-empty"><i class="bi bi-robot"></i><p class="mb-0">The assistant isn't answering, so its numbers aren't available.</p></div>
+            <th:block th:if="${assistant != null}">
+                <div class="mz-panel-flush mb-3">
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0 mz-num-table small">
+                            <thead><tr><th>Endpoint</th><th class="text-end">Requests</th><th class="text-end">Avg</th><th class="text-end">Max</th><th class="text-end">Errors</th></tr></thead>
+                            <tbody>
+                            <tr th:each="r : ${assistant.path('requests').properties()}">
+                                <td><code th:text="${r.key}"></code></td>
+                                <td class="text-end" th:text="${r.value.path('count').asLong()}"></td>
+                                <td class="text-end" th:text="${#numbers.formatDecimal(r.value.path('avg_ms').asDouble(), 1, 0)} + ' ms'"></td>
+                                <td class="text-end" th:text="${#numbers.formatDecimal(r.value.path('max_ms').asDouble(), 1, 0)} + ' ms'"></td>
+                                <td class="text-end" th:classappend="${r.value.path('errors').asLong() > 0} ? 'text-danger fw-semibold'" th:text="${r.value.path('errors').asLong()}"></td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div th:each="err : ${assistant.path('errors')}" class="mz-panel py-2 mb-2 small">
+                    <div class="d-flex justify-content-between gap-2"><strong class="text-break" th:text="${err.path('type').asText()} + ': ' + ${err.path('message').asText()}"></strong>
+                        <span class="text-muted text-nowrap" th:text="${err.path('time').asText()}"></span></div>
+                    <details><summary class="text-muted" th:text="${err.path('path').asText()}"></summary><pre class="mz-stack mb-0" th:text="${err.path('trace').asText()}"></pre></details>
+                </div>
+            </th:block>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

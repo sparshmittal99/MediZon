@@ -6,6 +6,7 @@ import com.medizon.dto.PlanForm;
 import com.medizon.repository.DoseLogRepository;
 import com.medizon.repository.MedicationPlanRepository;
 import com.medizon.repository.MedicineRepository;
+import com.medizon.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,7 @@ public class MedicationPlanService {
     private final NotificationService notifications;
     private final MemberService memberService;
     private final AddressService addressService;
+    private final OrderRepository orders;
 
     // ------------------------------------------------------------------ CRUD
 
@@ -45,6 +47,45 @@ public class MedicationPlanService {
 
     public MedicationPlan get(Long id, User user) {
         return plans.findByIdAndUser(id, user).orElseThrow(() -> new BusinessException("Plan not found."));
+    }
+
+    // ------------------------------------------------------------------ what can be tracked
+
+    /**
+     * Medicine id to the ids of the household members it has been delivered for. Lines bought for "Others" (outside
+     * the household) don't count: those medicines aren't tracked.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Set<Long>> deliveredFor(User user) {
+        Long self = memberService.self(user).getId();
+        Map<Long, Set<Long>> out = new HashMap<>();
+        for (Object[] row : orders.medicineMembers(user, OrderStatus.DELIVERED)) {
+            Member m = (Member) row[1];
+            if (m != null && (m.isOthers() || m.isRemoved())) continue;
+            out.computeIfAbsent((Long) row[0], k -> new HashSet<>()).add(m == null ? self : m.getId());
+        }
+        return out;
+    }
+
+    /**
+     * Who can track what: a person can add medicines delivered for them, plus the household's common (OTC) medicines,
+     * which they'd take from the shelf; the common shelf holds what was delivered for it.
+     */
+    public static boolean canTrack(Member member, Long medicineId, Map<Long, Set<Long>> delivered, Long commonId) {
+        Set<Long> who = delivered.getOrDefault(medicineId, Set.of());
+        return who.contains(member.getId()) || (!member.isOthers() && who.contains(commonId));
+    }
+
+    /**
+     * Who to set a medicine's reminders up for: the first person (account holder first) it was delivered for, or who
+     * can take it from the common shelf. Empty when it never reached the household.
+     */
+    public Optional<Long> suggestedMember(User user, Long medicineId) {
+        Map<Long, Set<Long>> delivered = deliveredFor(user);
+        if (!delivered.containsKey(medicineId)) return Optional.empty();
+        Long commonId = memberService.common(user).getId();
+        return memberService.people(user).stream().filter(p -> canTrack(p, medicineId, delivered, commonId))
+                .map(Member::getId).findFirst();
     }
 
     /** A saved plan and how many units were moved into it from the common shelf. */
@@ -62,6 +103,16 @@ public class MedicationPlanService {
         if (member.isOthers()) throw new BusinessException("Choose a family member or the common shelf.");
         Medicine m = medicines.findById(form.getMedicineId())
                 .orElseThrow(() -> new BusinessException("Choose a medicine."));
+        // Only medicines that reached the household can be tracked; plans already saved keep working as they are
+        boolean unchanged = p.getId() != null && p.getMember() != null && p.getMember().getId().equals(member.getId())
+                && p.getMedicine().getId().equals(m.getId());
+        if (!unchanged && !canTrack(member, m.getId(), deliveredFor(user), memberService.common(user).getId())) {
+            throw new BusinessException(member.isCommon()
+                    ? m.getName() + " hasn't been delivered for common medicines yet. Order it for the common shelf first."
+                    : m.getName() + " hasn't been delivered for " + (member.isSelf() ? "you" : member.getLabel())
+                            + " yet. You can set reminders once an order of it for " + (member.isSelf() ? "you" : "them")
+                            + " is delivered.");
+        }
         boolean duplicate = plans.findByMemberAndMedicine(member, m).stream().anyMatch(o -> !o.getId().equals(p.getId()));
         if (duplicate) {
             throw new BusinessException(member.isSelf()

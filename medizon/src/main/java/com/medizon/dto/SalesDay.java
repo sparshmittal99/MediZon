@@ -21,6 +21,8 @@ public class SalesDay {
     private long cancelled;
     private long packs;
     private BigDecimal sales = BigDecimal.ZERO;
+    /** Round off on those orders: already inside {@code sales}, shown apart like a "Round off" ledger. */
+    private BigDecimal roundOff = BigDecimal.ZERO;
     private long returns;
     private long refundCount;
     private BigDecimal refunds = BigDecimal.ZERO;
@@ -48,6 +50,7 @@ public class SalesDay {
         cancelled += d.cancelled;
         packs += d.packs;
         sales = sales.add(d.sales);
+        roundOff = roundOff.add(d.roundOff);
         returns += d.returns;
         refundCount += d.refundCount;
         refunds = refunds.add(d.refunds);

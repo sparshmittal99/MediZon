@@ -5,12 +5,48 @@
 
     window.mzUrl = (path) => base + path;
 
+    // ---- monitoring: JavaScript errors and page load times go to Admin > Monitoring ----
+    // Sent as plain text with sendBeacon, so a report survives the page being closed. A page reports at most 5 errors.
+    const beacon = (path, body) => {
+        const data = JSON.stringify(body);
+        try {
+            if (navigator.sendBeacon && navigator.sendBeacon(mzUrl(path), new Blob([data], { type: 'text/plain' }))) return;
+        } catch (ignored) { /* fall through to fetch */ }
+        fetch(mzUrl(path), { method: 'POST', body: data, keepalive: true, credentials: 'same-origin',
+            headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
+    };
+    let errorsSent = 0;
+    const reportError = (report) => {
+        if (errorsSent++ < 5) beacon('/api/monitoring/client-error', Object.assign({ page: location.pathname }, report));
+    };
+    window.addEventListener('error', (e) => {
+        if (!e.message) return;                 // a broken image or stylesheet, not a script error
+        reportError({ kind: 'error', message: e.message, source: e.filename, line: e.lineno, column: e.colno, stack: e.error?.stack });
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+        const r = e.reason;
+        reportError({ kind: 'promise', message: String(r?.message || r), stack: r?.stack });
+    });
+    window.addEventListener('load', () => setTimeout(() => {
+        const nav = performance.getEntriesByType?.('navigation')?.[0];
+        if (!nav || nav.loadEventEnd <= 0) return;
+        beacon('/api/monitoring/page-timing', { page: location.pathname, ttfb: Math.round(nav.responseStart),
+            domReady: Math.round(nav.domContentLoadedEventEnd), load: Math.round(nav.loadEventEnd) });
+    }, 0));
+
     window.mzFetch = function (path, options = {}) {
         const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
         const header = meta('_csrf_header'), token = meta('_csrf');
         if (header && token) headers[header] = token;
         return fetch(mzUrl(path), Object.assign({}, options, { headers, credentials: 'same-origin' }));
     };
+
+    // Number boxes ignore the mouse wheel. Scrolling the page over a focused price box used to step it down a
+    // paisa a tick, so an MRP typed as 600 could be saved as 599.81.
+    document.addEventListener('wheel', (e) => {
+        const el = e.target;
+        if (el instanceof HTMLInputElement && el.type === 'number' && document.activeElement === el) el.blur();
+    }, { passive: true });
 
     // ---- in-page toast for new notifications ----
     function toast(item) {
@@ -216,6 +252,11 @@
         }
         summary.querySelector('[data-mz-subtotal]').textContent = data.subtotal;
         summary.querySelector('[data-mz-delivery]').textContent = data.delivery;
+        const roundOff = summary.querySelector('[data-mz-round-off]');
+        if (roundOff) {
+            roundOff.hidden = !data.rounded;
+            roundOff.querySelector('[data-mz-round-off-value]').textContent = data.roundOff;
+        }
         summary.querySelector('[data-mz-total]').textContent = data.total;
         summary.querySelector('[data-mz-free-note]').hidden = data.freeDelivery;
         summary.querySelector('[data-mz-rx-note]').hidden = !data.prescriptionRequired;
@@ -394,7 +435,23 @@
         const member = document.querySelector('[data-mz-plan-member]');
         const medicine = document.querySelector('[data-mz-plan-medicine]');
         const take = document.querySelector('[data-mz-take-common]');
+        // Medicines on offer depend on who takes them: each option lists the member ids it was delivered for.
+        // Options are rebuilt rather than hidden, since Safari ignores hidden <option>s.
+        const allMedicines = medicine ? [...medicine.options].filter(o => o.value) : [];
+        const syncMedicines = () => {
+            if (!medicine || !member) return;
+            const who = member.value;
+            const chosen = medicine.value;
+            const fits = allMedicines.filter(o => (o.dataset.members || '').split(' ').includes(who));
+            [...medicine.options].forEach(o => { if (o.value) o.remove(); });
+            fits.forEach(o => medicine.add(o));
+            medicine.value = fits.some(o => o.value === chosen) ? chosen : '';
+            document.querySelector('[data-mz-plan-medicine-none]').hidden = fits.length > 0;
+            document.querySelector('[data-mz-plan-medicine-hint]').hidden = fits.length === 0;
+        };
         if (member) {
+            member.addEventListener('change', syncMedicines);
+            syncMedicines();
             const syncMember = () => {
                 const shelf = member.selectedOptions[0]?.dataset.common === 'true';
                 document.querySelectorAll('[data-mz-person-only]').forEach(el => { el.hidden = shelf; });

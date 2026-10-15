@@ -91,7 +91,8 @@
                 <div th:replace="~{fragments/layout :: cartStepper(${m}, true)}"></div>
                 <p th:unless="${m.inStock}" class="text-danger fw-semibold">Out of stock right now.</p>
                 <div class="d-flex flex-wrap gap-2 mb-4">
-                    <a class="btn btn-outline-primary btn-sm" th:href="@{/plans/new(medicineId=${m.id})}">
+                    <a th:if="${reminderMemberId != null}" class="btn btn-outline-primary btn-sm"
+                       th:href="@{/plans/new(medicineId=${m.id}, memberId=${reminderMemberId})}">
                         <i class="bi bi-alarm me-1"></i>Set dose reminders</a>
                     <button type="button" class="btn btn-outline-primary btn-sm"
                             th:attr="data-mz-ask='Tell me about ' + ${m.name}">

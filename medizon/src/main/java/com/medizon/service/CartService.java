@@ -153,7 +153,7 @@ public class CartService {
         BigDecimal subtotal = items.stream().map(CartItem::getLineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal fee = deliveryFeeFor(subtotal);
         boolean rx = items.stream().anyMatch(i -> i.getMedicine().isPrescriptionRequired());
-        return new CartSummary(items, subtotal, fee, subtotal.add(fee), rx);
+        return new CartSummary(items, subtotal, fee, rx);
     }
 
     public long count(User user) { return cart.countByUser(user); }
@@ -225,7 +225,7 @@ public class CartService {
         BigDecimal subtotal = items.stream().map(CartItem::getLineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal fee = deliveryFeeFor(subtotal);
         boolean rx = items.stream().anyMatch(i -> i.getMedicine().isPrescriptionRequired());
-        return new CartSummary(items, subtotal, fee, subtotal.add(fee), rx);
+        return new CartSummary(items, subtotal, fee, rx);
     }
 
     /**

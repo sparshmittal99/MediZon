@@ -126,6 +126,9 @@
                 <th:block th:if="${inv.interState}">
                     <dt>IGST</dt><dd th:text="'₹' + ${#numbers.formatDecimal(inv.igstTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
                 </th:block>
+                <th:block th:if="${inv.rounded}">
+                    <dt>Round off</dt><dd th:text="${inv.roundOffLabel}"></dd>
+                </th:block>
                 <dt class="mz-invoice-grand">Total</dt>
                 <dd class="mz-invoice-grand" th:text="'₹' + ${#numbers.formatDecimal(inv.grandTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
             </dl>

@@ -19,7 +19,7 @@ class ExpirySweepTest {
     private final DoseLogRepository doseLogs = mock(DoseLogRepository.class);
     private final NotificationService notifications = mock(NotificationService.class);
     private final MedicationPlanService service =
-            new MedicationPlanService(plans, doseLogs, null, notifications, mock(MemberService.class), mock(AddressService.class));
+            new MedicationPlanService(plans, doseLogs, null, notifications, mock(MemberService.class), mock(AddressService.class), null);
     private final LocalDate today = LocalDate.of(2026, 10, 12);
 
     private static MedicationPlan plan(long id, MemberKind kind, int units) {

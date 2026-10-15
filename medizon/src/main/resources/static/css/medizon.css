@@ -611,6 +611,9 @@ a { text-underline-offset: 2px; }
 /* ---------- Sales report ---------- */
 .mz-range { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 1rem; padding: 1rem 1.25rem; }
 .mz-num-table td, .mz-num-table th { font-variant-numeric: tabular-nums; }
+/* Admin > Monitoring: stack traces */
+.mz-stack { max-height: 18rem; overflow: auto; padding: .6rem .75rem; margin-top: .4rem; border-radius: .5rem;
+    background: #F3F6F4; border: 1px solid var(--mz-line); font-size: .75rem; white-space: pre; }
 .mz-num-table tfoot td { border-top: 2px solid var(--mz-ink); background: #FAFCFB; }
 .mz-row-quiet td { color: var(--mz-muted); }
 .mz-export > summary { list-style: none; display: inline-flex; align-items: center; gap: .35rem; }

@@ -105,8 +105,11 @@ public class InvoiceService {
 
         String place = buyerState == null || buyerState.isBlank() ? "Not given"
                 : buyerState + (buyerCode == null ? "" : " (" + buyerCode + ")");
+        // Rounding is decided when the order is placed, so the invoice shows exactly what the customer paid
+        BigDecimal roundOff = (o.getRoundOff() == null ? BigDecimal.ZERO : o.getRoundOff()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal grand = total.add(roundOff);
         return new Invoice(o, seller, buyerState, buyerCode, place, interState, lines, summary,
-                taxable, cgst, sgst, igst, cgst.add(sgst).add(igst), total, RupeesInWords.of(total));
+                taxable, cgst, sgst, igst, cgst.add(sgst).add(igst), total, roundOff, grand, RupeesInWords.of(grand));
     }
 
     /** Splits a GST-inclusive amount into taxable value and tax; the parts always add back up to the amount paid. */

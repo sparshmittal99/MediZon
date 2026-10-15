@@ -35,10 +35,13 @@
                     <select class="form-select" th:field="*{medicineId}" th:errorclass="is-invalid" data-mz-plan-medicine>
                         <option value="">Choose a medicine</option>
                         <option th:each="m : ${medicines}" th:value="${m.id}"
-                                th:attr="data-shelf=${shelfStock.getOrDefault(m.id, 0)},data-unit=${m.unitLabel}"
+                                th:attr="data-shelf=${shelfStock.getOrDefault(m.id, 0)},data-unit=${m.unitLabel},data-members=${medicineTakers.get(m.id)}"
                                 th:text="${m.name} + ' (pack of ' + ${m.unitsPerPack} + ' ' + ${m.unitLabel} + ')'"></option>
                     </select>
                     <div class="invalid-feedback" th:errors="*{medicineId}"></div>
+                    <div class="form-text" data-mz-plan-medicine-hint>Medicines delivered for this person, and the common (OTC) medicines at home.</div>
+                    <div class="form-text text-danger" data-mz-plan-medicine-none hidden>
+                        Nothing has been delivered for this person yet. Medicines you order for them show up here once they're delivered.</div>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="dosePerIntake">Dose each time</label>

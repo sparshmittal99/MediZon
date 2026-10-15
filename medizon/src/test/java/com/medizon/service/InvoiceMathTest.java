@@ -60,6 +60,37 @@ class InvoiceMathTest {
     }
 
     @Test
+    void roundOffIsShownApartAndAddsUpToWhatWasPaid() {
+        Order o = order("Maharashtra");
+        o.setRoundOff(RoundOff.of(new BigDecimal("540.50")));      // +0.50: the bill is ₹541
+        o.setTotal(new BigDecimal("541.00"));
+        Invoice inv = service("Maharashtra").forOrder(o);
+        assertThat(inv.getInvoiceValue()).isEqualByComparingTo("540.50");
+        assertThat(inv.getRoundOff()).isEqualByComparingTo("0.50");
+        assertThat(inv.getGrandTotal()).isEqualByComparingTo(o.getTotal());
+        assertThat(inv.getTaxableTotal().add(inv.getTaxTotal())).isEqualByComparingTo(inv.getInvoiceValue());   // GST untouched
+        assertThat(inv.getRoundOffLabel()).isEqualTo("+₹0.50");
+        assertThat(inv.getAmountInWords()).isEqualTo("Rupees Five Hundred Forty One Only");
+    }
+
+    @Test
+    void ordersFromBeforeRoundingKeepTheirPaise() {
+        Invoice inv = invoice("Maharashtra", "Maharashtra");     // round off never set: zero
+        assertThat(inv.isRounded()).isFalse();
+        assertThat(inv.getGrandTotal()).isEqualByComparingTo("540.50");
+    }
+
+    @Test
+    void roundOffGoesToTheNearestRupee() {
+        assertThat(RoundOff.of(new BigDecimal("599.81"))).isEqualByComparingTo("0.19");
+        assertThat(RoundOff.of(new BigDecimal("100.49"))).isEqualByComparingTo("-0.49");
+        assertThat(RoundOff.of(new BigDecimal("100.50"))).isEqualByComparingTo("0.50");
+        assertThat(RoundOff.of(new BigDecimal("250.00"))).isEqualByComparingTo("0");
+        assertThat(RoundOff.label(new BigDecimal("-0.20"))).isEqualTo("−₹0.20");
+        assertThat(RoundOff.label(null)).isEqualTo("+₹0.00");
+    }
+
+    @Test
     void interStateInvoiceChargesIgst() {
         Invoice inv = invoice("Maharashtra", "Karnataka");
         assertThat(inv.isInterState()).isTrue();
@@ -69,6 +100,12 @@ class InvoiceMathTest {
     }
 
     private Invoice invoice(String sellerState, String buyerState) {
+        Order o = order(buyerState);
+        o.setTotal(new BigDecimal("540.50"));
+        return service(sellerState).forOrder(o);
+    }
+
+    private static InvoiceService service(String sellerState) {
         InvoiceService service = new InvoiceService(null);
         ReflectionTestUtils.setField(service, "sellerName", "MediZon Pharmacy");
         ReflectionTestUtils.setField(service, "sellerGstin", "");
@@ -77,7 +114,10 @@ class InvoiceMathTest {
         ReflectionTestUtils.setField(service, "sellerState", sellerState);
         ReflectionTestUtils.setField(service, "sellerPhone", "");
         ReflectionTestUtils.setField(service, "sellerEmail", "");
+        return service;
+    }
 
+    private static Order order(String buyerState) {
         Order o = new Order();
         o.setStatus(OrderStatus.SHIPPED);
         o.setInvoiceNumber("MZ/2026-27/00001");
@@ -86,8 +126,7 @@ class InvoiceMathTest {
         o.addItem(item("Paracetamol 650 mg", "33.50", 2, "5"));
         o.addItem(item("Ibuprofen 400 mg", "433.50", 1, "12"));
         o.setDeliveryFee(new BigDecimal("40"));
-        o.setTotal(new BigDecimal("540.50"));
-        return service.forOrder(o);
+        return o;
     }
 
     private static OrderItem item(String name, String price, int qty, String rate) {

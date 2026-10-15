@@ -9,6 +9,9 @@
     <meta name="_csrf_header" th:content="${_csrf.headerName}">
     <meta name="mz_base" th:content="@{/}">
     <title th:text="${title} + ' | MediZon'">MediZon</title>
+    <link rel="icon" href="/favicon.ico" th:href="@{/favicon.ico}" sizes="any">
+    <link rel="icon" href="/favicon.svg" th:href="@{/favicon.svg}" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" th:href="@{/apple-touch-icon.png}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -195,7 +198,7 @@
     </span>
     <span class="mz-tile-name" th:text="${m.name}">Name</span>
     <span class="mz-tile-price"><span th:text="'₹' + ${#numbers.formatDecimal(m.price, 1, 'COMMA', 2, 'POINT')}">₹0</span>
-        <s th:if="${m.discountPercent > 0}" th:text="'₹' + ${#numbers.formatDecimal(m.mrp, 1, 'COMMA', 0, 'POINT')}"></s></span>
+        <s th:if="${m.discountPercent > 0}" th:text="'₹' + ${#numbers.formatDecimal(m.mrp, 1, 'COMMA', 2, 'POINT')}"></s></span>
 </a>
 
 <!-- Medicine card used on home and shop pages -->
@@ -281,6 +284,7 @@
             <li class="nav-item"><a class="nav-link" th:classappend="${active == 'locations'} ? 'active'" th:href="@{/admin/locations}">Delivery areas</a></li>
             <li class="nav-item"><a class="nav-link" th:classappend="${active == 'users'} ? 'active'" th:href="@{/admin/users}">Users</a></li>
             <li class="nav-item"><a class="nav-link" th:classappend="${active == 'reviews'} ? 'active'" th:href="@{/admin/reviews}">Reviews</a></li>
+            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'monitoring'} ? 'active'" th:href="@{/admin/monitoring}">Monitoring</a></li>
         </ul>
     </div>
 </div>

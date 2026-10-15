@@ -174,7 +174,9 @@ public class OrderService {
         BigDecimal fee = CartService.deliveryFeeFor(subtotal);
         order.setSubtotal(subtotal);
         order.setDeliveryFee(fee);
-        order.setTotal(subtotal.add(fee));
+        BigDecimal exact = subtotal.add(fee);
+        order.setRoundOff(RoundOff.of(exact));
+        order.setTotal(exact.add(order.getRoundOff()));
         // UPI / card are simulated as paid. Plug a gateway (Razorpay, Stripe ...) in here.
         order.setPaymentStatus(paymentMethod == PaymentMethod.COD ? PaymentStatus.PENDING : PaymentStatus.PAID);
         return orders.save(order);

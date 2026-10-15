@@ -51,7 +51,7 @@ public class SalesExcelService {
         public String getDescription() { return description; }
     }
 
-    private static final String[] SALES_COLUMNS = {"Orders placed", "Cancelled", "Packs sold", "Sales", "Returns requested",
+    private static final String[] SALES_COLUMNS = {"Orders placed", "Cancelled", "Packs sold", "Sales", "Round off", "Returns requested",
             "Refunds paid", "Refunded", "Net revenue"};
 
     private final SalesReportService report;
@@ -110,6 +110,7 @@ public class SalesExcelService {
         r = pair(s, r, "Orders completed", t.getCompletedOrders(), st);
         r = pair(s, r, "Packs sold", t.getPacks(), st);
         r = pair(s, r, "Sales (incl. GST and delivery)", t.getSales(), st);
+        r = pair(s, r, "  of which round off", t.getRoundOff(), st);
         r = pair(s, r, "Average order value", t.getAverageOrder(), st);
         r = pair(s, r, "Returns requested", t.getReturns(), st);
         r = pair(s, r, "Refunds paid", t.getRefundCount(), st);
@@ -123,6 +124,9 @@ public class SalesExcelService {
         r = pair(s, r, "SGST", sum(tax, Invoice::getSgstTotal), st);
         r = pair(s, r, "IGST", sum(tax, Invoice::getIgstTotal), st);
         r = pair(s, r, "Total GST", sum(tax, Invoice::getTaxTotal), st);
+        r = pair(s, r, "Invoice value before rounding", sum(tax, Invoice::getInvoiceValue), st);
+        r = pair(s, r, "Round off", sum(tax, Invoice::getRoundOff), st);
+        r = pair(s, r, "Invoice value (amount billed)", sum(tax, Invoice::getGrandTotal), st);
         r++;
 
         text(s.createRow(r++), 0, "Notes", st.section);
@@ -130,6 +134,8 @@ public class SalesExcelService {
                 "Sales are what customers paid on orders that weren't cancelled, counted on the day the order was placed.",
                 "Returns count on the day they were requested; refunds on the day they were paid out.",
                 "GST is worked out from GST-inclusive prices, as on the invoices. Refunds aren't netted off the GST here.",
+                "Bills are rounded to the nearest rupee. Round off is booked to its own ledger (indirect income when positive, "
+                        + "indirect expense when negative) and is outside the taxable value and GST.",
                 "Invoice numbers are issued when an order ships, so orders not yet shipped have none.")) {
             text(s.createRow(r++), 0, note, st.muted);
         }
@@ -142,7 +148,7 @@ public class SalesExcelService {
         String[] heads = new String[SALES_COLUMNS.length + 1];
         heads[0] = monthly ? "Month" : "Date";
         System.arraycopy(SALES_COLUMNS, 0, heads, 1, SALES_COLUMNS.length);
-        header(s, st, heads, new int[]{14, 14, 11, 12, 16, 17, 13, 16, 16});
+        header(s, st, heads, new int[]{14, 14, 11, 12, 16, 12, 17, 13, 16, 16});
 
         int r = 1;
         for (SalesDay d : rows) {
@@ -154,22 +160,23 @@ public class SalesExcelService {
             num(row, 2, d.getCancelled(), st.integer);
             num(row, 3, d.getPacks(), st.integer);
             money(row, 4, d.getSales(), st.money);
-            num(row, 5, d.getReturns(), st.integer);
-            num(row, 6, d.getRefundCount(), st.integer);
-            money(row, 7, d.getRefunds(), st.money);
-            formula(row, 8, "E" + (r + 1) + "-H" + (r + 1), st.money);
+            money(row, 5, d.getRoundOff(), st.money);
+            num(row, 6, d.getReturns(), st.integer);
+            num(row, 7, d.getRefundCount(), st.integer);
+            money(row, 8, d.getRefunds(), st.money);
+            formula(row, 9, "E" + (r + 1) + "-I" + (r + 1), st.money);
             r++;
         }
-        totals(s, st, r, 1, 8, Set.of(4, 7, 8));
+        totals(s, st, r, 1, 9, Set.of(4, 5, 8, 9));
         s.createFreezePane(1, 1);
     }
 
     private void ordersSheet(SXSSFWorkbook wb, Styles st, List<Order> placed, Map<Long, Invoice> tax) {
         SXSSFSheet s = wb.createSheet(Section.ORDERS.title);
         header(s, st, new String[]{"Order date", "Order no.", "Invoice no.", "Invoice date", "Customer", "Place of supply",
-                        "Status", "Payment", "Payment status", "Packs", "Items value", "Delivery", "Order total",
+                        "Status", "Payment", "Payment status", "Packs", "Items value", "Delivery", "Round off", "Order total",
                         "Taxable value", "CGST", "SGST", "IGST", "Total GST"},
-                new int[]{14, 17, 19, 14, 22, 18, 12, 18, 14, 8, 13, 11, 13, 14, 11, 11, 11, 12});
+                new int[]{14, 17, 19, 14, 22, 18, 12, 18, 14, 8, 13, 11, 11, 13, 14, 11, 11, 11, 12});
         int r = 1;
         for (Order o : placed) {
             Row row = s.createRow(r++);
@@ -186,25 +193,26 @@ public class SalesExcelService {
             num(row, 9, o.getItemCount(), st.integer);
             money(row, 10, o.getSubtotal(), st.money);
             money(row, 11, o.getDeliveryFee(), st.money);
-            money(row, 12, o.getTotal(), st.money);
+            money(row, 12, o.getRoundOff(), st.money);
+            money(row, 13, o.getTotal(), st.money);
             if (inv != null) {
-                money(row, 13, inv.getTaxableTotal(), st.money);
-                money(row, 14, inv.getCgstTotal(), st.money);
-                money(row, 15, inv.getSgstTotal(), st.money);
-                money(row, 16, inv.getIgstTotal(), st.money);
-                money(row, 17, inv.getTaxTotal(), st.money);
+                money(row, 14, inv.getTaxableTotal(), st.money);
+                money(row, 15, inv.getCgstTotal(), st.money);
+                money(row, 16, inv.getSgstTotal(), st.money);
+                money(row, 17, inv.getIgstTotal(), st.money);
+                money(row, 18, inv.getTaxTotal(), st.money);
             }
         }
         // Totals leave cancelled orders out, like the rest of the report
         Row total = s.createRow(r);
         text(total, 0, "Total (excl. cancelled)", st.totalLabel);
         String status = "$G$2:$G$" + Math.max(2, r);
-        for (int c = 9; c <= 17; c++) {
+        for (int c = 9; c <= 18; c++) {
             String col = CellReference.convertNumToColString(c);
             formula(total, c, r == 1 ? "0" : "SUMIF(" + status + ",\"<>" + OrderStatus.CANCELLED.getLabel() + "\"," + col + "2:" + col + r + ")",
                     c == 9 ? st.totalInteger : st.totalMoney);
         }
-        s.setAutoFilter(new CellRangeAddress(0, Math.max(0, r - 1), 0, 17));
+        s.setAutoFilter(new CellRangeAddress(0, Math.max(0, r - 1), 0, 18));
         s.createFreezePane(2, 1);
     }
 
