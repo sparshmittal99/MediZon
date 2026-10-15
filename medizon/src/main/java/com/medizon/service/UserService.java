@@ -131,7 +131,7 @@ public class UserService {
     /** Every account except deleted ones, newest first. */
     public List<User> all() { return users.findAllByOrderByCreatedAtDesc().stream().filter(u -> !u.isDeleted()).toList(); }
 
-    public User get(Long id) { return users.findById(id).orElseThrow(() -> new BusinessException("User not found.")); }
+    public User get(Long id) { return users.findById(id).orElseThrow(() -> new NotFoundException("User not found.")); }
 
     @Transactional
     public User setEnabled(Long id, boolean enabled, User actingAdmin) {

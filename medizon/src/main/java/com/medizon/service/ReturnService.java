@@ -146,9 +146,9 @@ public class ReturnService {
                 : viewer.isStoreStaff() ? returns.findById(returnId)
                         .filter(x -> viewer.getStore() != null && x.getOrder().getStore() != null
                                 && viewer.getStore().getId().equals(x.getOrder().getStore().getId()))
-                        .orElseThrow(() -> new BusinessException("File not found."))
-                : returns.findByIdAndUser(returnId, viewer).orElseThrow(() -> new BusinessException("File not found."));
-        if (index < 0 || index >= r.getImages().size()) throw new BusinessException("File not found.");
+                        .orElseThrow(() -> new NotFoundException("File not found."))
+                : returns.findByIdAndUser(returnId, viewer).orElseThrow(() -> new NotFoundException("File not found."));
+        if (index < 0 || index >= r.getImages().size()) throw new NotFoundException("File not found.");
         return r.getImages().get(index);
     }
 
@@ -157,7 +157,7 @@ public class ReturnService {
     // ------------------------------------------------------------------ admin
 
     public ReturnRequest get(Long id) {
-        return returns.findById(id).orElseThrow(() -> new BusinessException("Return not found."));
+        return returns.findById(id).orElseThrow(() -> new NotFoundException("Return not found."));
     }
 
     /** Returns for the back office: one store's, or every store's when {@code store} is null. */

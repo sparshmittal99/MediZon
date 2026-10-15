@@ -42,7 +42,7 @@ public class ReminderService {
 
     @Transactional
     public Reminder complete(Long id, User user) {
-        Reminder r = reminders.findByIdAndUser(id, user).orElseThrow(() -> new BusinessException("Reminder not found."));
+        Reminder r = reminders.findByIdAndUser(id, user).orElseThrow(() -> new NotFoundException("Reminder not found."));
         r.setDone(true);
         return r;
     }

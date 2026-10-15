@@ -46,7 +46,7 @@ public class MedicationPlanService {
     public List<MedicationPlan> forUser(User user) { return plans.findByUserOrderByActiveDescIdDesc(user); }
 
     public MedicationPlan get(Long id, User user) {
-        return plans.findByIdAndUser(id, user).orElseThrow(() -> new BusinessException("Plan not found."));
+        return plans.findByIdAndUser(id, user).orElseThrow(() -> new NotFoundException("Plan not found."));
     }
 
     // ------------------------------------------------------------------ what can be tracked

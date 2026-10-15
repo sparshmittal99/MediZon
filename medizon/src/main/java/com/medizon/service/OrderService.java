@@ -280,7 +280,7 @@ public class OrderService {
 
     @Transactional
     public Order updateStatus(Long orderId, OrderStatus next) {
-        Order o = orders.findById(orderId).orElseThrow(() -> new BusinessException("Order not found."));
+        Order o = orders.findById(orderId).orElseThrow(() -> new NotFoundException("Order not found."));
         if (!o.getStatus().canMoveTo(next)) {
             throw new BusinessException("An order that is " + o.getStatus().getLabel().toLowerCase()
                     + " can't be marked " + next.getLabel().toLowerCase() + ".");
@@ -354,10 +354,10 @@ public class OrderService {
     public List<Order> recentForUser(User user) { return orders.findTop5ByUserOrderByCreatedAtDesc(user); }
 
     public Order getForUser(Long id, User user) {
-        return orders.findByIdAndUser(id, user).orElseThrow(() -> new BusinessException("Order not found."));
+        return orders.findByIdAndUser(id, user).orElseThrow(() -> new NotFoundException("Order not found."));
     }
 
-    public Order get(Long id) { return orders.findById(id).orElseThrow(() -> new BusinessException("Order not found.")); }
+    public Order get(Long id) { return orders.findById(id).orElseThrow(() -> new NotFoundException("Order not found.")); }
 
     /** The other orders placed in the same checkout as this one. */
     public List<Order> placedWith(Order o) {

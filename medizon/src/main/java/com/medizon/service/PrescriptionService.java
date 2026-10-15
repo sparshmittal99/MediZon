@@ -57,7 +57,7 @@ public class PrescriptionService {
     @Transactional
     public void review(Long id, boolean approve, String note, LocalDate validUntil) {
         Prescription p = prescriptions.findById(id)
-                .orElseThrow(() -> new BusinessException("Prescription not found."));
+                .orElseThrow(() -> new NotFoundException("Prescription not found."));
         p.setStatus(approve ? PrescriptionStatus.APPROVED : PrescriptionStatus.REJECTED);
         p.setReviewerNote(note);
         p.setValidUntil(approve ? (validUntil != null ? validUntil : LocalDate.now().plusMonths(6)) : null);
@@ -73,10 +73,10 @@ public class PrescriptionService {
     /** Owners and admins can view a file; anyone else gets "not found". */
     @Transactional(readOnly = true)
     public Prescription getForViewer(Long id, User viewer) {
-        Prescription p = prescriptions.findById(id).orElseThrow(() -> new BusinessException("File not found."));
+        Prescription p = prescriptions.findById(id).orElseThrow(() -> new NotFoundException("File not found."));
         boolean reviewer = viewer.isAdmin() || viewer.is(Role.PHARMACIST);
         if (!reviewer && !p.getUser().getId().equals(viewer.getId())) {
-            throw new BusinessException("File not found.");
+            throw new NotFoundException("File not found.");
         }
         return p;
     }

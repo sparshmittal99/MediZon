@@ -13,12 +13,13 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.servlet.support.RequestContextUtils;
 
+import java.io.IOException;
 import java.util.Optional;
 
 /**
  * Adds the signed-in user, cart count, per-medicine cart quantities, this device's notification settings and its
  * unread count to every page, plus the seller's contact details and the "Delivers to" location; turns rule
- * violations into flash messages.
+ * violations into flash messages and missing records into 404s.
  */
 @ControllerAdvice(basePackages = "com.medizon.web")
 @RequiredArgsConstructor
@@ -74,6 +75,12 @@ public class GlobalModelAdvice {
             }
             model.addAttribute("unreadCount", notificationService.unreadCount(u, device));
         });
+    }
+
+    /** Someone else's order, plan, file...: a plain 404 page, so the ID isn't confirmed to exist. */
+    @ExceptionHandler(NotFoundException.class)
+    public void notFound(NotFoundException e, HttpServletResponse response) throws IOException {
+        response.sendError(HttpServletResponse.SC_NOT_FOUND, e.getMessage());
     }
 
     @ExceptionHandler(BusinessException.class)

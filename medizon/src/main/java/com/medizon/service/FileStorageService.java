@@ -101,7 +101,7 @@ public class FileStorageService {
 
     public Resource load(String name) {
         Path p = root.resolve(name).normalize();
-        if (!p.startsWith(root) || !Files.exists(p)) throw new BusinessException("File not found.");
+        if (!p.startsWith(root) || !Files.exists(p)) throw new NotFoundException("File not found.");
         return new FileSystemResource(p);
     }
 }
