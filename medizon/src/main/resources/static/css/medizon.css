@@ -595,6 +595,11 @@ a { text-underline-offset: 2px; }
     .mz-nav, .mz-locbar, .mz-catbar, .mz-subnav, .mz-footer, .mz-tabbar, .mz-bot, .mz-toasts, .mz-flash, .mz-no-print { display: none !important; }
     .mz-page { padding: 0; max-width: none !important; }
     .mz-invoice { border: 0; border-radius: 0; padding: 12mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    /* Seller on the left, "Tax invoice" and its numbers on the right, however long the store's address */
+    .mz-invoice-head { flex-wrap: nowrap; }
+    .mz-invoice-head > div:first-child { flex: 1 1 auto; min-width: 0; }
+    .mz-invoice-head > div:last-child { flex: none; text-align: right; }
+    .mz-invoice-head .mz-invoice-meta { justify-content: end; }
     .mz-invoice-parties { grid-template-columns: repeat(3, 1fr); }
     .mz-invoice-foot { grid-template-columns: 1fr 16rem; }
     .table-responsive { overflow: visible; }

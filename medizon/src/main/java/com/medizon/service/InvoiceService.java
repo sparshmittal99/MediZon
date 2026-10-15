@@ -144,7 +144,7 @@ public class InvoiceService {
         if (s == null) return seller();
         String state = or(s.getState(), sellerState);
         return new Invoice.Seller(s.getName(), or(s.getGstin(), sellerGstin), or(s.getDrugLicense(), sellerDrugLicense),
-                or(s.getFormattedAddress(), sellerAddress), state, GstStates.code(state), or(s.getPhone(), sellerPhone),
+                or(s.getStreetAddress(), sellerAddress), state, GstStates.code(state), or(s.getPhone(), sellerPhone),
                 or(s.getEmail(), sellerEmail));
     }
 

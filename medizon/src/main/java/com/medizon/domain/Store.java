@@ -55,4 +55,11 @@ public class Store {
         return Stream.of(addressLine, city, state, pincode).filter(s -> s != null && !s.isBlank())
                 .collect(Collectors.joining(", "));
     }
+
+    /** The address without the state, for the invoice header, which prints the state on its own line. */
+    public String getStreetAddress() {
+        String street = Stream.of(addressLine, city).filter(s -> s != null && !s.isBlank()).collect(Collectors.joining(", "));
+        if (pincode == null || pincode.isBlank() || street.contains(pincode)) return street;
+        return street.isEmpty() ? pincode : street + " " + pincode;
+    }
 }
