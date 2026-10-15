@@ -31,6 +31,10 @@ public class Order {
     @Enumerated(EnumType.STRING)
     private OrderStatus status = OrderStatus.PLACED;
 
+    /** The cart it was checked out from; empty for automatic refills and orders from before carts had ids. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Cart cart;
+
     /** The store that fulfils and invoices this order. */
     @ManyToOne
     private Store store;

@@ -2,6 +2,7 @@ package com.medizon.config;
 
 import com.medizon.service.CartService;
 import com.medizon.service.UserService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,7 +24,10 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
+import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -31,6 +35,8 @@ import java.security.MessageDigest;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    private static final RequestMatcher API = new AntPathRequestMatcher("/api/**");
 
     /**
      * Every sign-in gets its own HTTP session, so any number of customers and admins can be signed in
@@ -69,12 +75,16 @@ public class SecurityConfig {
                 .requestMatchers("/prescriptions/*/file", "/returns/*/images/*").authenticated()   // owner or admin, checked in the service
                 // Shopping and dose reminders are for customers; admin accounts only run the store.
                 // The assistant API is open to both roles; each role gets its own actions in AssistantTools.
-                .requestMatchers("/cart/**", "/api/cart/**", "/checkout", "/orders/**", "/plans/**",
+                .requestMatchers("/cart/**", "/api/cart/**", "/api/orders/**", "/checkout", "/orders/**", "/plans/**",
                         "/prescriptions/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
             // sendBeacon can't send the CSRF header; these endpoints only record telemetry
             .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**"))
-            .exceptionHandling(ex -> ex.accessDeniedHandler(accessDeniedHandler()))
+            // The JSON API answers 401 instead of sending the caller to the login page
+            .exceptionHandling(ex -> ex
+                .defaultAuthenticationEntryPointFor((request, response, e) ->
+                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Sign in to continue."), API)
+                .accessDeniedHandler(accessDeniedHandler()))
             .formLogin(form -> form
                 .loginPage("/login")
                 .usernameParameter("email")
@@ -127,11 +137,16 @@ public class SecurityConfig {
         };
     }
 
-    /** Staff who follow a customer link, or a page outside their role, land on their own home instead of a bare 403. */
+    /**
+     * Staff who follow a customer link, or a page outside their role, land on their own home instead of a bare 403.
+     * The JSON API always answers 403 (AppErrorController turns it into JSON).
+     */
     private AccessDeniedHandler accessDeniedHandler() {
         AccessDeniedHandlerImpl fallback = new AccessDeniedHandlerImpl();
         return (request, response, exception) -> {
-            if (request.isUserInRole("STAFF")) response.sendRedirect(request.getContextPath() + "/admin?denied");
+            if (API.matches(request)) response.sendError(HttpServletResponse.SC_FORBIDDEN, exception instanceof CsrfException
+                    ? "Missing or invalid CSRF token. Reload the page and try again." : "You don't have access to this.");
+            else if (request.isUserInRole("STAFF")) response.sendRedirect(request.getContextPath() + "/admin?denied");
             else fallback.handle(request, response, exception);
         };
     }

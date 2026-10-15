@@ -1,6 +1,8 @@
 package com.medizon.service;
 
+import com.medizon.domain.Cart;
 import com.medizon.domain.CartItem;
+import com.medizon.domain.CartStatus;
 import com.medizon.domain.Medicine;
 import com.medizon.domain.Member;
 import com.medizon.domain.Shares;
@@ -8,20 +10,27 @@ import com.medizon.domain.User;
 import com.medizon.dto.CartSummary;
 import com.medizon.dto.Offer;
 import com.medizon.repository.CartItemRepository;
+import com.medizon.repository.CartRepository;
 import com.medizon.repository.MedicineRepository;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * The cart. What can go in it, and at what price, depends on where it's going: {@code pincode} is the shopper's
  * delivery location (null when they haven't picked one, which allows anything some store has in stock). Checkout
  * checks every line again against the delivery address.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CartService {
@@ -30,6 +39,7 @@ public class CartService {
     public static final BigDecimal DELIVERY_FEE = new BigDecimal("40");
 
     private final CartItemRepository cart;
+    private final CartRepository carts;
     private final MedicineRepository medicines;
     private final MemberService memberService;
     private final CatalogService catalog;
@@ -141,9 +151,50 @@ public class CartService {
         return cart.findByUserAndMedicine(user, m).orElseGet(() -> {
             CartItem c = new CartItem();
             c.setUser(user);
+            c.setCart(openCart(user));
             c.setMedicine(m);
             return c;
         });
+    }
+
+    // ------------------------------------------------------------------ cart ids
+
+    /** The account's open cart, if it has one: none before the first medicine goes in, or right after checkout. */
+    @Transactional(readOnly = true)
+    public Optional<Cart> activeCart(User user) {
+        return carts.findFirstByUserAndStatusOrderByIdAsc(user, CartStatus.ACTIVE);
+    }
+
+    private Cart openCart(User user) {
+        return activeCart(user).orElseGet(() -> carts.save(new Cart(user)));
+    }
+
+    /**
+     * Checkout: closes the cart and empties it; the next medicine added opens a new cart with a new id. Returns the
+     * closed cart, for the orders to point back to.
+     */
+    @Transactional
+    public Cart checkOut(User user) {
+        Cart closed = openCart(user);
+        carts.findByUserAndStatus(user, CartStatus.ACTIVE).forEach(c -> {   // normally just the one
+            c.setStatus(CartStatus.CHECKED_OUT);
+            c.setCheckedOutAt(LocalDateTime.now());
+        });
+        cart.deleteByUser(user);
+        return closed;
+    }
+
+    /** Cart lines from before carts had ids go into their account's open cart. */
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void assignLegacyLinesToCarts() {
+        List<CartItem> legacy = cart.findByCartIsNull();
+        if (legacy.isEmpty()) return;
+        legacy.stream().collect(Collectors.groupingBy(CartItem::getUser)).forEach((user, lines) -> {
+            Cart c = openCart(user);
+            lines.forEach(l -> l.setCart(c));
+        });
+        log.info("Put {} cart line(s) into carts", legacy.size());
     }
 
     /** Packs in the cart per medicine id, for the quantity steppers on product cards and pages. */
@@ -174,9 +225,6 @@ public class CartService {
     }
 
     public long count(User user) { return cart.countByUser(user); }
-
-    @Transactional
-    public void clear(User user) { cart.deleteByUser(user); }
 
     // ------------------------------------------------------------------ signed-out visitors
 

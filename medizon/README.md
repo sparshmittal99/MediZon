@@ -173,6 +173,24 @@ performance, with no outside service needed:
   rejects it with a note; approved returns are marked picked up (the packs leave the member's supply count, and can go
   back into stock) and then refunded.
 
+## JSON API
+
+The site's pages are HTML (Thymeleaf). Everything under `/api` is JSON, errors included. POSTs need the CSRF token
+(`X-CSRF-TOKEN` header, from the page's `_csrf` meta tag).
+
+| Endpoint | What it returns |
+|---|---|
+| `GET /api/cart` | `cartId` of the open cart (`null` before the first medicine goes in, and for a signed-out visitor, whose cart lives in the session), lines with `cartItemId`, totals |
+| `POST /api/cart/{medicineId}` `{"quantity": n}` | The line's new quantity and `cartItemId`, and the cart totals |
+| `GET /api/orders` | The signed-in customer's orders, newest first |
+| `GET /api/orders/{id}` | One order with its lines and the `cartId` it was checked out from |
+| `GET /api/orders/{id}/invoice` | The GST invoice for an order that has shipped |
+
+An account has one open cart (`carts` table, status `ACTIVE`). It keeps its id across sign-ins and devices; checkout
+marks it `CHECKED_OUT`, the orders keep its id, and the next medicine added opens a new cart. Errors look like
+`{"timestamp", "status", "error", "path", "requestId"}`, with `error` holding the message: 401 when not signed in, 403
+without access or with a bad CSRF token, 404 for an unknown path or another account's order, 400 for a rule broken.
+
 ## Chat assistant
 
 A chat button sits in the bottom-right corner of every page once you sign in. The conversation follows you across

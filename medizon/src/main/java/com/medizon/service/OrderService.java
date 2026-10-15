@@ -76,7 +76,8 @@ public class OrderService {
         }
 
         List<Order> placed = createOrders(user, lines, paymentMethod, rx, OrderSource.CUSTOMER, ship);
-        cartService.clear(user);
+        Cart from = cartService.checkOut(user);
+        placed.forEach(o -> o.setCart(from));
         if (placed.size() == 1) {
             Order o = placed.get(0);
             notifications.notify(user, NotificationType.ORDER_UPDATE, "Order placed",

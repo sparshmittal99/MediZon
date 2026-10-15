@@ -14,6 +14,9 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
     Optional<CartItem> findByUserAndMedicine(User user, Medicine medicine);
     long countByUser(User user);
 
+    /** Lines from before carts had ids. */
+    List<CartItem> findByCartIsNull();
+
     @Query("select c from CartItem c where c.members is empty")
     List<CartItem> findWithoutMembers();
     void deleteByUser(User user);

@@ -22,6 +22,10 @@ public class CartItem {
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     private User user;
 
+    /** The account's active cart. Lines leave with checkout, so (user, medicine) stays unique. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Cart cart;
+
     @ManyToOne(optional = false)
     private Medicine medicine;
 
