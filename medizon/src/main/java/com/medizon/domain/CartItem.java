@@ -1,5 +1,7 @@
 package com.medizon.domain;
 
+import com.medizon.dto.Offer;
+import com.medizon.dto.Product;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -40,6 +42,18 @@ public class CartItem {
     @MapKeyColumn(name = "member_id")
     @Column(name = "packs")
     private Map<Long, Integer> packs = new HashMap<>();
+
+    /** Which store would deliver this line to the shopper, and at what price; worked out for each page, not stored. */
+    @Transient
+    private Offer offer;
+
+    /** The product as the shopper sees it, priced by the store that would deliver it. */
+    public Product getProduct() { return new Product(medicine, offer != null ? offer : Offer.none(medicine)); }
+
+    /** Enough packs at a store that delivers here (or, without a location, at some store). */
+    public boolean isAvailable() { return offer != null && offer.canSell(quantity); }
+
+    public BigDecimal getUnitPrice() { return offer != null ? offer.price() : medicine.getPrice(); }
 
     /** Packs for each member it's for, account holder first; members left with no pack are skipped. */
     public Map<Member, Integer> getAllocation() {
@@ -83,7 +97,7 @@ public class CartItem {
     }
 
     public BigDecimal getLineTotal() {
-        return medicine.getPrice().multiply(BigDecimal.valueOf(quantity));
+        return getUnitPrice().multiply(BigDecimal.valueOf(quantity));
     }
 
     public boolean hasMember(Long memberId) {

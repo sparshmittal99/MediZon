@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/layout :: head(${medicine.id == null} ? 'Add medicine' : 'Edit medicine')}"></head>
+<head th:replace="~{fragments/layout :: head(${medicine.id == null} ? 'Add product' : 'Edit product')}"></head>
 <body>
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: adminNav}"></div>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page" style="max-width: 900px">
-    <a th:href="@{/admin/medicines}" class="small"><i class="bi bi-arrow-left"></i> Catalog</a>
-    <h1 class="mz-page-title mt-2 mb-4" th:text="${medicine.id == null} ? 'Add medicine' : ('Edit ' + ${medicine.name})">Medicine</h1>
+    <a th:href="${listIn != null} ? @{/admin/medicines(store=${listIn.id})} : @{/admin/medicines}" class="small"><i class="bi bi-arrow-left"></i> Catalogue</a>
+    <h1 class="mz-page-title mt-2 mb-1" th:text="${medicine.id == null} ? 'Add a product' : ('Edit ' + ${medicine.name})">Product</h1>
+    <p class="small text-muted mb-4" th:text="${medicine.id == null and listIn != null}
+        ? 'It joins the master catalogue, and ' + ${listIn.name} + ' starts selling it. After this, only the admin changes the product details.'
+        : 'Product details are the same in every store. Each store keeps its own stock, expiry and OTC price in its catalogue.'"></p>
 
     <form th:action="@{/admin/medicines/save}" th:object="${medicine}" method="post" class="mz-panel"
           enctype="multipart/form-data" novalidate>
@@ -40,8 +43,9 @@
                 <div class="invalid-feedback" th:errors="*{dosageForm}"></div>
             </div>
             <div class="col-md-3">
-                <label class="form-label" for="price">Price (₹)</label>
+                <label class="form-label" for="price">Catalogue price (₹)</label>
                 <input class="form-control" type="number" step="0.01" min="0" th:field="*{price}" th:errorclass="is-invalid">
+                <div class="form-text">Every store's price for Rx medicines; the default for OTC.</div>
                 <div class="invalid-feedback" th:errors="*{price}"></div>
             </div>
             <div class="col-md-3">
@@ -52,15 +56,6 @@
                 <label class="form-label" for="unitsPerPack">Units per pack</label>
                 <input class="form-control" type="number" min="1" th:field="*{unitsPerPack}" th:errorclass="is-invalid">
                 <div class="invalid-feedback" th:errors="*{unitsPerPack}"></div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="stock">Stock (packs)</label>
-                <input class="form-control" type="number" min="0" th:field="*{stock}" th:errorclass="is-invalid">
-                <div class="invalid-feedback" th:errors="*{stock}"></div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="expiryDate">Expiry date</label>
-                <input class="form-control" type="date" th:field="*{expiryDate}">
             </div>
             <div class="col-md-3">
                 <label class="form-label" for="strength">Strength</label>
@@ -76,17 +71,6 @@
                 <input class="form-control" type="number" step="0.01" min="0" max="40" th:field="*{gstRate}" list="gstRates" th:errorclass="is-invalid">
                 <datalist id="gstRates"><option value="0"><option value="5"><option value="12"><option value="18"></datalist>
                 <div class="invalid-feedback" th:errors="*{gstRate}"></div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="deliveryMinDays">Delivery from (days)</label>
-                <input class="form-control" type="number" min="0" max="30" th:field="*{deliveryMinDays}" placeholder="3" th:errorclass="is-invalid">
-                <div class="invalid-feedback" th:errors="*{deliveryMinDays}"></div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="deliveryMaxDays">Delivery to (days)</label>
-                <input class="form-control" type="number" min="0" max="30" th:field="*{deliveryMaxDays}" placeholder="5" th:errorclass="is-invalid">
-                <div class="form-text">0 to 0 is same-day delivery.</div>
-                <div class="invalid-feedback" th:errors="*{deliveryMaxDays}"></div>
             </div>
 
             <div class="col-12" data-mz-image-picker>
@@ -150,8 +134,26 @@
                     <label class="form-check-label" th:for="${#ids.prev('active')}">Listed in the shop</label>
                 </div>
             </div>
+
+            <!-- A new product from a store starts on sale there -->
+            <th:block th:if="${medicine.id == null and listIn != null}">
+                <input type="hidden" name="listStoreId" th:value="${listIn.id}">
+                <div class="col-12"><hr class="my-1"><h2 class="h6 mt-2 mb-0" th:text="'Selling at ' + ${listIn.name}">Selling at this store</h2></div>
+                <div class="col-md-4">
+                    <label class="form-label" for="listPrice">Store price (₹) <span class="text-muted fw-normal">(OTC only)</span></label>
+                    <input class="form-control" id="listPrice" name="listPrice" type="number" step="0.01" min="0.01" placeholder="Catalogue price">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="listStock">Stock (packs)</label>
+                    <input class="form-control" id="listStock" name="listStock" type="number" min="0" value="0" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="listExpiry">Batch expiry</label>
+                    <input class="form-control" id="listExpiry" name="listExpiry" type="date">
+                </div>
+            </th:block>
         </div>
-        <button class="btn btn-primary mt-4" type="submit">Save medicine</button>
+        <button class="btn btn-primary mt-4" type="submit" th:text="${medicine.id == null} ? 'Add product' : 'Save product'">Save product</button>
     </form>
 </main>
 <footer th:replace="~{fragments/layout :: footer}"></footer>

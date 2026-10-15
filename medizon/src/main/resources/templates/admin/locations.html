@@ -35,9 +35,21 @@
                 <label class="form-label small" for="state">State <span class="text-muted fw-normal">(optional)</span></label>
                 <input id="state" name="state" class="form-control" placeholder="Maharashtra">
             </div>
-            <div class="col-md-3">
-                <label class="form-label small" for="extraDeliveryDays">Extra delivery days</label>
-                <input id="extraDeliveryDays" name="extraDeliveryDays" type="number" min="0" max="30" value="0" class="form-control">
+            <div class="col-md-4">
+                <label class="form-label small" for="storeId">Delivered by</label>
+                <select id="storeId" name="storeId" class="form-select">
+                    <option value="">Choose later</option>
+                    <option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}"></option>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small" for="minDays">Delivery from (days)</label>
+                <input id="minDays" name="minDays" type="number" min="0" max="30" value="1" class="form-control">
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small" for="maxDays">to (days)</label>
+                <input id="maxDays" name="maxDays" type="number" min="0" max="30" value="3" class="form-control">
+                <div class="form-text">0 to 0 is same day.</div>
             </div>
             <div class="col-12">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1"></i>Add to delivery areas</button>
@@ -47,27 +59,43 @@
 
     <div th:if="${#lists.isEmpty(pincodes)}" class="mz-panel mz-empty">
         <i class="bi bi-geo-alt"></i>
-        <p class="mb-0">No PIN codes yet. Until you add some, customers see "We don't deliver here" and can't check out.</p>
+        <p class="mb-0">No PIN codes yet. Until you add some and choose the stores that deliver there, customers see "We don't deliver here" and can't check out.</p>
     </div>
     <div th:unless="${#lists.isEmpty(pincodes)}" class="mz-panel-flush">
         <div class="table-responsive">
             <table class="table align-middle mb-0">
-                <thead><tr><th>PIN code</th><th>Area</th><th>City</th><th>State</th><th>Extra delivery days</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+                <thead><tr><th>PIN code</th><th>Area</th><th style="min-width: 22rem">Delivered by (nearest first)</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
                 <tbody>
-                <tr th:each="p : ${pincodes}" th:classappend="${!p.active} ? 'mz-user-off'">
+                <tr th:each="p : ${pincodes}" th:classappend="${!p.active} ? 'mz-user-off'" th:with="served=${servedBy.get(p.pincode)}">
                     <td class="fw-semibold" style="font-variant-numeric: tabular-nums" th:text="${p.pincode}"></td>
-                    <td th:text="${p.area} ?: '—'"></td>
-                    <td th:text="${p.city} ?: '—'"></td>
-                    <td th:text="${p.state} ?: '—'"></td>
+                    <td><span th:text="${p.area} ?: '—'"></span>
+                        <div class="small text-muted" th:text="(${p.city} ?: '') + (${p.city != null and p.state != null} ? ', ' : '') + (${p.state} ?: '')"></div></td>
                     <td>
-                        <form th:action="@{/admin/locations/{id}/delivery-days(id=${p.id})}" method="post" class="d-flex gap-1" style="max-width: 9rem">
-                            <input class="form-control form-control-sm" type="number" min="0" max="30" name="extraDeliveryDays"
-                                   th:id="'days' + ${p.id}" th:value="${p.extraDeliveryDays}" th:attr="aria-label='Extra delivery days for ' + ${p.pincode}">
-                            <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                        <ul class="list-unstyled small mb-2" th:if="${served != null}">
+                            <li th:each="a, s : ${served}" class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge" th:classappend="${s.first} ? 'text-bg-primary' : 'text-bg-light border'" th:text="${s.count}">1</span>
+                                <a th:href="@{/admin/stores/{id}(id=${a.store.id})}" th:text="${a.store.name}"
+                                   th:classappend="${!a.store.active} ? 'text-decoration-line-through text-muted'"></a>
+                                <span class="text-muted" th:text="${a.daysLabel}"></span>
+                                <form th:action="@{/admin/locations/areas/{id}/delete(id=${a.id})}" method="post" class="ms-auto">
+                                    <button class="btn btn-sm btn-link text-danger p-0" type="submit" th:attr="aria-label='Stop ' + ${a.store.name} + ' delivering here'"><i class="bi bi-x-lg"></i></button>
+                                </form>
+                            </li>
+                        </ul>
+                        <div th:if="${served == null}" class="small text-danger mb-2">No store delivers here yet, so customers can't order.</div>
+                        <form th:action="@{/admin/locations/serve}" method="post" class="d-flex flex-wrap gap-1" th:unless="${#lists.isEmpty(stores)}">
+                            <input type="hidden" name="pincode" th:value="${p.pincode}">
+                            <select name="storeId" class="form-select form-select-sm" style="width: 10rem" th:attr="aria-label='Store for ' + ${p.pincode}">
+                                <option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}"></option>
+                            </select>
+                            <input name="minDays" type="number" min="0" max="30" value="1" class="form-control form-control-sm" style="width: 4rem" aria-label="Delivery from (days)">
+                            <input name="maxDays" type="number" min="0" max="30" value="3" class="form-control form-control-sm" style="width: 4rem" aria-label="Delivery to (days)">
+                            <button class="btn btn-sm btn-outline-primary" type="submit">Add store</button>
                         </form>
                     </td>
                     <td>
-                        <span th:if="${p.active}" class="badge text-bg-success">Delivering</span>
+                        <span th:if="${p.active and served != null}" class="badge text-bg-success">Delivering</span>
+                        <span th:if="${p.active and served == null}" class="badge text-bg-warning">No store</span>
                         <span th:unless="${p.active}" class="badge text-bg-secondary">Paused</span>
                     </td>
                     <td class="text-end">

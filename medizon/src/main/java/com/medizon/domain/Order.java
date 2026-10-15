@@ -31,6 +31,17 @@ public class Order {
     @Enumerated(EnumType.STRING)
     private OrderStatus status = OrderStatus.PLACED;
 
+    /** The store that fulfils and invoices this order. */
+    @ManyToOne
+    private Store store;
+
+    /**
+     * Orders placed together share this: a cart with medicines from different stores becomes one order per store,
+     * paid for once.
+     */
+    @Column(length = 20)
+    private String checkoutRef;
+
     @Enumerated(EnumType.STRING)
     private PaymentMethod paymentMethod = PaymentMethod.COD;
 

@@ -1,44 +1,52 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/layout :: head('Catalog')}"></head>
+<head th:replace="~{fragments/layout :: head('Master catalogue')}"></head>
 <body>
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: adminNav}"></div>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="mz-page-title mb-0">Catalog</h1>
-        <a th:href="@{/admin/medicines/new}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add medicine</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+        <h1 class="mz-page-title mb-0">Master catalogue</h1>
+        <div class="d-flex flex-wrap gap-2">
+            <!-- Each store's own catalogue: stock, expiry and OTC prices -->
+            <form th:action="@{/admin/medicines}" method="get" class="d-flex gap-2" th:unless="${#lists.isEmpty(stores)}">
+                <select name="store" class="form-select" aria-label="Open a store's catalogue" onchange="this.form.submit()">
+                    <option value="">Open a store's catalogue…</option>
+                    <option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}"></option>
+                </select>
+                <noscript><button class="btn btn-outline-primary" type="submit">Open</button></noscript>
+            </form>
+            <a th:href="@{/admin/medicines/new}" class="btn btn-primary text-nowrap"><i class="bi bi-plus-lg me-1"></i>Add product</a>
+        </div>
     </div>
+    <p class="small text-muted mb-4">Every product, the same for all stores. Prescription medicines sell at this price in every store;
+        stores set their own price for OTC medicines, up to the MRP.</p>
+
     <div class="mz-panel-flush">
         <div class="table-responsive">
             <table class="table align-middle mb-0">
-                <thead><tr><th>Medicine</th><th>Category</th><th>Price</th><th>Stock</th><th>Expiry</th><th>Delivery</th><th>Rx</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Product</th><th>Category</th><th class="text-end">Price</th><th class="text-end">MRP</th><th>Rx</th>
+                    <th class="text-end">Stores</th><th class="text-end">Stock (all stores)</th><th>Status</th><th></th></tr></thead>
                 <tbody>
-                <tr th:each="m : ${medicines}" th:classappend="${!m.active} ? 'text-muted'">
+                <tr th:each="m : ${medicines}" th:classappend="${!m.active} ? 'text-muted'" th:with="c=${coverage.get(m.id)}">
                     <td><span class="fw-semibold" th:text="${m.name}"></span>
                         <span th:unless="${m.returnable}" class="badge text-bg-light border ms-1">Non-returnable</span>
                         <div class="small text-muted" th:text="${m.manufacturer}"></div></td>
                     <td th:text="${m.category}"></td>
-                    <td th:text="'₹' + ${m.price}"></td>
-                    <td th:text="${m.stock}" th:classappend="${m.stock < 50} ? 'text-danger fw-semibold'"></td>
-                    <td class="text-nowrap">
-                        <span th:if="${m.expiryDate == null}" class="text-muted">-</span>
-                        <span th:if="${m.expiryDate != null}" th:text="${#temporals.format(m.expiryDate, 'MMM yyyy')}"
-                              th:classappend="${m.expired} ? 'text-danger fw-semibold' : (${m.expiringSoon} ? 'text-warning-emphasis fw-semibold')"></span>
-                        <span th:if="${m.expired}" class="badge text-bg-danger ms-1">Expired</span>
-                        <span th:if="${m.expiringSoon}" class="badge text-bg-warning ms-1">Soon</span>
-                    </td>
-                    <td class="text-nowrap" th:with="lo=${m.deliveryMinDays ?: 3}, hi=${m.deliveryMaxDays ?: 5}">
-                        <span th:if="${hi == 0}" class="badge text-bg-warning">Same day</span>
-                        <span th:unless="${hi == 0}" th:text="${lo == hi} ? (${lo} + (${lo == 1} ? ' day' : ' days')) : (${lo} + '–' + ${hi} + ' days')"></span>
-                    </td>
+                    <td class="text-end text-nowrap" th:text="'₹' + ${m.price}"></td>
+                    <td class="text-end text-nowrap" th:text="${m.mrp != null} ? '₹' + ${m.mrp} : '–'"></td>
                     <td th:text="${m.prescriptionRequired} ? 'Yes' : 'No'"></td>
+                    <td class="text-end" th:text="${c != null} ? ${c[0]} : 0"
+                        th:classappend="${c == null} ? 'text-danger fw-semibold'" th:title="${c == null} ? 'No store sells it, so shoppers don’t see it' : null"></td>
+                    <td class="text-end" th:text="${c != null} ? ${c[1]} : 0"></td>
                     <td><span class="badge" th:classappend="${m.active} ? 'text-bg-success' : 'text-bg-secondary'" th:text="${m.active} ? 'Listed' : 'Hidden'"></span></td>
                     <td class="text-end text-nowrap">
                         <a th:href="@{/admin/medicines/{id}/edit(id=${m.id})}" class="btn btn-sm btn-outline-primary">Edit</a>
-                        <form th:action="@{/admin/medicines/{id}/toggle(id=${m.id})}" method="post" class="d-inline">
+                        <form th:action="@{/admin/medicines/{id}/toggle(id=${m.id})}" method="post" class="d-inline"
+                              th:attr="data-mz-confirm=${m.active} ? 'It disappears from every store\'s shop until you list it again.' : null"
+                              data-mz-confirm-title="Hide this product?" data-mz-confirm-ok="Hide">
                             <button class="btn btn-sm btn-outline-secondary" type="submit" th:text="${m.active} ? 'Hide' : 'List'">Hide</button>
                         </form>
                     </td>

@@ -99,14 +99,27 @@
         <div class="col-lg-5">
             <div class="mz-panel">
                 <h2 class="h5 mb-3">Order summary</h2>
-                <div th:each="i : ${cart.items}" class="d-flex justify-content-between small mb-2">
-                    <span>
-                        <span th:text="${i.quantity} + ' × ' + ${i.medicine.name}"></span>
-                        <span class="d-block text-muted" th:if="${!#lists.isEmpty(i.sortedMembers)}"
-                              th:text="'For ' + ${i.allocationLabel}"></span>
-                        <span class="d-block text-danger" th:if="${#lists.isEmpty(i.sortedMembers)}">Choose who it's for in the cart</span>
-                    </span>
-                    <span th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></span>
+                <!-- One order per store; each store's part arrives on its own -->
+                <p th:if="${cart.split}" class="small text-muted mb-3">
+                    <i class="bi bi-boxes me-1" aria-hidden="true"></i><span th:text="'This cart comes from ' + ${cart.byStore.size()}
+                        + ' stores, so it will be ' + ${cart.byStore.size()} + ' orders, each with its own delivery and invoice. You pay once.'"></span></p>
+                <div th:each="g : ${cart.byStore}" class="mb-3">
+                    <div class="small fw-semibold mb-1">
+                        <i class="bi bi-shop me-1" aria-hidden="true"></i><span th:text="${g.store().name}"></span>
+                        <span th:if="${g.delivery() != null}" class="fw-normal text-muted" th:text="' · ' + ${g.delivery().headline}"></span>
+                    </div>
+                    <div th:each="i : ${g.items()}" class="d-flex justify-content-between small mb-2">
+                        <span>
+                            <span th:text="${i.quantity} + ' × ' + ${i.medicine.name}"></span>
+                            <span class="d-block text-muted" th:if="${!#lists.isEmpty(i.sortedMembers)}"
+                                  th:text="'For ' + ${i.allocationLabel}"></span>
+                            <span class="d-block text-danger" th:if="${#lists.isEmpty(i.sortedMembers)}">Choose who it's for in the cart</span>
+                        </span>
+                        <span th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></span>
+                    </div>
+                </div>
+                <div th:unless="${#lists.isEmpty(cart.unavailable)}" class="alert alert-warning small">
+                    <span th:text="${#strings.listJoin(cart.unavailable.![medicine.name], ', ')} + ' can’t be delivered to this address. Remove them from the cart or choose another address.'"></span>
                 </div>
                 <a th:href="@{/cart}" class="small">Change who medicines are for</a>
                 <hr>

@@ -5,6 +5,27 @@
 
     window.mzUrl = (path) => base + path;
 
+    // ---- Admin > Users: a store account needs its store ----
+    document.querySelectorAll('[data-mz-new-user]').forEach((form) => {
+        const role = form.querySelector('[data-mz-role]');
+        const pick = form.querySelector('[data-mz-store-pick]');
+        const sync = () => {
+            const store = role.value === 'STORE';
+            pick.hidden = !store;
+            pick.querySelector('select').required = store;
+        };
+        role.addEventListener('change', sync);
+        sync();
+    });
+
+    // ---- checkout: prices, stores and delivery times depend on the address, so changing it reloads the summary ----
+    document.addEventListener('change', (e) => {
+        const r = e.target;
+        if (r.matches && r.matches('input[name="addressId"][form="placeOrder"]')) {
+            location.href = mzUrl('/checkout?address=' + encodeURIComponent(r.value));
+        }
+    });
+
     // ---- monitoring: JavaScript errors and page load times go to Admin > Monitoring ----
     // Sent as plain text with sendBeacon, so a report survives the page being closed. A page reports at most 5 errors.
     const beacon = (path, body) => {
@@ -244,9 +265,20 @@
         if (!summary) return;
         if (data.empty) { location.reload(); return; }      // shows the "cart is empty" state
         const row = box.closest('[data-mz-cart-row]');
+        // A line that couldn't be delivered, or one that now moves to another store, is simplest shown fresh
+        if (row && data.quantity > 0 && (row.classList.contains('mz-cart-unavailable') || !data.store)) { location.reload(); return; }
+        const deliveries = summary.querySelector('[data-mz-deliveries]');
+        if (deliveries) {
+            deliveries.hidden = (data.deliveries || 0) < 2;
+            deliveries.querySelector('span').textContent = `Comes from ${data.deliveries} stores, as separate orders paid for together.`;
+        }
         if (row) {
             if (data.quantity === 0) row.remove();
             else row.querySelector('[data-mz-line-total]').textContent = data.lineTotal;
+            const unit = row.querySelector('[data-mz-unit-price]');
+            if (unit && data.unitPrice) unit.textContent = data.unitPrice;
+            const store = row.querySelector('[data-mz-line-store]');
+            if (store && data.store) store.textContent = data.store;
             const alloc = row.querySelector('[data-mz-alloc]');
             if (alloc && data.allocation) renderAlloc(alloc, data.allocation, data.quantity);
         }

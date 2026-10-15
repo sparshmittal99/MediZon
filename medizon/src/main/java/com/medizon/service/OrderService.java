@@ -2,9 +2,11 @@ package com.medizon.service;
 
 import com.medizon.domain.*;
 import com.medizon.dto.CartSummary;
+import com.medizon.dto.Offer;
 import com.medizon.repository.MedicineRepository;
 import com.medizon.repository.OrderRepository;
 import com.medizon.repository.PrescriptionRepository;
+import com.medizon.repository.StoreItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,16 +16,25 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
+/**
+ * Orders. Each order comes from one store: at checkout every line goes to the nearest store delivering to the address
+ * that has it in stock, so a cart can become several orders, placed and paid for together (they share a checkout
+ * reference). The delivery fee is worked out on the whole cart and charged once.
+ */
 @Service
 @RequiredArgsConstructor
 public class OrderService {
 
     private final OrderRepository orders;
     private final MedicineRepository medicines;
+    private final StoreItemRepository storeItems;
     private final PrescriptionRepository prescriptions;
     private final CartService cartService;
+    private final CatalogService catalog;
     private final NotificationService notifications;
+    private final StaffAlerts staffAlerts;
     private final MedicationPlanService planService;
     private final InvoiceService invoiceService;
     private final DeliveryAreaService deliveryAreas;
@@ -34,13 +45,19 @@ public class OrderService {
 
     // ------------------------------------------------------------------ customer checkout
 
+    /** Places the cart as one order per store; returns them, the biggest first. */
     @Transactional
-    public Order checkout(User user, PaymentMethod paymentMethod, Long prescriptionId, Long addressId) {
-        if (user.isAdmin()) throw new BusinessException("Admin accounts can't place orders.");
+    public List<Order> checkout(User user, PaymentMethod paymentMethod, Long prescriptionId, Long addressId) {
+        if (user.isStaff()) throw new BusinessException("Staff accounts can't place orders.");
         if (addressId == null) throw new BusinessException("Choose a delivery address.");
         Address ship = addressService.get(addressId, user);
-        CartSummary cart = cartService.summary(user);
+        CartSummary cart = cartService.summary(user, ship.getPincode());
         if (cart.isEmpty()) throw new BusinessException("Your cart is empty.");
+        if (!cart.getUnavailable().isEmpty()) {
+            throw new BusinessException(cart.getUnavailable().stream().map(i -> i.getMedicine().getName()).collect(Collectors.joining(", "))
+                    + " can't be delivered to " + ship.getPincode() + " right now. Remove " + (cart.getUnavailable().size() == 1 ? "it" : "them")
+                    + " from the cart or choose another address.");
+        }
 
         Prescription rx = null;
         if (cart.isPrescriptionRequired()) {
@@ -58,12 +75,27 @@ public class OrderService {
             lines.add(new Line(i.getMedicine().getId(), i.getQuantity(), i.getAllocation()));
         }
 
-        Order order = createOrder(user, lines, paymentMethod, rx, OrderSource.CUSTOMER, ship);
+        List<Order> placed = createOrders(user, lines, paymentMethod, rx, OrderSource.CUSTOMER, ship);
         cartService.clear(user);
-        notifications.notify(user, NotificationType.ORDER_UPDATE, "Order placed",
-                "Order " + order.getOrderNumber() + " for ₹" + order.getTotal() + " is placed.",
-                "/orders/" + order.getId());
-        return order;
+        if (placed.size() == 1) {
+            Order o = placed.get(0);
+            notifications.notify(user, NotificationType.ORDER_UPDATE, "Order placed",
+                    "Order " + o.getOrderNumber() + " for ₹" + o.getTotal() + " is placed.", "/orders/" + o.getId());
+        } else {
+            BigDecimal total = placed.stream().map(Order::getTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+            notifications.notify(user, NotificationType.ORDER_UPDATE, "Orders placed",
+                    "Your cart of ₹" + total + " comes from " + placed.size() + " stores, so it's " + placed.size() + " orders: "
+                            + placed.stream().map(o -> o.getOrderNumber() + " (" + o.getStore().getName() + ")").collect(Collectors.joining(", ")) + ".",
+                    "/orders");
+        }
+        placed.forEach(this::alertStore);
+        return placed;
+    }
+
+    private void alertStore(Order o) {
+        staffAlerts.notifyStore(o.getStore(), false, NotificationType.ORDER_UPDATE, "New order " + o.getOrderNumber(),
+                o.getItemCount() + " pack(s), ₹" + o.getTotal() + (o.isAutoReorder() ? " (automatic refill)." : "."),
+                "/admin/orders/" + o.getId());
     }
 
     // ------------------------------------------------------------------ auto refill
@@ -76,8 +108,9 @@ public class OrderService {
         if (ship == null) return Optional.of("there's no saved delivery address");
         if (!deliveryAreas.isServiceable(ship.getPincode())) return Optional.of("we don't deliver to PIN code " + ship.getPincode() + " yet");
         if (!m.isActive()) return Optional.of(m.getName() + " is no longer sold on MediZon");
-        if (m.getStock() < plan.getReorderPacks()) return Optional.of(m.getName() + " is out of stock");
-        if (m.isExpired()) return Optional.of("the stock of " + m.getName() + " has expired");
+        Offer offer = catalog.offer(m, ship.getPincode(), Math.max(1, plan.getReorderPacks()));
+        if (!offer.isListed()) return Optional.of(m.getName() + " isn't sold by the stores that deliver to " + ship.getPincode());
+        if (!offer.canSell(Math.max(1, plan.getReorderPacks()))) return Optional.of(m.getName() + " is out of stock for delivery to " + ship.getPincode());
         if (m.isPrescriptionRequired() && findValidPrescription(user).isEmpty()) {
             return Optional.of("there's no approved prescription on file");
         }
@@ -91,8 +124,10 @@ public class OrderService {
         Prescription rx = m.isPrescriptionRequired() ? findValidPrescription(user).orElse(null) : null;
         int packs = Math.max(1, plan.getReorderPacks());
         Map<Member, Integer> forWhom = plan.getMember() == null ? Map.of() : Map.of(plan.getMember(), packs);
-        return createOrder(user, List.of(new Line(m.getId(), packs, forWhom)),
-                PaymentMethod.COD, rx, OrderSource.AUTO_REORDER, refillAddress(plan));
+        Order o = createOrders(user, List.of(new Line(m.getId(), packs, forWhom)),
+                PaymentMethod.COD, rx, OrderSource.AUTO_REORDER, refillAddress(plan)).get(0);
+        alertStore(o);
+        return o;
     }
 
     /** The address chosen on the reminder for automatic refills, else the default address. */
@@ -108,18 +143,104 @@ public class OrderService {
 
     // ------------------------------------------------------------------ shared core
 
-    /** {@code ship} is the saved address to deliver to; without one, the account's address is used. */
-    private Order createOrder(User user, List<Line> lines, PaymentMethod paymentMethod,
-                              Prescription rx, OrderSource source, Address ship) {
+    /**
+     * Places the lines as one order per store: each line goes to the nearest store delivering to {@code ship} that
+     * has enough in stock. {@code ship} is the saved address to deliver to; without one, the account's address.
+     */
+    private List<Order> createOrders(User user, List<Line> lines, PaymentMethod paymentMethod,
+                                     Prescription rx, OrderSource source, Address ship) {
         if (ship == null && !user.hasAddress()) throw new BusinessException("Add a delivery address first.");
-        deliveryAreas.requireServiceable(ship != null ? ship.getPincode() : user.getPincode());
+        String pincode = ship != null ? ship.getPincode() : user.getPincode();
+        deliveryAreas.requireServiceable(pincode);
 
+        Map<Medicine, Integer> wanted = new LinkedHashMap<>();
+        Map<Long, Medicine> byId = new HashMap<>();
+        for (Line line : lines) {
+            Medicine m = medicines.findById(line.medicineId())
+                    .orElseThrow(() -> new BusinessException("A medicine in your order no longer exists."));
+            if (!m.isActive()) throw new BusinessException(m.getName() + " is no longer sold.");
+            wanted.merge(m, line.quantity(), Integer::sum);
+            byId.put(m.getId(), m);
+        }
+        Map<Long, Offer> offers = catalog.offers(wanted, pincode);
+
+        // Which store supplies each line, nearest first
+        Map<Long, List<Line>> byStore = new LinkedHashMap<>();
+        Map<Long, Store> stores = new HashMap<>();
+        for (Line line : lines) {
+            Offer o = offers.get(line.medicineId());
+            Medicine m = byId.get(line.medicineId());
+            if (!o.canSell(wanted.get(m))) {
+                throw new BusinessException(!o.isListed() ? m.getName() + " isn't sold by the stores that deliver to " + pincode + "."
+                        : o.stock() == 0 ? m.getName() + " is out of stock for delivery to " + pincode + "."
+                        : "Only " + o.stock() + " packs of " + m.getName() + " are available for delivery to " + pincode + ".");
+            }
+            byStore.computeIfAbsent(o.store().getId(), k -> new ArrayList<>()).add(line);
+            stores.put(o.store().getId(), o.store());
+        }
+
+        String ref = byStore.size() > 1 ? newCheckoutRef() : null;
+        List<Order> placed = new ArrayList<>();
+        for (Map.Entry<Long, List<Line>> group : byStore.entrySet()) {
+            Order order = newOrder(user, paymentMethod, source, ship);
+            order.setStore(stores.get(group.getKey()));
+            order.setCheckoutRef(ref);
+            BigDecimal subtotal = BigDecimal.ZERO;
+            boolean needsRx = false;
+            for (Line line : group.getValue()) {
+                Offer offer = offers.get(line.medicineId());
+                StoreItem si = storeItems.lockById(offer.item().getId())
+                        .orElseThrow(() -> new BusinessException("A medicine in your order is no longer listed."));
+                Medicine m = si.getMedicine();
+                int qty = line.quantity();
+                if (!si.isSellable() || si.getStock() < qty) {
+                    throw new BusinessException("Only " + Math.max(0, si.getStock()) + " packs of " + m.getName() + " are left. Try again.");
+                }
+                si.setStock(si.getStock() - qty);
+
+                OrderItem item = new OrderItem();
+                item.setMedicine(m);
+                item.setMedicineName(m.getName());
+                item.setUnitPrice(si.getSellingPrice());
+                item.setQuantity(qty);
+                item.setLineTotal(si.getSellingPrice().multiply(BigDecimal.valueOf(qty)));
+                item.setHsnCode(m.getHsnCode());
+                item.setGstRate(m.getGstRate());
+                item.setExpiryDate(si.getExpiryDate());
+                item.setReturnableAtOrder(m.isReturnable());
+                line.packs().forEach((who, n) -> {
+                    item.getMembers().add(who);
+                    item.getPacks().put(who.getId(), n);
+                });
+                order.addItem(item);
+                subtotal = subtotal.add(item.getLineTotal());
+                needsRx |= m.isPrescriptionRequired();
+            }
+            order.setPrescription(needsRx ? rx : null);
+            order.setSubtotal(subtotal);
+            placed.add(order);
+        }
+
+        // One delivery fee for the whole cart, on the biggest order
+        BigDecimal cartSubtotal = placed.stream().map(Order::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+        placed.sort(Comparator.comparing(Order::getSubtotal).reversed());
+        BigDecimal fee = CartService.deliveryFeeFor(cartSubtotal);
+        for (int k = 0; k < placed.size(); k++) {
+            Order o = placed.get(k);
+            o.setDeliveryFee(k == 0 ? fee : BigDecimal.ZERO);
+            BigDecimal exact = o.getSubtotal().add(o.getDeliveryFee());
+            o.setRoundOff(RoundOff.of(exact));
+            o.setTotal(exact.add(o.getRoundOff()));
+        }
+        return orders.saveAll(placed);
+    }
+
+    private Order newOrder(User user, PaymentMethod paymentMethod, OrderSource source, Address ship) {
         Order order = new Order();
         order.setOrderNumber(newOrderNumber());
         order.setUser(user);
         order.setPaymentMethod(paymentMethod);
         order.setSource(source);
-        order.setPrescription(rx);
         if (ship != null) {
             order.setShippingAddress(ship.getFormatted());
             order.setContactPhone(ship.getReceiverPhone());
@@ -140,51 +261,19 @@ public class OrderService {
             order.setBillingName(user.getFullName());   // the buyer, even when the parcel goes to someone else
             order.setBillingAddress(order.getShippingAddress());
         }
-
-        BigDecimal subtotal = BigDecimal.ZERO;
-        for (Line line : lines) {
-            Medicine m = medicines.lockById(line.medicineId())
-                    .orElseThrow(() -> new BusinessException("A medicine in your order no longer exists."));
-            int qty = line.quantity();
-            if (!m.isActive()) throw new BusinessException(m.getName() + " is no longer sold.");
-            if (m.isExpired()) throw new BusinessException(m.getName() + " is past its expiry date and can't be sold right now.");
-            if (m.getStock() < qty) {
-                throw new BusinessException("Only " + m.getStock() + " packs of " + m.getName() + " are left.");
-            }
-            m.setStock(m.getStock() - qty);
-
-            OrderItem item = new OrderItem();
-            item.setMedicine(m);
-            item.setMedicineName(m.getName());
-            item.setUnitPrice(m.getPrice());
-            item.setQuantity(qty);
-            item.setLineTotal(m.getPrice().multiply(BigDecimal.valueOf(qty)));
-            item.setHsnCode(m.getHsnCode());
-            item.setGstRate(m.getGstRate());
-            item.setExpiryDate(m.getExpiryDate());
-            item.setReturnableAtOrder(m.isReturnable());
-            line.packs().forEach((who, n) -> {
-                item.getMembers().add(who);
-                item.getPacks().put(who.getId(), n);
-            });
-            order.addItem(item);
-            subtotal = subtotal.add(item.getLineTotal());
-        }
-
-        BigDecimal fee = CartService.deliveryFeeFor(subtotal);
-        order.setSubtotal(subtotal);
-        order.setDeliveryFee(fee);
-        BigDecimal exact = subtotal.add(fee);
-        order.setRoundOff(RoundOff.of(exact));
-        order.setTotal(exact.add(order.getRoundOff()));
         // UPI / card are simulated as paid. Plug a gateway (Razorpay, Stripe ...) in here.
         order.setPaymentStatus(paymentMethod == PaymentMethod.COD ? PaymentStatus.PENDING : PaymentStatus.PAID);
-        return orders.save(order);
+        return order;
     }
 
     private String newOrderNumber() {
         return "MZ" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyMMdd"))
                 + String.format("%05d", new Random().nextInt(100_000));
+    }
+
+    private String newCheckoutRef() {
+        return "CK" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMddHHmmss"))
+                + String.format("%04d", new Random().nextInt(10_000));
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -207,7 +296,7 @@ public class OrderService {
             planService.onOrderDelivered(o);   // tops up supply at home
         }
         if (next == OrderStatus.CANCELLED) {
-            o.getItems().forEach(i -> i.getMedicine().setStock(i.getMedicine().getStock() + i.getQuantity()));
+            o.getItems().forEach(i -> restock(o, i.getMedicine(), i.getQuantity()));
             if (o.getPaymentStatus() == PaymentStatus.PAID) o.setPaymentStatus(PaymentStatus.REFUNDED);
         }
 
@@ -220,6 +309,12 @@ public class OrderService {
         return o;
     }
 
+    /** Puts packs back on the shelf of the store that sold them. */
+    public void restock(Order o, Medicine m, int packs) {
+        if (o.getStore() == null) return;
+        storeItems.findByStoreAndMedicine(o.getStore(), m).ifPresent(si -> si.setStock(si.getStock() + packs));
+    }
+
     @Transactional
     public void cancelByCustomer(Long orderId, User user) {
         Order o = getForUser(orderId, user);
@@ -227,9 +322,9 @@ public class OrderService {
         updateStatus(o.getId(), OrderStatus.CANCELLED);
     }
 
-    /** "Buy again": copies an old order's items into the cart, skipping what's unavailable. */
+    /** "Buy again": copies an old order's items into the cart, skipping what's unavailable at {@code pincode}. */
     @Transactional
-    public int reorderToCart(Long orderId, User user) {
+    public int reorderToCart(Long orderId, User user, String pincode) {
         Order o = getForUser(orderId, user);
         int added = 0;
         for (OrderItem i : o.getItems()) {
@@ -237,16 +332,16 @@ public class OrderService {
                 // Same packs for the same people, as far as they're still on the account
                 List<Member> who = i.getSortedMembers().stream().filter(x -> !x.isRemoved()).toList();
                 if (who.isEmpty()) {
-                    cartService.add(user, i.getMedicine().getId(), i.getQuantity());
+                    cartService.add(user, i.getMedicine().getId(), i.getQuantity(), pincode);
                 } else {
                     int[] share = i.shareOf(who, i.getQuantity());
                     for (int k = 0; k < who.size(); k++) {
-                        if (share[k] > 0) cartService.add(user, i.getMedicine().getId(), share[k], List.of(who.get(k)));
+                        if (share[k] > 0) cartService.add(user, i.getMedicine().getId(), share[k], List.of(who.get(k)), pincode);
                     }
                 }
                 added++;
             } catch (BusinessException ignored) {
-                // out of stock or discontinued: skip it
+                // out of stock or not sold here: skip it
             }
         }
         return added;
@@ -264,16 +359,28 @@ public class OrderService {
 
     public Order get(Long id) { return orders.findById(id).orElseThrow(() -> new BusinessException("Order not found.")); }
 
-    /** Customer orders for the admin pipeline, optionally narrowed to one status. */
-    public List<Order> adminList(OrderStatus status) {
+    /** The other orders placed in the same checkout as this one. */
+    public List<Order> placedWith(Order o) {
+        if (o.getCheckoutRef() == null) return List.of();
+        return orders.findByCheckoutRefOrderByIdAsc(o.getCheckoutRef()).stream().filter(x -> !x.getId().equals(o.getId())).toList();
+    }
+
+    /** Customer orders for the back office, optionally one store's and one status. */
+    public List<Order> adminList(OrderStatus status, Store store) {
+        if (store != null) {
+            return status == null ? orders.findByStoreOrderByCreatedAtDesc(store)
+                    : orders.findByStoreAndStatusOrderByCreatedAtDesc(store, status);
+        }
         return status == null ? orders.findByUserRoleOrderByCreatedAtDesc(Role.CUSTOMER)
                 : orders.findByUserRoleAndStatusOrderByCreatedAtDesc(Role.CUSTOMER, status);
     }
 
-    /** Number of customer orders in each status, in pipeline order. */
-    public Map<OrderStatus, Long> adminCounts() {
+    /** Number of orders in each status, in pipeline order, for one store or all. */
+    public Map<OrderStatus, Long> adminCounts(Store store) {
         Map<OrderStatus, Long> counts = new EnumMap<>(OrderStatus.class);
-        for (OrderStatus s : OrderStatus.values()) counts.put(s, orders.countByUserRoleAndStatus(Role.CUSTOMER, s));
+        for (OrderStatus s : OrderStatus.values()) {
+            counts.put(s, store != null ? orders.countByStoreAndStatus(store, s) : orders.countByUserRoleAndStatus(Role.CUSTOMER, s));
+        }
         return counts;
     }
 }

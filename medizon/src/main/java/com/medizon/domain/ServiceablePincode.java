@@ -7,7 +7,10 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-/** A PIN code MediZon delivers to. Admins add them; only addresses with an active one can check out. */
+/**
+ * A PIN code MediZon delivers to. Admins add them and choose which stores serve each ({@link StoreArea}); an address
+ * can check out when its PIN code is active and an open store serves it.
+ */
 @Entity
 @Getter @Setter @NoArgsConstructor
 public class ServiceablePincode {
@@ -24,10 +27,6 @@ public class ServiceablePincode {
     private String city;
 
     private String state;
-
-    /** Days added to every product's delivery time here, for areas further from the pharmacy. 0 keeps same-day delivery. */
-    @Column(columnDefinition = "integer not null default 0")
-    private int extraDeliveryDays;
 
     /** Paused PIN codes stay listed but aren't delivered to. */
     @Column(columnDefinition = "boolean not null default true")

@@ -18,10 +18,12 @@ public class AppUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         com.medizon.domain.User u = users.findByEmailIgnoreCase(email.trim())
                 .orElseThrow(() -> new UsernameNotFoundException("No account for " + email));
+        // Staff accounts also get STAFF: pages that are for any back-office account (and not for shoppers) check that
+        String[] roles = u.isStaff() ? new String[]{u.getRole().name(), "STAFF"} : new String[]{u.getRole().name()};
         return User.withUsername(u.getEmail())
                 .password(u.getPassword())
-                .roles(u.getRole().name())
-                .disabled(!u.isEnabled())
+                .roles(roles)
+                .disabled(!u.isEnabled() || u.isDeleted())
                 .build();
     }
 }

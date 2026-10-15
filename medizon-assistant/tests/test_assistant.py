@@ -2,7 +2,7 @@
 import unittest
 from datetime import datetime
 
-from assistant import dialog, insights
+from assistant import dialog, insights, monitoring
 from assistant.nlu import model
 from assistant.text import medicine_query, parse_quantity, parse_times, parse_when, symptom_category
 
@@ -298,6 +298,27 @@ class InsightTests(unittest.TestCase):
 
     def test_empty(self):
         self.assertTrue(insights.analyze([], [])["empty"])
+
+
+class MonitoringTests(unittest.TestCase):
+    def test_timings_and_errors(self):
+        monitoring.record("/v1/chat", 120, False)
+        monitoring.record("/v1/chat", 80, True)
+        try:
+            raise ValueError("bad payload")
+        except ValueError as e:
+            monitoring.record_error("/v1/chat", e)
+        snap = monitoring.snapshot()
+        chat = snap["requests"]["/v1/chat"]
+        self.assertGreaterEqual(chat["count"], 2)
+        self.assertGreaterEqual(chat["errors"], 1)
+        self.assertEqual(snap["errors"][0]["type"], "ValueError")
+        self.assertIn("bad payload", snap["errors"][0]["trace"])
+
+    def test_unknown_paths_are_grouped(self):
+        for i in range(monitoring.MAX_PATHS + 5):
+            monitoring.record(f"/random/{i}", 1, False)
+        self.assertLessEqual(len(monitoring.snapshot()["requests"]), monitoring.MAX_PATHS + 1)
 
 
 if __name__ == "__main__":

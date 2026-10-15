@@ -19,11 +19,12 @@ public class FeedbackService {
     private final FeedbackRepository feedback;
     private final UserRepository users;
     private final NotificationService notifications;
+    private final StaffAlerts staffAlerts;
 
-    /** Stores customer feedback and tells every admin. */
+    /** Stores customer feedback and tells the admin and support. */
     @Transactional
     public Feedback submit(User user, String message, String category, Integer rating) {
-        if (user.isAdmin()) throw new BusinessException("Feedback comes from customer accounts.");
+        if (user.isStaff()) throw new BusinessException("Feedback comes from customer accounts.");
         if (message == null || message.isBlank()) throw new BusinessException("The feedback is empty.");
         String m = message.trim();
         Feedback f = new Feedback();
@@ -32,9 +33,8 @@ public class FeedbackService {
         f.setCategory(category == null || category.isBlank() ? "General" : category);
         f.setRating(rating != null && rating >= 1 && rating <= 5 ? rating : null);
         feedback.save(f);
-        users.findByRole(Role.ADMIN).forEach(admin -> notifications.notify(admin, NotificationType.INFO,
-                "New feedback: " + f.getCategory(), user.getFullName() + ": " + abbreviate(f.getMessage()),
-                "/admin/reviews#feedback"));
+        staffAlerts.notify(Role.SUPPORT, NotificationType.INFO, "New feedback: " + f.getCategory(),
+                user.getFullName() + ": " + abbreviate(f.getMessage()), "/admin/reviews#feedback");
         return f;
     }
 

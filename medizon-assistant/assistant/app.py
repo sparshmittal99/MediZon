@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from . import dialog, insights, nlu
+from . import dialog, insights, monitoring, nlu
 
 TOKEN = os.environ.get("ASSISTANT_TOKEN", "")
 
@@ -21,6 +21,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="MediZon Assistant", version="1.0.0", lifespan=lifespan)
+app.middleware("http")(monitoring.middleware)
 
 
 def check_token(token: str | None) -> None:
@@ -47,6 +48,13 @@ class InsightsRequest(BaseModel):
 @app.get("/health")
 def health() -> dict:
     return {"ok": True}
+
+
+@app.get("/metrics")
+def metrics(x_assistant_token: str | None = Header(default=None)) -> dict:
+    """Request timings and recent errors, for Admin > Monitoring in the Java app."""
+    check_token(x_assistant_token)
+    return monitoring.snapshot()
 
 
 @app.post("/v1/chat")

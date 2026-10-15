@@ -57,7 +57,7 @@ public class NotificationController {
     @GetMapping("/settings")
     public String settings(Model model, HttpServletRequest request, HttpServletResponse response) {
         User user = currentUser.get();
-        if (user.isAdmin()) return "redirect:/notifications";
+        if (user.isStaff()) return "redirect:/notifications";
         NotificationDevice here = deviceService.current(user, request, response);
         model.addAttribute("here", here);
         model.addAttribute("others", deviceService.forUser(user).stream().filter(d -> !d.getId().equals(here.getId())).toList());

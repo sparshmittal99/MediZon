@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Stores')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+        <h1 class="mz-page-title mb-0">Stores</h1>
+        <a th:href="@{/admin/stores/new}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add store</a>
+    </div>
+    <p class="small text-muted mb-4">Each store has its own catalogue and delivers to the PIN codes you choose. Shoppers get each
+        medicine from the nearest store that has it. Store accounts (created under Users) run one store.</p>
+
+    <div th:if="${#lists.isEmpty(stores)}" class="mz-panel mz-empty"><i class="bi bi-shop"></i><p class="mb-0">No stores yet.</p></div>
+    <div th:unless="${#lists.isEmpty(stores)}" class="mz-panel-flush">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>Store</th><th>GSTIN</th><th class="text-end">Products</th><th class="text-end">PIN codes</th>
+                    <th class="text-end">Accounts</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                <tr th:each="s : ${stores}" th:classappend="${!s.active} ? 'mz-user-off'">
+                    <td><a class="fw-semibold" th:href="@{/admin/stores/{id}(id=${s.id})}" th:text="${s.name}"></a>
+                        <div class="small text-muted" th:text="${s.formattedAddress}"></div></td>
+                    <td class="small" th:text="${s.gstin} ?: 'Uses MediZon\'s'"></td>
+                    <td class="text-end"><a th:href="@{/admin/medicines(store=${s.id})}" th:text="${listings.get(s.id)}"></a></td>
+                    <td class="text-end" th:text="${areaCounts.get(s.id)}" th:classappend="${areaCounts.get(s.id) == 0} ? 'text-danger fw-semibold'"></td>
+                    <td class="text-end" th:text="${staffCounts.get(s.id)}"></td>
+                    <td><span class="badge" th:classappend="${s.active} ? 'text-bg-success' : 'text-bg-secondary'" th:text="${s.active} ? 'Open' : 'Paused'"></span></td>
+                    <td class="text-end text-nowrap">
+                        <a th:href="@{/admin/stores/{id}(id=${s.id})}" class="btn btn-sm btn-outline-primary">Manage</a>
+                        <a th:href="@{/admin/medicines(store=${s.id})}" class="btn btn-sm btn-outline-secondary">Catalogue</a>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

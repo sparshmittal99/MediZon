@@ -26,7 +26,7 @@ public class ProfileController {
     public String view(Model model) {
         User u = currentUser.get();
         model.addAttribute("form", ProfileForm.from(u));
-        if (!u.isAdmin()) model.addAttribute("addresses", addressService.list(u));
+        if (!u.isStaff()) model.addAttribute("addresses", addressService.list(u));
         return "profile";
     }
 
@@ -35,7 +35,7 @@ public class ProfileController {
                        @RequestParam(required = false) String returnTo, Model model, RedirectAttributes ra) {
         if (result.hasErrors()) {
             User u = currentUser.get();
-            if (!u.isAdmin()) model.addAttribute("addresses", addressService.list(u));
+            if (!u.isStaff()) model.addAttribute("addresses", addressService.list(u));
             return "profile";
         }
         userService.updateProfile(currentUser.get(), form);

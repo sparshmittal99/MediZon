@@ -4,6 +4,7 @@ import com.medizon.domain.*;
 import com.medizon.dto.DoseSlot;
 import com.medizon.dto.PlanForm;
 import com.medizon.service.*;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -31,6 +32,8 @@ public class PlanController {
     private final CartService cartService;
     private final MemberService memberService;
     private final CurrentUser currentUser;
+    private final DeliveryLocations deliveryLocations;
+    private final CatalogService catalog;
 
     /** {@code member} narrows the page to one person (or the common shelf); without it every member gets a section. */
     @GetMapping
@@ -64,7 +67,7 @@ public class PlanController {
 
     @GetMapping("/new")
     public String newPlan(@RequestParam(required = false) Long medicineId, @RequestParam(required = false) Long memberId,
-                          Model model) {
+                          HttpServletRequest request, Model model) {
         User user = currentUser.get();
         PlanForm form = new PlanForm();
         form.setMemberId(memberId != null ? memberService.get(memberId, user).getId()
@@ -76,7 +79,7 @@ public class PlanController {
             // Medicines already on the common shelf are moved across on save, so start from what the person has of their own
             boolean onShelf = planService.shelfStock(user).getOrDefault(m.getId(), 0) > 0;
             form.setUnitsRemaining(onShelf ? 0 : m.getUnitsPerPack());
-            if (!onShelf) form.setExpiryDate(m.getExpiryDate());
+            if (!onShelf) form.setExpiryDate(catalog.offer(m, deliveryLocations.pincode(request), 1).expiryDate());
         }
         return showForm(form, model);
     }
@@ -167,10 +170,10 @@ public class PlanController {
 
     /** Manual refill: puts the plan's usual quantity in the cart, for the same member. */
     @PostMapping("/{id}/reorder")
-    public String reorder(@PathVariable Long id, RedirectAttributes ra) {
+    public String reorder(@PathVariable Long id, HttpServletRequest request, RedirectAttributes ra) {
         User user = currentUser.get();
         MedicationPlan p = planService.get(id, user);
-        cartService.add(user, p.getMedicine().getId(), p.getReorderPacks(), List.of(p.getMember()));
+        cartService.add(user, p.getMedicine().getId(), p.getReorderPacks(), List.of(p.getMember()), deliveryLocations.pincode(request));
         ra.addFlashAttribute("success", p.getReorderPacks() + " pack(s) of " + p.getTitle() + " added. Check out to place the refill.");
         return "redirect:/cart";
     }

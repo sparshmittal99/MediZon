@@ -30,19 +30,19 @@
 <th:block th:fragment="navbar">
     <nav class="mz-nav" aria-label="Main">
         <div class="container mz-nav-row">
-            <button type="button" class="mz-burger d-lg-none" sec:authorize="!hasRole('ADMIN')"
+            <button type="button" class="mz-burger d-lg-none" sec:authorize="!hasRole('STAFF')"
                     data-bs-toggle="offcanvas" data-bs-target="#mzMenu" aria-controls="mzMenu" aria-label="Open menu">
                 <i class="bi bi-list"></i>
             </button>
-            <a class="mz-brand" translate="no" th:href="@{/}" sec:authorize="!hasRole('ADMIN')">
+            <a class="mz-brand" translate="no" th:href="@{/}" sec:authorize="!hasRole('STAFF')">
                 <span class="mz-mark" aria-hidden="true"><i class="bi bi-capsule"></i></span>MediZon
             </a>
-            <a class="mz-brand" translate="no" th:href="@{/admin}" sec:authorize="hasRole('ADMIN')">
+            <a class="mz-brand" translate="no" th:href="@{/admin}" sec:authorize="hasRole('STAFF')">
                 <span class="mz-mark" aria-hidden="true"><i class="bi bi-capsule"></i></span>MediZon <span class="mz-admin-badge">Admin</span>
             </a>
 
             <!-- Where orders go: "Select location" until one is chosen, then "Delivers to ..." (or "We don't deliver here") -->
-            <button type="button" class="mz-loc d-none d-lg-inline-flex" sec:authorize="!hasRole('ADMIN')" data-bs-toggle="modal" data-bs-target="#mzLocModal"
+            <button type="button" class="mz-loc d-none d-lg-inline-flex" sec:authorize="!hasRole('STAFF')" data-bs-toggle="modal" data-bs-target="#mzLocModal"
                     data-mz-loc th:classappend="${deliverTo != null and !deliverTo.serviceable} ? 'is-off'"
                     th:attr="aria-label=${deliverTo == null} ? 'Select delivery location' : 'Change delivery location'">
                 <i class="bi bi-geo-alt mz-loc-pin" aria-hidden="true"></i>
@@ -55,7 +55,7 @@
                 <i class="bi bi-chevron-down mz-loc-caret" aria-hidden="true"></i>
             </button>
 
-            <form class="mz-search" th:action="@{/medicines}" method="get" role="search" sec:authorize="!hasRole('ADMIN')">
+            <form class="mz-search" th:action="@{/medicines}" method="get" role="search" sec:authorize="!hasRole('STAFF')">
                 <input class="form-control" name="q" type="search" placeholder="Search medicines, salts or brands"
                        aria-label="Search medicines" th:value="${q}">
                 <button type="submit" aria-label="Search"><i class="bi bi-search"></i></button>
@@ -70,7 +70,7 @@
                               th:classappend="${unreadCount == null or unreadCount == 0} ? 'd-none'">0</span>
                     </a>
                 </li>
-                <li sec:authorize="!hasRole('ADMIN')">
+                <li sec:authorize="!hasRole('STAFF')">
                     <a class="mz-icon-link" th:href="@{/cart}" aria-label="Cart">
                         <i class="bi bi-cart3"></i>
                         <span id="mzCartCount" class="mz-count" th:text="${cartCount}"
@@ -92,11 +92,11 @@
                         <li th:if="${me != null}"><h6 class="dropdown-header text-truncate" style="max-width: 16rem" th:text="${me.email}"></h6></li>
                         <li sec:authorize="hasRole('CUSTOMER')"><a class="dropdown-item" th:href="@{/orders}"><i class="bi bi-box-seam me-2"></i>Your orders</a></li>
                         <li sec:authorize="hasRole('CUSTOMER')"><a class="dropdown-item" th:href="@{/plans}"><i class="bi bi-capsule-pill me-2"></i>My medicines</a></li>
-                        <li sec:authorize="hasRole('ADMIN')"><a class="dropdown-item" th:href="@{/admin}"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
-                        <li sec:authorize="hasRole('ADMIN')"><a class="dropdown-item" th:href="@{/admin/orders}"><i class="bi bi-box-seam me-2"></i>Customer orders</a></li>
+                        <li sec:authorize="hasRole('STAFF')"><a class="dropdown-item" th:href="@{/admin}"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
+                        <li sec:authorize="hasAnyRole('ADMIN','STORE','SUPPORT','FINANCE')"><a class="dropdown-item" th:href="@{/admin/orders}"><i class="bi bi-box-seam me-2"></i>Customer orders</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" th:href="@{/account}"><i class="bi bi-gear me-2"></i>Account settings</a></li>
-                        <li><a class="dropdown-item" th:href="@{/account#password}"><i class="bi bi-key me-2"></i>Change password</a></li>
+                        <li sec:authorize="!hasRole('ADMIN')"><a class="dropdown-item" th:href="@{/account#password}"><i class="bi bi-key me-2"></i>Change password</a></li>
                         <li><a class="dropdown-item" th:href="@{/profile}"><i class="bi bi-person me-2"></i>Profile</a></li>
                         <li sec:authorize="hasRole('CUSTOMER')"><a class="dropdown-item" th:href="@{/addresses}"><i class="bi bi-geo-alt me-2"></i>Saved addresses</a></li>
                         <li sec:authorize="hasRole('CUSTOMER')"><a class="dropdown-item" th:href="@{/billing-address}"><i class="bi bi-receipt me-2"></i>Billing address</a></li>
@@ -126,7 +126,7 @@
         </div>
     </nav>
 
-    <div class="mz-locbar d-lg-none" sec:authorize="!hasRole('ADMIN')">
+    <div class="mz-locbar d-lg-none" sec:authorize="!hasRole('STAFF')">
         <div class="container">
             <!-- Phones and tablets: "Delivers to" as a strip of its own. Where orders go: "Select location" until one is chosen, then "Delivers to ..." (or "We don't deliver here") -->
             <button type="button" class="mz-loc" data-bs-toggle="modal" data-bs-target="#mzLocModal"
@@ -145,7 +145,7 @@
     </div>
 
     <!-- Category bar: everything at one tap, scrolls sideways on small screens -->
-    <nav class="mz-catbar" sec:authorize="!hasRole('ADMIN')" aria-label="Shop by section">
+    <nav class="mz-catbar" sec:authorize="!hasRole('STAFF')" aria-label="Shop by section">
         <div class="container">
             <div class="mz-catbar-scroll">
                 <button type="button" class="mz-catbar-all" data-bs-toggle="offcanvas" data-bs-target="#mzMenu" aria-controls="mzMenu">
@@ -217,7 +217,7 @@
                 <span class="mz-price" th:text="'₹' + ${#numbers.formatDecimal(m.price, 1, 'COMMA', 2, 'POINT')}">₹0</span>
                 <span th:if="${m.discountPercent > 0}" class="mz-off" th:text="${m.discountPercent} + '% off'"></span>
             </div>
-            <th:block sec:authorize="!hasRole('ADMIN')">
+            <th:block sec:authorize="!hasRole('STAFF')">
                 <div th:replace="~{fragments/layout :: cartStepper(${m}, false)}"></div>
             </th:block>
         </div>
@@ -275,23 +275,25 @@
 <div th:fragment="adminNav" class="mz-subnav">
     <div class="container">
         <ul class="nav">
-            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'dashboard'} ? 'active'" th:href="@{/admin}">Overview</a></li>
-            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'orders'} ? 'active'" th:href="@{/admin/orders}">Orders</a></li>
-            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'sales'} ? 'active'" th:href="@{/admin/sales}">Sales</a></li>
-            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'returns'} ? 'active'" th:href="@{/admin/returns}">Returns</a></li>
-            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'prescriptions'} ? 'active'" th:href="@{/admin/prescriptions}">Prescriptions</a></li>
-            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'medicines'} ? 'active'" th:href="@{/admin/medicines}">Catalog</a></li>
-            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'locations'} ? 'active'" th:href="@{/admin/locations}">Delivery areas</a></li>
-            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'users'} ? 'active'" th:href="@{/admin/users}">Users</a></li>
-            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'reviews'} ? 'active'" th:href="@{/admin/reviews}">Reviews</a></li>
-            <li class="nav-item"><a class="nav-link" th:classappend="${active == 'monitoring'} ? 'active'" th:href="@{/admin/monitoring}">Monitoring</a></li>
+            <!-- Each role sees only its own pages; the admin sees them all -->
+            <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'dashboard'} ? 'active'" th:href="@{/admin}">Overview</a></li>
+            <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','STORE','SUPPORT','FINANCE')"><a class="nav-link" th:classappend="${active == 'orders'} ? 'active'" th:href="@{/admin/orders}">Orders</a></li>
+            <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','FINANCE')"><a class="nav-link" th:classappend="${active == 'sales'} ? 'active'" th:href="@{/admin/sales}">Sales</a></li>
+            <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','STORE')"><a class="nav-link" th:classappend="${active == 'returns'} ? 'active'" th:href="@{/admin/returns}">Returns</a></li>
+            <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','PHARMACIST')"><a class="nav-link" th:classappend="${active == 'prescriptions'} ? 'active'" th:href="@{/admin/prescriptions}">Prescriptions</a></li>
+            <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','STORE')"><a class="nav-link" th:classappend="${active == 'medicines'} ? 'active'" th:href="@{/admin/medicines}">Catalog</a></li>
+            <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'stores'} ? 'active'" th:href="@{/admin/stores}">Stores</a></li>
+            <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'locations'} ? 'active'" th:href="@{/admin/locations}">Delivery areas</a></li>
+            <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'users'} ? 'active'" th:href="@{/admin/users}">Users</a></li>
+            <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','SUPPORT')"><a class="nav-link" th:classappend="${active == 'reviews'} ? 'active'" th:href="@{/admin/reviews}">Reviews</a></li>
+            <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'monitoring'} ? 'active'" th:href="@{/admin/monitoring}">Monitoring</a></li>
         </ul>
     </div>
 </div>
 
 <footer th:fragment="footer" class="mz-footer">
     <!-- Why shop here -->
-    <div class="mz-footer-trust" sec:authorize="!hasRole('ADMIN')">
+    <div class="mz-footer-trust" sec:authorize="!hasRole('STAFF')">
         <div class="container">
             <ul class="mz-trust">
                 <li><i class="bi bi-patch-check" aria-hidden="true"></i><span><strong>Licensed pharmacy</strong><small>Genuine medicines</small></span></li>
@@ -322,7 +324,7 @@
             </div>
 
             <!-- Customers and visitors -->
-            <nav class="col-6 col-md-4 col-lg-2" sec:authorize="!hasRole('ADMIN')" aria-labelledby="mzFootShop">
+            <nav class="col-6 col-md-4 col-lg-2" sec:authorize="!hasRole('STAFF')" aria-labelledby="mzFootShop">
                 <h2 class="mz-footer-head" id="mzFootShop">Shop</h2>
                 <ul class="mz-footer-list">
                     <li><a th:href="@{/medicines}">All medicines</a></li>
@@ -331,7 +333,7 @@
                     <li sec:authorize="hasRole('CUSTOMER')"><a th:href="@{/orders}">Track orders</a></li>
                 </ul>
             </nav>
-            <nav class="col-6 col-md-4 col-lg-2" sec:authorize="!hasRole('ADMIN')" aria-labelledby="mzFootAccount">
+            <nav class="col-6 col-md-4 col-lg-2" sec:authorize="!hasRole('STAFF')" aria-labelledby="mzFootAccount">
                 <h2 class="mz-footer-head" id="mzFootAccount">Your account</h2>
                 <ul class="mz-footer-list">
                     <th:block sec:authorize="hasRole('CUSTOMER')">
@@ -348,13 +350,14 @@
             </nav>
 
             <!-- Store staff -->
-            <nav class="col-6 col-md-4 col-lg-2" sec:authorize="hasRole('ADMIN')" aria-labelledby="mzFootStore">
-                <h2 class="mz-footer-head" id="mzFootStore">Store</h2>
+            <nav class="col-6 col-md-4 col-lg-2" sec:authorize="hasRole('STAFF')" aria-labelledby="mzFootStore">
+                <h2 class="mz-footer-head" id="mzFootStore">Back office</h2>
                 <ul class="mz-footer-list">
                     <li><a th:href="@{/admin}">Dashboard</a></li>
-                    <li><a th:href="@{/admin/orders}">Orders</a></li>
-                    <li><a th:href="@{/admin/sales}">Sales</a></li>
-                    <li><a th:href="@{/admin/medicines}">Catalog</a></li>
+                    <li sec:authorize="hasAnyRole('ADMIN','STORE','SUPPORT','FINANCE')"><a th:href="@{/admin/orders}">Orders</a></li>
+                    <li sec:authorize="hasAnyRole('ADMIN','FINANCE')"><a th:href="@{/admin/sales}">Sales</a></li>
+                    <li sec:authorize="hasAnyRole('ADMIN','STORE')"><a th:href="@{/admin/medicines}">Catalog</a></li>
+                    <li sec:authorize="hasAnyRole('ADMIN','PHARMACIST')"><a th:href="@{/admin/prescriptions}">Prescriptions</a></li>
                 </ul>
             </nav>
 
@@ -362,7 +365,7 @@
                 <h2 class="mz-footer-head" id="mzFootHelp">Help</h2>
                 <ul class="mz-footer-list">
                     <li><a th:href="@{/help}">Help &amp; FAQ</a></li>
-                    <th:block sec:authorize="!hasRole('ADMIN')">
+                    <th:block sec:authorize="!hasRole('STAFF')">
                         <li><a th:href="@{/help#help-orders}">Delivery</a></li>
                         <li><a th:href="@{/help#help-returns}">Returns &amp; refunds</a></li>
                         <li><a th:href="@{/help#help-rx}">Prescriptions</a></li>
@@ -430,7 +433,7 @@
 </footer>
 
 <!-- Phones: app-style tab bar for the main sections -->
-<nav th:fragment="tabbar" class="mz-tabbar d-lg-none" sec:authorize="!hasRole('ADMIN')" aria-label="Main sections">
+<nav th:fragment="tabbar" class="mz-tabbar d-lg-none" sec:authorize="!hasRole('STAFF')" aria-label="Main sections">
     <a th:href="@{/}" data-mz-tab="/"><i class="bi bi-house" aria-hidden="true"></i><span>Home</span></a>
     <a th:href="@{/medicines}" data-mz-tab="/medicines"><i class="bi bi-grid" aria-hidden="true"></i><span>Shop</span></a>
     <th:block sec:authorize="hasRole('CUSTOMER')">
@@ -449,7 +452,7 @@
     <nav th:replace="~{fragments/layout :: tabbar}"></nav>
 
     <!-- "All" menu: slides in from the left, like shopping apps -->
-    <div sec:authorize="!hasRole('ADMIN')" class="offcanvas offcanvas-start mz-menu" tabindex="-1" id="mzMenu" aria-labelledby="mzMenuTitle">
+    <div sec:authorize="!hasRole('STAFF')" class="offcanvas offcanvas-start mz-menu" tabindex="-1" id="mzMenu" aria-labelledby="mzMenuTitle">
         <div class="mz-menu-head">
             <i class="bi bi-person-circle" aria-hidden="true"></i>
             <h2 class="mz-menu-title" id="mzMenuTitle" th:text="${me != null} ? 'Hello, ' + ${me.firstName} : 'Hello, sign in'">Hello, sign in</h2>
@@ -489,7 +492,7 @@
 
 
     <!-- Delivery location picker: device location, a pin on the map, a typed address or a PIN code (medizon.js) -->
-    <div sec:authorize="!hasRole('ADMIN')" class="modal fade" id="mzLocModal" tabindex="-1" aria-labelledby="mzLocTitle" aria-hidden="true"
+    <div sec:authorize="!hasRole('STAFF')" class="modal fade" id="mzLocModal" tabindex="-1" aria-labelledby="mzLocTitle" aria-hidden="true"
          th:attr="data-pincode=${deliverTo != null} ? ${deliverTo.pincode} : ''">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down">
             <div class="modal-content mz-loc-modal">
@@ -572,7 +575,7 @@
     <script th:src="@{/js/medizon.js}"></script>
 
     <!-- MediZon Assistant: floating chat for signed-in users -->
-    <th:block sec:authorize="isAuthenticated()">
+    <th:block sec:authorize="hasAnyRole('CUSTOMER','ADMIN')">
         <div class="mz-bot" id="mzBot" th:attr="data-first-name=${me != null} ? ${me.firstName} : '',
              data-role=${me != null and me.admin} ? 'admin' : 'customer'">
             <div class="mz-bot-teaser" hidden>

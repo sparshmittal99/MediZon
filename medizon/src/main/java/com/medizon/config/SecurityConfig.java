@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
@@ -54,6 +55,16 @@ public class SecurityConfig {
                 // Visitors can fill a cart and pick a delivery location before signing in; checkout needs an account.
                 // Admin accounts are turned away in CartController / CartService.
                 .requestMatchers("/cart", "/cart/add", "/cart/*/remove", "/api/cart", "/api/cart/*", "/api/location/**").permitAll()
+                // The back office. One admin can do everything; every other staff role only reaches its own pages.
+                .requestMatchers("/admin/users/**", "/admin/stores/**", "/admin/locations/**", "/admin/monitoring/**").hasRole("ADMIN")
+                .requestMatchers("/admin/prescriptions/**").hasAnyRole("ADMIN", "PHARMACIST")
+                .requestMatchers("/admin/reviews/**").hasAnyRole("ADMIN", "SUPPORT")
+                .requestMatchers("/admin/sales", "/admin/sales.csv", "/admin/sales.xlsx").hasAnyRole("ADMIN", "FINANCE")
+                .requestMatchers("/admin/medicines/**", "/admin/returns/**").hasAnyRole("ADMIN", "STORE")
+                // Support and finance can look orders up and open invoices; only the store (and admin) move them along
+                .requestMatchers(HttpMethod.POST, "/admin/orders/**").hasAnyRole("ADMIN", "STORE")
+                .requestMatchers("/admin/orders/**").hasAnyRole("ADMIN", "STORE", "SUPPORT", "FINANCE")
+                .requestMatchers("/admin").hasRole("STAFF")
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 .requestMatchers("/prescriptions/*/file", "/returns/*/images/*").authenticated()   // owner or admin, checked in the service
                 // Shopping and dose reminders are for customers; admin accounts only run the store.
@@ -96,9 +107,9 @@ public class SecurityConfig {
         return (request, response, authentication) -> {
             userService.recordLogin(authentication.getName())
                     .ifPresent(u -> cartService.mergeGuestCart(u, request.getSession(false)));
-            boolean admin = authentication.getAuthorities().stream()
-                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-            if (admin) response.sendRedirect(request.getContextPath() + "/admin");
+            boolean staff = authentication.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_STAFF"));
+            if (staff) response.sendRedirect(request.getContextPath() + "/admin");
             else customer.onAuthenticationSuccess(request, response, authentication);
         };
     }
@@ -116,11 +127,11 @@ public class SecurityConfig {
         };
     }
 
-    /** An admin who follows a customer link lands back on the dashboard instead of a bare 403. */
+    /** Staff who follow a customer link, or a page outside their role, land on their own home instead of a bare 403. */
     private AccessDeniedHandler accessDeniedHandler() {
         AccessDeniedHandlerImpl fallback = new AccessDeniedHandlerImpl();
         return (request, response, exception) -> {
-            if (request.isUserInRole("ADMIN")) response.sendRedirect(request.getContextPath() + "/admin");
+            if (request.isUserInRole("STAFF")) response.sendRedirect(request.getContextPath() + "/admin?denied");
             else fallback.handle(request, response, exception);
         };
     }

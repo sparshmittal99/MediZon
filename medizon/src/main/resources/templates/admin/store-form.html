@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${storeForm.id == null} ? 'Add store' : ${storeForm.name})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" style="max-width: 980px">
+    <a th:href="@{/admin/stores}" class="small"><i class="bi bi-arrow-left"></i> Stores</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2 mb-4">
+        <h1 class="mz-page-title mb-0" th:text="${storeForm.id == null} ? 'Add a store' : ${storeForm.name}">Store</h1>
+        <div class="d-flex gap-2" th:if="${storeForm.id != null}">
+            <a th:href="@{/admin/medicines(store=${storeForm.id})}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-capsule me-1"></i>Catalogue (<span th:text="${listingCount}">0</span>)</a>
+            <form th:action="@{/admin/stores/{id}/active(id=${storeForm.id})}" method="post"
+                  th:attr="data-mz-confirm=${storeForm.active} ? 'It stops selling and delivering until you reopen it. Its open orders can still be handled.' : null"
+                  data-mz-confirm-title="Pause this store?" data-mz-confirm-ok="Pause">
+                <input type="hidden" name="active" th:value="${!storeForm.active}">
+                <button class="btn btn-sm" type="submit" th:classappend="${storeForm.active} ? 'btn-outline-danger' : 'btn-success'"
+                        th:text="${storeForm.active} ? 'Pause store' : 'Reopen store'">Pause store</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Details: printed on this store's tax invoices; blanks fall back to MediZon's seller details -->
+    <form th:action="@{/admin/stores/save}" th:object="${storeForm}" method="post" class="mz-panel mb-4" novalidate>
+        <input type="hidden" th:field="*{id}">
+        <h2 class="h6 mb-1">Store details</h2>
+        <p class="small text-muted mb-3">Printed on the tax invoices for this store's orders. Its state decides CGST + SGST or IGST.</p>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="name">Name</label>
+                <input class="form-control" th:field="*{name}" th:errorclass="is-invalid" required>
+                <div class="invalid-feedback" th:errors="*{name}"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="addressLine">Address</label>
+                <input class="form-control" th:field="*{addressLine}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="city">City</label>
+                <input class="form-control" th:field="*{city}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="state">State</label>
+                <input class="form-control" th:field="*{state}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="pincode">PIN code</label>
+                <input class="form-control" th:field="*{pincode}" inputmode="numeric" maxlength="6" th:errorclass="is-invalid">
+                <div class="invalid-feedback" th:errors="*{pincode}"></div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="phone">Phone</label>
+                <input class="form-control" th:field="*{phone}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="email">Email</label>
+                <input class="form-control" type="email" th:field="*{email}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="gstin">GSTIN</label>
+                <input class="form-control text-uppercase" th:field="*{gstin}" maxlength="15" th:errorclass="is-invalid">
+                <div class="invalid-feedback" th:errors="*{gstin}"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="drugLicense">Drug licence numbers</label>
+                <input class="form-control" th:field="*{drugLicense}">
+            </div>
+        </div>
+        <button class="btn btn-primary mt-4" type="submit" th:text="${storeForm.id == null} ? 'Add store' : 'Save details'">Save</button>
+    </form>
+
+    <th:block th:if="${storeForm.id != null}">
+        <!-- PIN codes this store delivers to -->
+        <section class="mz-panel mb-4" id="areas">
+            <h2 class="h6 mb-1">Delivers to</h2>
+            <p class="small text-muted mb-3">Where several stores deliver to a PIN code, the quickest is the nearest and delivers first.</p>
+            <form th:action="@{/admin/stores/{id}/areas(id=${storeForm.id})}" method="post" class="row g-2 align-items-end mb-3">
+                <div class="col-md-6">
+                    <label class="form-label small" for="pincodes">PIN codes</label>
+                    <input id="pincodes" name="pincodes" class="form-control" placeholder="400050, 400051 400052" required>
+                </div>
+                <div class="col-4 col-md-2">
+                    <label class="form-label small" for="minDays">From (days)</label>
+                    <input id="minDays" name="minDays" type="number" min="0" max="30" value="1" class="form-control" required>
+                </div>
+                <div class="col-4 col-md-2">
+                    <label class="form-label small" for="maxDays">To (days)</label>
+                    <input id="maxDays" name="maxDays" type="number" min="0" max="30" value="3" class="form-control" required>
+                </div>
+                <div class="col-4 col-md-2">
+                    <button class="btn btn-primary w-100" type="submit">Add</button>
+                </div>
+                <div class="col-12 form-text mt-0">0 to 0 is same-day delivery. New PIN codes are added to the delivery areas too.</div>
+            </form>
+            <div th:if="${#lists.isEmpty(areas)}" class="small text-danger">This store doesn't deliver anywhere yet.</div>
+            <div class="table-responsive" th:unless="${#lists.isEmpty(areas)}">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>PIN code</th><th>Delivery time</th><th class="text-end"></th></tr></thead>
+                    <tbody>
+                    <tr th:each="a : ${areas}">
+                        <td class="fw-semibold" th:text="${a.pincode}"></td>
+                        <td>
+                            <form th:action="@{/admin/stores/{id}/areas/{aid}(id=${storeForm.id}, aid=${a.id})}" method="post" class="d-flex gap-1 align-items-center">
+                                <input name="minDays" type="number" min="0" max="30" class="form-control form-control-sm" style="width: 4.5rem"
+                                       th:value="${a.minDays}" th:attr="aria-label='From (days) for ' + ${a.pincode}">
+                                <span class="small text-muted">to</span>
+                                <input name="maxDays" type="number" min="0" max="30" class="form-control form-control-sm" style="width: 4.5rem"
+                                       th:value="${a.maxDays}" th:attr="aria-label='To (days) for ' + ${a.pincode}">
+                                <span class="small text-muted">days</span>
+                                <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                            </form>
+                        </td>
+                        <td class="text-end">
+                            <form th:action="@{/admin/stores/{id}/areas/{aid}/delete(id=${storeForm.id}, aid=${a.id})}" method="post">
+                                <button class="btn btn-sm btn-outline-danger" type="submit" th:attr="aria-label='Stop delivering to ' + ${a.pincode}"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Store accounts -->
+        <section class="mz-panel">
+            <div class="d-flex justify-content-between align-items-baseline mb-2">
+                <h2 class="h6 mb-0">Store accounts</h2>
+                <a th:href="@{/admin/users}" class="small">Create one under Users</a>
+            </div>
+            <p th:if="${#lists.isEmpty(staff)}" class="small text-muted mb-0">No accounts yet. Create a user with the Store role and choose this store.</p>
+            <ul class="list-unstyled mb-0" th:unless="${#lists.isEmpty(staff)}">
+                <li th:each="u : ${staff}" class="small mb-1">
+                    <span class="fw-semibold" th:text="${u.fullName}"></span> · <span class="text-muted" th:text="${u.email}"></span>
+                    <span th:unless="${u.enabled}" class="badge text-bg-secondary ms-1">Disabled</span>
+                </li>
+            </ul>
+        </section>
+    </th:block>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

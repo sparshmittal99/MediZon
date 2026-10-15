@@ -3,6 +3,7 @@ package com.medizon.service;
 import com.medizon.domain.NotificationType;
 import com.medizon.domain.Prescription;
 import com.medizon.domain.PrescriptionStatus;
+import com.medizon.domain.Role;
 import com.medizon.domain.User;
 import com.medizon.repository.PrescriptionRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class PrescriptionService {
     private final PrescriptionRepository prescriptions;
     private final FileStorageService storage;
     private final NotificationService notifications;
+    private final StaffAlerts staffAlerts;
 
     @Transactional
     public Prescription upload(User user, MultipartFile file, String doctorName, String notes) {
@@ -32,7 +34,11 @@ public class PrescriptionService {
         p.setContentType(file.getContentType());
         p.setDoctorName(doctorName);
         p.setNotes(notes);
-        return prescriptions.save(p);
+        prescriptions.save(p);
+        staffAlerts.notify(Role.PHARMACIST, NotificationType.PRESCRIPTION_UPDATE, "Prescription to review",
+                user.getFullName() + " uploaded a prescription" + (doctorName == null || doctorName.isBlank() ? "." : " from " + doctorName.trim() + "."),
+                "/admin/prescriptions");
+        return p;
     }
 
     public List<Prescription> forUser(User user) { return prescriptions.findByUserOrderByUploadedAtDesc(user); }
@@ -68,7 +74,8 @@ public class PrescriptionService {
     @Transactional(readOnly = true)
     public Prescription getForViewer(Long id, User viewer) {
         Prescription p = prescriptions.findById(id).orElseThrow(() -> new BusinessException("File not found."));
-        if (!viewer.isAdmin() && !p.getUser().getId().equals(viewer.getId())) {
+        boolean reviewer = viewer.isAdmin() || viewer.is(Role.PHARMACIST);
+        if (!reviewer && !p.getUser().getId().equals(viewer.getId())) {
             throw new BusinessException("File not found.");
         }
         return p;

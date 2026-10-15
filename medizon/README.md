@@ -13,7 +13,7 @@ The assistant is a separate Python service (FastAPI + scikit-learn) in [`../medi
 # 1. Start PostgreSQL
 docker compose up -d db
 
-# 2. Credentials for the first admin account (only used while no admin exists)
+# 2. The one admin account's sign-in (applied on every start)
 export MEDIZON_ADMIN_EMAIL=...
 export MEDIZON_ADMIN_PASSWORD=...
 
@@ -27,9 +27,11 @@ uvicorn assistant.app:app --port 8001
 mvn spring-boot:run
 ```
 
-Open http://localhost:8080. Tables are created and the starter catalog is seeded automatically on first start.
-Customers sign up from **Create account**. Admin accounts can't be registered or promoted from customer accounts;
-the first one comes from the variables above and every other one is created by an existing admin under **Admin > Users**.
+Open http://localhost:8080. Tables are created and the starter catalog is seeded into a "main store" on first start;
+add PIN codes for it under **Admin > Delivery areas** before customers can order.
+Customers sign up from **Create account**. There is exactly one admin: its email and password come from the variables
+above on every start (change them there and restart), and any other admin account from an older version is disabled.
+The admin creates every other account under **Admin > Users** with a role (see Roles and stores).
 
 Everything runs in `Asia/Kolkata` by default; change it with `MEDIZON_TZ`.
 To run the app and the assistant in Docker as well: `docker compose --profile app up --build`.
@@ -48,7 +50,7 @@ All settings are in `application.properties` and can be overridden with environm
 | `UPLOAD_DIR` | Where prescription files and return photos are stored |
 | `SELLER_NAME`, `SELLER_GSTIN`, `SELLER_DRUG_LICENSE`, `SELLER_ADDRESS`, `SELLER_STATE`, `SELLER_PHONE`, `SELLER_EMAIL` | Seller details on GST invoices and in the site footer. `SELLER_STATE` decides CGST + SGST (same state as the customer) or IGST. Placeholder values are set in `application.properties` until real ones are given |
 | `BASE_URL` | Used for links inside emails |
-| `MEDIZON_ADMIN_EMAIL`, `MEDIZON_ADMIN_PASSWORD`, `MEDIZON_ADMIN_NAME` | First admin account, created on startup when no admin exists |
+| `MEDIZON_ADMIN_EMAIL`, `MEDIZON_ADMIN_PASSWORD`, `MEDIZON_ADMIN_NAME` | The one admin account: created if missing, its password reset to this one on every start |
 | `MONITORING_TOKEN` | Lets a Prometheus scraper read `/actuator/prometheus` with `Authorization: Bearer <token>` (admins can always) |
 | `SLOW_REQUEST_MS`, `SLOW_QUERY_MS` | Requests (default 1000 ms) and database queries (default 500 ms) slower than this are logged |
 
@@ -69,11 +71,37 @@ invoice prints both. Without it, orders are billed to the account holder at the 
 (someone outside the family): it's delivered but not added to My medicines. Account settings: change password (current
 password first, then the new one twice) and sign out other devices.
 
-**Pharmacist / admin**: dashboard, customer order pipeline (Placed → Confirmed → Shipped → Delivered / Cancelled),
+**Back office**: dashboard, customer order pipeline (Placed → Confirmed → Shipped → Delivered / Cancelled),
 prescription review with validity date, GST tax invoices, return review (approve or reject, pickup with optional
-restock, refund), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, medicines sold, HSN summary and returns sheets; CSV), catalog management with stock, low-stock list, delivery areas (the PIN codes MediZon delivers to; orders to any
-other PIN code are refused, including automatic refills), customer accounts,
-creating other admin accounts, customer feedback, and a chat assistant for store tasks and review insights. Admin accounts are for running the store only; they can't shop, order or set reminders.
+restock, refund), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, store-wise, medicines sold, HSN summary and returns sheets; CSV), the master catalogue and each store's catalogue, low-stock list, stores and delivery areas, user accounts by role, customer feedback, monitoring, and a chat assistant for the admin. Staff accounts are for running the shop only; they can't shop, order or set reminders.
+
+## Roles and stores
+
+| Role | Can do |
+|---|---|
+| Admin (one, from `MEDIZON_ADMIN_*`) | Everything: all stores, master catalogue, delivery areas, users, reports, monitoring |
+| Pharmacist | Read, approve and reject prescriptions |
+| Support | Read feedback and reviews; look up orders and invoices to help customers |
+| Finance | Sales, GST and Excel/CSV reports; look up orders and invoices |
+| Store | One store: its catalogue (stock, expiry, OTC prices, new products), its orders, deliveries and returns |
+| Customer | Shop, order, prescriptions, My medicines; delete their own account |
+
+- **Stores** (Admin > Stores) each sell from the master catalogue with their own stock, batch expiry and, for OTC
+  medicines, their own price (never above MRP). Prescription medicines sell at the admin's catalogue price everywhere.
+  A store's GSTIN, address and state go on the invoices for its orders.
+- **Delivery areas**: the admin chooses which stores deliver to each PIN code and how long each takes there. The
+  quickest store is the nearest. Shoppers see what the stores delivering to their location sell; each product comes
+  from the nearest store that has enough in stock, else the next nearest, with that store's price and delivery time.
+- **Checkout** splits a cart across stores into one order per store (shared checkout reference), paid for once; the
+  delivery fee is worked out on the whole cart and charged on the biggest order; each order is rounded on its own and
+  the cart shows the same total.
+- **Deleting accounts**: customers delete their own (Account settings, with their password); the admin can delete any
+  other account. Personal data is deleted (profile, addresses, family, medicines, prescriptions and files, cart,
+  reviews, feedback, notifications); orders, invoices and refunds stay for the accounts without name, phone or
+  address (a business buyer's GSTIN and billing name stay, as GST requires). The FAQ explains this to customers.
+- **Upgrading** an existing database: on first start the catalogue's stock and expiry move into a store named after
+  `SELLER_NAME`, it serves every listed PIN code (1 to 3 days plus the PIN code's old extra days) and existing orders
+  are assigned to it.
 
 ## How reminders and refills work
 
@@ -106,7 +134,7 @@ creating other admin accounts, customer feedback, and a chat assistant for store
 - Items bought as **Common (OTC)** go straight onto the household's common shelf, which only lists what's at home and
   its expiry: no reminders or refill alerts. Adding that medicine to a person's list moves stock off the shelf: what the
   rest of their course needs (or all of it for an ongoing medicine); an emptied shelf entry disappears.
-- Each medicine carries an expiry date: set per catalog item by the admin, shown on the product page, printed on the
+- Each store listing carries the expiry of its batch: set by the store, shown on the product page, printed on the
   invoice, and carried to the supply at home on delivery (the earliest expiry still at home is shown). Expired stock
   can't be ordered.
 - Every morning (and on startup) expired stock at home is cleared with an alert: common-shelf entries and delivered
@@ -189,7 +217,7 @@ Emergencies ("chest pain", "can't breathe", overdose, self-harm) always get a ca
 
 ```
 src/main/java/com/medizon
-├── config/      Security, login, catalog seed and first admin
+├── config/      Security (role-based access), login, catalog seed, the one admin, upgrade to stores
 ├── domain/      JPA entities and enums (family members, plans, orders, addresses, delivery PIN codes, returns,
 │                invoice counters ...) and Shares (splits packs between people)
 ├── repository/  Spring Data repositories

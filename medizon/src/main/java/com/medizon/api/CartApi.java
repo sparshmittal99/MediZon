@@ -6,6 +6,8 @@ import com.medizon.dto.CartSummary;
 import com.medizon.service.BusinessException;
 import com.medizon.service.CartService;
 import com.medizon.service.CurrentUser;
+import com.medizon.web.DeliveryLocations;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +27,7 @@ public class CartApi {
 
     private final CartService cartService;
     private final CurrentUser currentUser;
+    private final DeliveryLocations deliveryLocations;
 
     public record QuantityRequest(int quantity) {}
 
@@ -43,18 +46,20 @@ public class CartApi {
      * visitors change their session cart.
      */
     @PostMapping("/{medicineId}")
-    public Map<String, Object> setQuantity(@PathVariable Long medicineId, @RequestBody QuantityRequest req, HttpSession session) {
+    public Map<String, Object> setQuantity(@PathVariable Long medicineId, @RequestBody QuantityRequest req, HttpSession session,
+                                           HttpServletRequest request) {
         Optional<User> user = currentUser.find();
+        String pin = deliveryLocations.pincode(request);
         int qty;
         CartSummary c;
         long count;
         if (user.isPresent()) {
-            qty = cartService.setQuantity(user.get(), medicineId, req.quantity());
-            c = cartService.summary(user.get());
+            qty = cartService.setQuantity(user.get(), medicineId, req.quantity(), pin);
+            c = cartService.summary(user.get(), pin);
             count = cartService.count(user.get());
         } else {
-            qty = cartService.setGuestQuantity(session, medicineId, req.quantity());
-            c = cartService.guestSummary(session);
+            qty = cartService.setGuestQuantity(session, medicineId, req.quantity(), pin);
+            c = cartService.guestSummary(session, pin);
             count = cartService.guestCount(session);
         }
         BigDecimal line = c.getItems().stream().filter(i -> i.getMedicine().getId().equals(medicineId))
@@ -73,8 +78,13 @@ public class CartApi {
         out.put("total", money(c.getTotal()));
         out.put("prescriptionRequired", c.isPrescriptionRequired());
         out.put("empty", c.isEmpty());
-        c.getItems().stream().filter(i -> i.getMedicine().getId().equals(medicineId)).findFirst()
-                .ifPresent(i -> out.put("allocation", i.getAllocationById()));
+        out.put("deliveries", c.getByStore().size());
+        c.getItems().stream().filter(i -> i.getMedicine().getId().equals(medicineId)).findFirst().ifPresent(i -> {
+            out.put("allocation", i.getAllocationById());
+            // A bigger quantity can move the line to another store, with its own price and delivery time
+            out.put("unitPrice", money(i.getUnitPrice()));
+            if (i.isAvailable()) out.put("store", i.getOffer().store().getName());
+        });
         return out;
     }
 
@@ -83,9 +93,10 @@ public class CartApi {
 
     /** Sets how many packs each person gets; the line's quantity becomes the total. Returns the new totals. */
     @PostMapping("/{medicineId}/allocation")
-    public Map<String, Object> setAllocation(@PathVariable Long medicineId, @RequestBody AllocationRequest req, HttpSession session) {
-        CartItem item = cartService.setAllocation(currentUser.get(), medicineId, req.packs());
-        return setQuantity(medicineId, new QuantityRequest(item.getQuantity()), session);
+    public Map<String, Object> setAllocation(@PathVariable Long medicineId, @RequestBody AllocationRequest req, HttpSession session,
+                                             HttpServletRequest request) {
+        CartItem item = cartService.setAllocation(currentUser.get(), medicineId, req.packs(), deliveryLocations.pincode(request));
+        return setQuantity(medicineId, new QuantityRequest(item.getQuantity()), session, request);
     }
 
     @ExceptionHandler(BusinessException.class)

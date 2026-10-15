@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.medizon.domain.*;
 import com.medizon.dto.CartSummary;
 import com.medizon.dto.PlanForm;
+import com.medizon.dto.Product;
 import com.medizon.repository.FeedbackRepository;
 import com.medizon.repository.OrderRepository;
 import com.medizon.repository.PrescriptionRepository;
@@ -37,6 +38,9 @@ public class AssistantTools {
     private static final int MAX_RESULTS = 8;
 
     private final MedicineService medicineService;
+    private final CatalogService catalog;
+    private final StoreCatalogService storeCatalog;
+    private final AddressService addressService;
     private final CartService cartService;
     private final OrderService orderService;
     private final MedicationPlanService planService;
@@ -50,15 +54,16 @@ public class AssistantTools {
     private final FeedbackRepository feedbackRepository;
 
     public Object execute(String name, JsonNode args, User user) {
-        if (!(user.isAdmin() ? ADMIN : CUSTOMER).contains(name)) {
+        if (user.isStaff() && !user.isAdmin() || !(user.isAdmin() ? ADMIN : CUSTOMER).contains(name)) {
             return Map.of("error", "That isn't available for this account.");
         }
+        String pin = user.isAdmin() ? null : shopperPincode(user);
         return switch (name) {
-            case "search_medicines" -> search(args.path("query").asText(""), args.path("category").asText(""),
-                    user.isAdmin()).stream().map(m -> summary(m, user.isAdmin())).toList();
-            case "medicine_details" -> details(args);
-            case "add_to_cart" -> addToCart(user, args.path("medicine_id").asLong(), args.path("quantity").asInt(1));
-            case "cart_summary" -> cart(user);
+            case "search_medicines" -> catalog.products(search(args.path("query").asText(""), args.path("category").asText(""),
+                    user.isAdmin(), pin), pin).stream().map(p -> summary(p, user.isAdmin())).toList();
+            case "medicine_details" -> details(args, pin);
+            case "add_to_cart" -> addToCart(user, args.path("medicine_id").asLong(), args.path("quantity").asInt(1), pin);
+            case "cart_summary" -> cart(user, pin);
             case "my_orders" -> orderService.recentForUser(user).stream().map(this::order).toList();
             case "my_plans" -> planService.forUser(user).stream().map(this::plan).toList();
             case "todays_doses" -> planService.todaysDoses(user).stream().map(s -> Map.of(
@@ -69,7 +74,7 @@ public class AssistantTools {
                     "status", s.getState())).toList();
             case "create_plan" -> createPlan(user, args);
             case "mark_dose" -> markDose(user, args);
-            case "refill_plan" -> refill(user, args.path("plan_id").asLong());
+            case "refill_plan" -> refill(user, args.path("plan_id").asLong(), pin);
             case "submit_feedback" -> {
                 Feedback f = feedbackService.submit(user, args.path("message").asText(""), args.path("category").asText(""),
                         args.hasNonNull("rating") ? args.get("rating").asInt() : null);
@@ -96,27 +101,34 @@ public class AssistantTools {
 
     // ------------------------------------------------------------------ catalog
 
+    /** Where the customer's orders go by default: the shop, prices and stock are worked out for it. */
+    private String shopperPincode(User user) {
+        return addressService.defaultFor(user).map(Address::getPincode).orElse(user.getPincode());
+    }
+
     /** Whole query first, then its longest words one at a time, then the category alone. */
-    private List<Medicine> search(String query, String category, boolean admin) {
+    private List<Medicine> search(String query, String category, boolean admin, String pin) {
         String q = query.trim();
         String cat = medicineService.categories().stream().filter(c -> c.equalsIgnoreCase(category.trim()))
                 .findFirst().orElse("");
-        List<Medicine> found = find(q, cat, admin);
+        List<Medicine> found = find(q, cat, admin, pin);
         if (found.isEmpty() && q.contains(" ")) {
             List<String> words = new ArrayList<>(Arrays.asList(q.split("\\s+")));
             words.removeIf(w -> w.length() < 3 || w.chars().allMatch(Character::isDigit));
             words.sort(Comparator.comparingInt(String::length).reversed());
             for (String w : words) {
-                found = find(w, cat, admin);
+                found = find(w, cat, admin, pin);
                 if (!found.isEmpty()) break;
             }
         }
-        if (found.isEmpty() && !cat.isEmpty() && !q.isEmpty()) found = find("", cat, admin);
+        if (found.isEmpty() && !cat.isEmpty() && !q.isEmpty()) found = find("", cat, admin, pin);
         return found;
     }
 
-    private List<Medicine> find(String q, String category, boolean admin) {
-        if (!admin) return medicineService.search(q, category, 0).getContent().stream().limit(MAX_RESULTS).toList();
+    private List<Medicine> find(String q, String category, boolean admin, String pin) {
+        if (!admin) {
+            return catalog.search(q, category, 0, pin).getContent().stream().limit(MAX_RESULTS).map(Product::getMedicine).toList();
+        }
         String term = q.toLowerCase();
         return medicineService.all().stream()
                 .filter(m -> category.isEmpty() || category.equals(m.getCategory()))
@@ -129,38 +141,41 @@ public class AssistantTools {
         return field != null && field.toLowerCase().contains(term);
     }
 
-    private Map<String, Object> summary(Medicine m, boolean admin) {
+    /** A product as the customer would buy it (price and stock of the store that would deliver it). */
+    private Map<String, Object> summary(Product p, boolean admin) {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", m.getId());
-        out.put("name", m.getName());
-        out.put("salt", m.getGenericName());
-        out.put("manufacturer", m.getManufacturer());
-        out.put("category", m.getCategory());
-        out.put("price", m.getPrice());
-        out.put("mrp", m.getMrp());
-        out.put("pack", m.getUnitsPerPack() + " " + m.getUnitLabel());
-        out.put("in_stock", m.isInStock());
-        out.put("rx", m.isPrescriptionRequired());
-        out.put("url", "/medicines/" + m.getId());
-        out.put("image", m.getImageUrl());
+        out.put("id", p.getId());
+        out.put("name", p.getName());
+        out.put("salt", p.getGenericName());
+        out.put("manufacturer", p.getManufacturer());
+        out.put("category", p.getCategory());
+        out.put("price", p.getPrice());
+        out.put("mrp", p.getMrp());
+        out.put("pack", p.getUnitsPerPack() + " " + p.getUnitLabel());
+        out.put("in_stock", p.isInStock());
+        out.put("rx", p.isPrescriptionRequired());
+        out.put("url", "/medicines/" + p.getId());
+        out.put("image", p.getImageUrl());
         if (admin) {
-            out.put("stock", m.getStock());
-            out.put("active", m.isActive());
-            out.put("admin_url", "/admin/medicines/" + m.getId() + "/edit");
+            out.put("stock", p.getStock());
+            out.put("active", p.isActive());
+            out.put("admin_url", "/admin/medicines/" + p.getId() + "/edit");
+        } else if (p.getStoreName() != null) {
+            out.put("store", p.getStoreName());
         }
         return out;
     }
 
-    private Object details(JsonNode args) {
+    private Object details(JsonNode args, String pin) {
         Medicine m;
         if (args.hasNonNull("id")) {
             m = medicineService.get(args.get("id").asLong());
         } else {
-            List<Medicine> hits = search(args.path("query").asText(""), "", false);
+            List<Medicine> hits = search(args.path("query").asText(""), "", false, pin);
             if (hits.isEmpty()) return Map.of("error", "Not found");
             m = hits.get(0);
         }
-        Map<String, Object> out = summary(m, false);
+        Map<String, Object> out = summary(catalog.product(m, pin), false);
         out.put("form", m.getDosageForm());
         out.put("description", m.getDescription());
         return out;
@@ -168,16 +183,16 @@ public class AssistantTools {
 
     // ------------------------------------------------------------------ cart and orders
 
-    private Object addToCart(User user, long medicineId, int quantity) {
+    private Object addToCart(User user, long medicineId, int quantity, String pin) {
         int qty = Math.max(1, Math.min(quantity, 20));
-        cartService.add(user, medicineId, qty);
+        cartService.add(user, medicineId, qty, pin);
         Medicine m = medicineService.get(medicineId);
         return Map.of("ok", true, "added", qty + " × " + m.getName(), "rx", m.isPrescriptionRequired(),
                 "cart_count", cartService.count(user));
     }
 
-    private Object cart(User user) {
-        CartSummary c = cartService.summary(user);
+    private Object cart(User user, String pin) {
+        CartSummary c = cartService.summary(user, pin);
         List<Map<String, Object>> items = c.getItems().stream().map(i -> Map.<String, Object>of(
                 "name", i.getMedicine().getName(), "quantity", i.getQuantity(), "line_total", i.getLineTotal(),
                 "for", i.getSortedMembers().stream().map(Member::getLabel).toList())).toList();
@@ -247,9 +262,9 @@ public class AssistantTools {
                 "units_left", p.getUnitsRemaining());
     }
 
-    private Object refill(User user, long planId) {
+    private Object refill(User user, long planId, String pin) {
         MedicationPlan p = planService.get(planId, user);
-        cartService.add(user, p.getMedicine().getId(), p.getReorderPacks(), List.of(p.getMember()));
+        cartService.add(user, p.getMedicine().getId(), p.getReorderPacks(), List.of(p.getMember()), pin);
         return Map.of("ok", true, "added", p.getReorderPacks() + " pack(s) of " + p.getTitle(),
                 "cart_count", cartService.count(user));
     }
@@ -266,8 +281,9 @@ public class AssistantTools {
         out.put("orders_to_ship", orderRepository.countByUserRoleAndStatus(Role.CUSTOMER, OrderStatus.CONFIRMED));
         out.put("orders_in_transit", orderRepository.countByUserRoleAndStatus(Role.CUSTOMER, OrderStatus.SHIPPED));
         out.put("prescriptions_pending", prescriptionRepository.countByStatus(PrescriptionStatus.PENDING));
-        out.put("low_stock", medicineService.lowStock(MedicineService.LOW_STOCK_BELOW).stream()
-                .map(m -> Map.of("id", m.getId(), "name", m.getName(), "stock", m.getStock())).toList());
+        out.put("low_stock", storeCatalog.lowStock(null).stream()
+                .map(i -> Map.of("id", i.getMedicine().getId(), "name", i.getMedicine().getName(), "store", i.getStore().getName(),
+                        "stock", i.getStock())).toList());
         out.put("low_reviews_7d", lowReviews);
         out.put("feedback_7d", feedbackRepository.countByCreatedAtAfter(weekAgo));
         out.put("orders_today", orderRepository.countByCreatedAtAfter(today.atStartOfDay()));

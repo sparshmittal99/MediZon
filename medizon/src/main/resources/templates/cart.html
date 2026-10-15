@@ -21,15 +21,23 @@
                     <table class="table align-middle mb-0 mz-table-stack mz-cart-table">
                         <thead><tr><th>Medicine</th><th style="width: 9rem">Packs</th><th class="text-end">Amount</th><th></th></tr></thead>
                         <tbody>
-                        <tr th:each="i : ${cart.items}" data-mz-cart-row>
+                        <tr th:each="i : ${cart.items}" data-mz-cart-row th:classappend="${!i.available} ? 'mz-cart-unavailable'">
                             <td>
                                 <a class="fw-semibold text-decoration-none" th:href="@{/medicines/{id}(id=${i.medicine.id})}" th:text="${i.medicine.name}">Name</a>
                                 <span th:if="${i.medicine.prescriptionRequired}" class="mz-rx position-static ms-1">Rx</span>
-                                <div class="small text-muted" th:text="'₹' + ${i.medicine.price} + ' per pack of ' + ${i.medicine.unitsPerPack}"></div>
+                                <div class="small text-muted"><span data-mz-unit-price th:text="'₹' + ${i.unitPrice}"></span>
+                                    <span th:text="' per pack of ' + ${i.medicine.unitsPerPack}"></span></div>
+                                <!-- The store that sends this line: the nearest one with enough in stock -->
+                                <div class="small text-muted" th:if="${i.available}"><i class="bi bi-shop me-1" aria-hidden="true"></i>From
+                                    <span data-mz-line-store th:text="${i.offer.store().name}"></span></div>
+                                <div class="small text-danger" th:unless="${i.available}" role="status">
+                                    <i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i><span th:text="${i.product.stock > 0}
+                                        ? 'Only ' + ${i.product.stock} + ' pack(s) can be delivered here. Lower the quantity.'
+                                        : 'Not available for delivery to your location. Remove it or change the location.'"></span></div>
                                 <!-- Who the packs are for. One pack goes to one choice; with more packs each person gets
                                      their own - n + and the line's quantity is the sum (medizon.js, /api/cart/{id}/allocation). -->
                                 <div th:unless="${guest}" class="mz-for mz-alloc" th:classappend="${i.quantity > 1} ? 'is-multi'"
-                                     th:attr="data-mz-alloc=${i.medicine.id},data-max=${i.medicine.stock}">
+                                     th:attr="data-mz-alloc=${i.medicine.id},data-max=${i.product.stock}">
                                     <span class="mz-for-label" th:id="'for' + ${i.id}">For</span>
                                     <div class="mz-member-picks" role="group" th:attr="aria-labelledby='for' + ${i.id}">
                                         <th:block th:each="m : ${people}">
@@ -44,7 +52,7 @@
                                 </div>
                             </td>
                             <td class="mz-cart-qty">
-                                <div th:replace="~{fragments/layout :: cartStepper(${i.medicine}, false)}"></div>
+                                <div th:replace="~{fragments/layout :: cartStepper(${i.product}, false)}"></div>
                             </td>
                             <td class="text-end fw-semibold mz-cart-amount" data-mz-line-total
                                 th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></td>
@@ -64,6 +72,8 @@
                 <h2 class="h5 mb-3">Summary</h2>
                 <div class="d-flex justify-content-between mb-2"><span>Subtotal</span>
                     <span data-mz-subtotal th:text="'₹' + ${#numbers.formatDecimal(cart.subtotal, 1, 'COMMA', 2, 'POINT')}"></span></div>
+                <p class="small text-muted mb-2" data-mz-deliveries th:hidden="${cart.byStore.size() < 2}">
+                    <i class="bi bi-boxes me-1" aria-hidden="true"></i><span th:text="'Comes from ' + ${cart.byStore.size()} + ' stores, as separate orders paid for together.'"></span></p>
                 <div class="d-flex justify-content-between mb-2"><span>Delivery</span>
                     <span data-mz-delivery th:text="${cart.deliveryFee.signum() == 0} ? 'Free' : ('₹' + ${cart.deliveryFee})"></span></div>
                 <p class="small text-muted" data-mz-free-note th:hidden="${cart.deliveryFee.signum() == 0}"

@@ -20,6 +20,7 @@ public class ReviewService {
     private final UserRepository users;
     private final OrderService orderService;
     private final NotificationService notifications;
+    private final StaffAlerts staffAlerts;
 
     /** Customers can review their own order once, after it's delivered. Admins are notified. */
     @Transactional
@@ -39,10 +40,8 @@ public class ReviewService {
         reviews.save(r);
 
         String stars = rating + " star" + (rating == 1 ? "" : "s");
-        users.findByRole(Role.ADMIN).forEach(admin -> notifications.notify(admin, NotificationType.INFO,
-                "New review: " + stars,
-                user.getFullName() + " rated order " + order.getOrderNumber() + " " + stars + ".",
-                "/admin/reviews"));
+        staffAlerts.notify(Role.SUPPORT, NotificationType.INFO, "New review: " + stars,
+                user.getFullName() + " rated order " + order.getOrderNumber() + " " + stars + ".", "/admin/reviews");
         return r;
     }
 

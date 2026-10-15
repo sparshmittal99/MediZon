@@ -5,13 +5,16 @@ import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import org.springframework.format.annotation.DateTimeFormat;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.math.RoundingMode;
 
+/**
+ * A product in the master catalogue, the same for every store: what it is, its MRP, tax details and the master price.
+ * Prescription medicines sell at the master price everywhere; OTC medicines at each store's own price when it sets one.
+ * Stock and batch expiry belong to each store's listing ({@link StoreItem}).
+ */
 @Entity
 @Getter @Setter @NoArgsConstructor
 public class Medicine {
@@ -45,6 +48,7 @@ public class Medicine {
     @Min(value = 1, message = "A pack holds at least 1 unit")
     private int unitsPerPack = 10;
 
+    /** Selling price for prescription medicines in every store, and the default for OTC ones. */
     @NotNull(message = "Enter a price")
     @DecimalMin(value = "0.0", message = "Price can't be negative")
     @Column(nullable = false, precision = 10, scale = 2)
@@ -52,10 +56,6 @@ public class Medicine {
 
     @Column(precision = 10, scale = 2)
     private BigDecimal mrp;
-
-    /** Packs in the warehouse. */
-    @Min(value = 0, message = "Stock can't be negative")
-    private int stock;
 
     private boolean prescriptionRequired;
 
@@ -69,12 +69,10 @@ public class Medicine {
     @NotNull(message = "Enter the GST rate")
     @DecimalMin(value = "0.0", message = "GST can't be negative")
     @DecimalMax(value = "40.0", message = "GST can't be above 40%")
-    @Column(columnDefinition = "numeric(5,2) not null default 5")
+    // A column default, not columnDefinition: Hibernate's schema update put "not null default" inside "set data type"
+    @Column(nullable = false, precision = 5, scale = 2)
+    @ColumnDefault("5")
     private BigDecimal gstRate = new BigDecimal("5");
-
-    /** Expiry of the batch currently in stock. Expired stock can't be sold. */
-    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-    private LocalDate expiryDate;
 
     private boolean active = true;
 
@@ -83,16 +81,6 @@ public class Medicine {
     private boolean returnable = true;
 
     private String imageUrl;
-
-    /**
-     * How long delivery takes once ordered, in days: 0 to 0 is same-day delivery. The PIN code can add days on top
-     * ({@link ServiceablePincode#getExtraDeliveryDays()}). Empty until set; DeliveryTimeService fills it in.
-     */
-    @Min(value = 0, message = "Use 0 or more days") @Max(value = 30, message = "Use 30 days or fewer")
-    private Integer deliveryMinDays;
-
-    @Min(value = 0, message = "Use 0 or more days") @Max(value = 30, message = "Use 30 days or fewer")
-    private Integer deliveryMaxDays;
 
     public int getDiscountPercent() {
         if (mrp == null || price == null || mrp.compareTo(price) <= 0) return 0;
@@ -119,12 +107,8 @@ public class Medicine {
         return f + "(s)";
     }
 
-    public boolean isInStock() { return stock > 0; }
-
-    public boolean isExpired() { return expiryDate != null && expiryDate.isBefore(LocalDate.now()); }
-
-    /** Expires within the next 90 days: admins should sell it first or pull it. */
-    public boolean isExpiringSoon() {
-        return expiryDate != null && !isExpired() && expiryDate.isBefore(LocalDate.now().plusDays(90));
+    /** Above MRP is never allowed: a store's OTC price, or the master price. */
+    public boolean exceedsMrp(BigDecimal amount) {
+        return amount != null && mrp != null && mrp.signum() > 0 && amount.compareTo(mrp) > 0;
     }
 }

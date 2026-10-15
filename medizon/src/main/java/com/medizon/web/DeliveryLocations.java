@@ -50,12 +50,17 @@ public class DeliveryLocations {
         boolean mine = pickedBy(request, user);
         String pin = mine ? DeliveryAreaService.normalize(cookie(request, PIN_COOKIE)) : null;
         String label = mine ? cookie(request, LABEL_COOKIE) : null;
-        if (pin == null && user != null && !user.isAdmin()) {
+        if (pin == null && user != null && !user.isStaff()) {
             pin = DeliveryAreaService.normalize(user.getPincode());
             label = user.getCity();
         }
         if (pin == null) return Optional.empty();
         return Optional.of(locate(pin, label));
+    }
+
+    /** The shopper's PIN code: what the shop, prices and delivery times are worked out for. Null when none is picked. */
+    public String pincode(HttpServletRequest request) {
+        return current(request, currentUser.find().orElse(null)).map(Location::getPincode).orElse(null);
     }
 
     /** Works out a location for a PIN code; the label falls back to the area admins gave that PIN code. */

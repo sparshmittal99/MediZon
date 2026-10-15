@@ -41,8 +41,6 @@ public class OrderController {
     @GetMapping("/checkout")
     public String checkout(@RequestParam(required = false) Long address, HttpServletRequest request, Model model) {
         User user = currentUser.get();
-        CartSummary cart = cartService.summary(user);
-        if (cart.isEmpty()) return "redirect:/cart";
         List<Address> addresses = addressService.list(user);
         Map<Long, Boolean> serviceable = new HashMap<>();
         addresses.forEach(a -> serviceable.put(a.getId(), deliveryAreas.isServiceable(a.getPincode())));
@@ -50,6 +48,11 @@ public class OrderController {
                 .filter(id -> id != null && serviceable.getOrDefault(id, false))
                 .findFirst()
                 .orElseGet(() -> addresses.stream().filter(a -> serviceable.get(a.getId())).map(Address::getId).findFirst().orElse(null));
+        // Priced and split by store for the address it's going to
+        String pin = addresses.stream().filter(a -> a.getId().equals(selected)).map(Address::getPincode).findFirst()
+                .orElse(deliveryLocations.pincode(request));
+        CartSummary cart = cartService.summary(user, pin);
+        if (cart.isEmpty()) return "redirect:/cart";
         model.addAttribute("cart", cart);
         model.addAttribute("paymentMethods", PaymentMethod.values());
         model.addAttribute("prescriptions", prescriptionService.validForUser(user));
@@ -64,9 +67,15 @@ public class OrderController {
                              @RequestParam(required = false) Long prescriptionId,
                              @RequestParam(required = false) Long addressId,
                              RedirectAttributes ra) {
-        Order o = orderService.checkout(currentUser.get(), paymentMethod, prescriptionId, addressId);
-        ra.addFlashAttribute("success", "Order " + o.getOrderNumber() + " placed. We'll notify you as it moves.");
-        return "redirect:/orders/" + o.getId();
+        List<Order> placed = orderService.checkout(currentUser.get(), paymentMethod, prescriptionId, addressId);
+        if (placed.size() == 1) {
+            ra.addFlashAttribute("success", "Order " + placed.get(0).getOrderNumber() + " placed. We'll notify you as it moves.");
+            return "redirect:/orders/" + placed.get(0).getId();
+        }
+        ra.addFlashAttribute("success", "Your cart comes from " + placed.size() + " stores, so it's " + placed.size() + " orders: "
+                + placed.stream().map(Order::getOrderNumber).collect(java.util.stream.Collectors.joining(", "))
+                + ". Each has its own delivery and invoice.");
+        return "redirect:/orders";
     }
 
     /** Order sections on the customer's Orders page. */
@@ -108,6 +117,7 @@ public class OrderController {
     public String detail(@PathVariable Long id, Model model) {
         Order o = orderService.getForUser(id, currentUser.get());
         model.addAttribute("o", o);
+        model.addAttribute("placedWith", orderService.placedWith(o));
         model.addAttribute("review", reviewService.forOrder(o).orElse(null));
         model.addAttribute("returns", returnService.forOrder(o));
         model.addAttribute("returnBlocker", returnService.blocker(o).orElse(null));
@@ -141,8 +151,8 @@ public class OrderController {
     }
 
     @PostMapping("/orders/{id}/buy-again")
-    public String buyAgain(@PathVariable Long id, RedirectAttributes ra) {
-        int added = orderService.reorderToCart(id, currentUser.get());
+    public String buyAgain(@PathVariable Long id, HttpServletRequest request, RedirectAttributes ra) {
+        int added = orderService.reorderToCart(id, currentUser.get(), deliveryLocations.pincode(request));
         if (added == 0) ra.addFlashAttribute("error", "None of these items are available right now.");
         else ra.addFlashAttribute("success", added + " item(s) added to your cart.");
         return "redirect:/cart";

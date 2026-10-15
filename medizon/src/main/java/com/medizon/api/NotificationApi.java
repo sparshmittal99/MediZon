@@ -47,7 +47,7 @@ public class NotificationApi {
     @GetMapping("/poll")
     public Map<String, Object> poll(@RequestParam(defaultValue = "0") long after, HttpServletRequest request) {
         User user = currentUser.get();
-        NotificationDevice device = user.isAdmin() ? null : deviceService.find(user, request);
+        NotificationDevice device = user.isStaff() ? null : deviceService.find(user, request);
         List<Map<String, Object>> fresh = notificationService.newSince(user, after, device).stream()
                 .map(n -> Map.<String, Object>of(
                         "id", n.getId(),

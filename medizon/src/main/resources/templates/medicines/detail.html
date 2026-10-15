@@ -30,10 +30,19 @@
                 <span th:if="${m.discountPercent > 0}" class="mz-mrp" th:text="'MRP ₹' + ${#numbers.formatDecimal(m.mrp, 1, 'COMMA', 2, 'POINT')}"></span>
                 <span th:if="${m.discountPercent > 0}" class="mz-off" th:text="${m.discountPercent} + '% off'"></span>
             </div>
-            <p class="small text-muted mb-4" th:text="'Pack of ' + ${m.unitsPerPack} + ' ' + ${m.unitLabel} + ', inclusive of all taxes'"></p>
+            <p class="small text-muted mb-1" th:text="'Pack of ' + ${m.unitsPerPack} + ' ' + ${m.unitLabel} + ', inclusive of all taxes'"></p>
+            <p class="small text-muted mb-4" th:if="${m.storeName != null and deliverTo != null and deliverTo.serviceable}">
+                <i class="bi bi-shop me-1" aria-hidden="true"></i>Sold and delivered by <span class="fw-semibold" th:text="${m.storeName}"></span></p>
+            <div class="mb-4" th:unless="${m.storeName != null and deliverTo != null and deliverTo.serviceable}"></div>
+
+            <!-- None of the stores that deliver to the shopper sell it -->
+            <div th:if="${m.unavailable and deliverTo != null and deliverTo.serviceable}" class="alert alert-warning small mb-4" role="status">
+                <i class="bi bi-shop me-1" aria-hidden="true"></i>
+                <span th:text="'The stores that deliver to ' + ${deliverTo.pincode} + ' don’t sell this. Try another location.'"></span>
+            </div>
 
             <!-- When it arrives at the "Delivers to" location; the page reloads when the location changes (medizon.js) -->
-            <div class="mz-delivery mb-4" sec:authorize="!hasRole('ADMIN')" th:if="${m.inStock and !m.expired}" data-mz-delivery>
+            <div class="mz-delivery mb-4" sec:authorize="!hasRole('STAFF')" th:if="${m.inStock and !m.expired}" data-mz-delivery>
                 <th:block th:if="${delivery != null}">
                     <i class="bi mz-delivery-ico" th:classappend="${delivery.sameDay} ? 'bi-lightning-charge-fill is-fast' : 'bi-truck'" aria-hidden="true"></i>
                     <div class="min-w-0">
@@ -89,7 +98,7 @@
 
             <th:block sec:authorize="hasRole('CUSTOMER')">
                 <div th:replace="~{fragments/layout :: cartStepper(${m}, true)}"></div>
-                <p th:unless="${m.inStock}" class="text-danger fw-semibold">Out of stock right now.</p>
+                <p th:unless="${m.inStock or m.unavailable}" class="text-danger fw-semibold">Out of stock right now.</p>
                 <div class="d-flex flex-wrap gap-2 mb-4">
                     <a th:if="${reminderMemberId != null}" class="btn btn-outline-primary btn-sm"
                        th:href="@{/plans/new(medicineId=${m.id}, memberId=${reminderMemberId})}">
@@ -101,10 +110,10 @@
             </th:block>
             <th:block sec:authorize="!isAuthenticated()">
                 <div th:replace="~{fragments/layout :: cartStepper(${m}, true)}"></div>
-                <p th:unless="${m.inStock}" class="text-danger fw-semibold">Out of stock right now.</p>
+                <p th:unless="${m.inStock or m.unavailable}" class="text-danger fw-semibold">Out of stock right now.</p>
                 <div class="mb-4"></div>
             </th:block>
-            <a sec:authorize="hasRole('ADMIN')" th:href="@{/admin/medicines/{id}/edit(id=${m.id})}" class="btn btn-outline-primary mb-4">
+            <a sec:authorize="hasRole('STAFF')" th:href="@{/admin/medicines/{id}/edit(id=${m.id})}" class="btn btn-outline-primary mb-4">
                 <i class="bi bi-pencil me-1"></i>Edit in catalog</a>
 
             <h2 class="h6 mt-2">About this medicine</h2>
@@ -114,7 +123,7 @@
                 <dt>Manufacturer</dt><dd th:text="${m.manufacturer}">-</dd>
                 <dt>Form</dt><dd th:text="${m.dosageForm}">-</dd>
                 <dt>Category</dt><dd th:text="${m.category}">-</dd>
-                <dt>Availability</dt><dd th:text="${m.expired} ? 'Unavailable' : (${m.inStock} ? 'In stock' : 'Out of stock')">-</dd>
+                <dt>Availability</dt><dd th:text="${m.unavailable} ? 'Not sold near you' : (${m.inStock} ? 'In stock' : 'Out of stock')">-</dd>
                 <dt>Expiry</dt><dd th:text="${m.expiryDate != null} ? ${#temporals.format(m.expiryDate, 'MMM yyyy')} : 'Shown on the pack'">-</dd>
                 <dt>Returns</dt><dd th:text="${m.returnable} ? 'Returnable within ' + ${returnDays} + ' days of delivery' : 'Non-returnable'">-</dd>
             </dl>

@@ -16,6 +16,15 @@
                 <span th:text="'Placed ' + ${#temporals.format(o.createdAt, 'd MMM yyyy, h:mm a')}"></span>
                 <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Placed by auto refill</span>
             </p>
+            <p class="small text-muted mb-0 mt-1" th:if="${o.store != null}">
+                <i class="bi bi-shop me-1" aria-hidden="true"></i>From <span class="fw-semibold" th:text="${o.store.name}"></span>
+            </p>
+            <!-- A cart from several stores became one order per store -->
+            <p class="small mb-0 mt-1" th:if="${placedWith != null and !#lists.isEmpty(placedWith)}">
+                <i class="bi bi-boxes me-1" aria-hidden="true"></i>Placed together with
+                <th:block th:each="x, s : ${placedWith}"><a th:href="${adminView} ? @{/admin/orders/{id}(id=${x.id})} : @{/orders/{id}(id=${x.id})}"
+                    th:text="${x.orderNumber}"></a><span th:if="${x.store != null}" th:text="' (' + ${x.store.name} + ')'"></span><span th:unless="${s.last}">, </span></th:block>
+            </p>
         </div>
         <div class="d-flex align-items-center gap-2">
             <a th:if="${o.invoiceAvailable}" class="btn btn-sm btn-outline-primary"
@@ -143,7 +152,7 @@
                 <p class="small text-muted mb-3" th:if="${o.contactPhone}"><i class="bi bi-telephone me-1"></i><span th:text="${o.contactPhone}"></span></p>
                 <h2 class="h6">Payment</h2>
                 <p class="small mb-0" th:text="${o.paymentMethod.label} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></p>
-                <p th:if="${o.prescription != null}" class="small mt-3 mb-0">
+                <p th:if="${o.prescription != null}" sec:authorize="hasAnyRole('CUSTOMER','ADMIN','PHARMACIST')" class="small mt-3 mb-0">
                     <i class="bi bi-file-earmark-medical"></i>
                     <a th:href="@{/prescriptions/{id}/file(id=${o.prescription.id})}" target="_blank" rel="noopener">View prescription</a>
                 </p>
@@ -162,7 +171,7 @@
             </div>
 
             <!-- Admin actions -->
-            <form th:if="${adminView and !#lists.isEmpty(o.status.nextStatuses)}"
+            <form th:if="${adminView and canManage and !#lists.isEmpty(o.status.nextStatuses)}"
                   th:action="@{/admin/orders/{id}/status(id=${o.id})}" method="post" class="mz-panel">
                 <label class="form-label" for="status">Update status</label>
                 <div class="d-flex gap-2">

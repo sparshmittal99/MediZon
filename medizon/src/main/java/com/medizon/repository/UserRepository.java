@@ -1,6 +1,7 @@
 package com.medizon.repository;
 
 import com.medizon.domain.Role;
+import com.medizon.domain.Store;
 import com.medizon.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -17,4 +18,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByCreatedAtAfter(LocalDateTime since);
     List<User> findTop6ByRoleOrderByCreatedAtDesc(Role role);
     List<User> findAllByOrderByCreatedAtDesc();
+    List<User> findByStoreOrderByFullNameAsc(Store store);
+    List<User> findByRoleAndDeletedFalseAndEnabledTrue(Role role);
+    List<User> findByRoleAndStoreAndDeletedFalseAndEnabledTrue(Role role, Store store);
 }

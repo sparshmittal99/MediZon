@@ -49,10 +49,33 @@ public class User {
 
     private LocalDateTime lastLoginAt;
 
+    /** The store a STORE account works for. */
+    @ManyToOne(fetch = FetchType.EAGER)
+    private Store store;
+
+    /**
+     * Deleted accounts can't sign in and their personal data is gone; the row stays, renamed, so the orders and
+     * invoices kept for the accounts still point at someone.
+     */
+    @Column(columnDefinition = "boolean not null default false")
+    private boolean deleted;
+
+    private LocalDateTime deletedAt;
+
     @Column(columnDefinition = "integer not null default 0")
     private int loginCount;
 
     public boolean isAdmin() { return role == Role.ADMIN; }
+
+    /** Any back-office account: admin, pharmacist, support, finance or store. Staff can't shop. */
+    public boolean isStaff() { return role.isStaff(); }
+
+    public boolean isCustomer() { return role == Role.CUSTOMER; }
+
+    /** A store account; it only sees its own store's catalogue, orders and returns. */
+    public boolean isStoreStaff() { return role == Role.STORE; }
+
+    public boolean is(Role r) { return role == r; }
 
     public boolean hasAddress() {
         return notBlank(addressLine) && notBlank(city) && notBlank(pincode);

@@ -1,8 +1,8 @@
 package com.medizon.web;
 
 import com.medizon.domain.*;
-import com.medizon.dto.AdminForm;
 import com.medizon.dto.DayTraffic;
+import com.medizon.dto.NewUserForm;
 import com.medizon.dto.ReportPeriod;
 import com.medizon.dto.SalesDay;
 import com.medizon.repository.*;
@@ -29,6 +29,10 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * The back office. The admin sees everything; every other staff role lands on its own page and only reaches what its
+ * role allows (see SecurityConfig). Store accounts only see their own store's orders.
+ */
 @Controller
 @RequestMapping("/admin")
 @RequiredArgsConstructor
@@ -50,14 +54,26 @@ public class AdminController {
     private final SalesReportService salesReport;
     private final SalesExcelService salesExcel;
     private final DeliveryAreaService deliveryAreas;
+    private final StoreService storeService;
+    private final StoreCatalogService storeCatalog;
+    private final AccountDeletionService accountDeletion;
     private final CurrentUser currentUser;
 
-    /** The image is chosen through upload / link fields, never posted directly. */
-    @InitBinder("medicine")
-    void medicineBinder(WebDataBinder binder) { binder.setDisallowedFields("imageUrl"); }
-
+    /** The admin's overview; other staff go straight to their own work. */
     @GetMapping
-    public String dashboard(Model model) {
+    public String dashboard(@RequestParam(required = false) String denied, Model model, RedirectAttributes ra) {
+        User me = currentUser.get();
+        if (!me.isAdmin()) {
+            if (denied != null) ra.addFlashAttribute("error", "That page isn't part of your role.");
+            return "redirect:" + switch (me.getRole()) {
+                case PHARMACIST -> "/admin/prescriptions";
+                case SUPPORT -> "/admin/reviews";
+                case FINANCE -> "/admin/sales";
+                case STORE -> "/admin/orders";
+                default -> "/";
+            };
+        }
+        if (denied != null) model.addAttribute("error", "That page isn't available to your account.");
         model.addAttribute("toConfirm", orderRepository.countByUserRoleAndStatus(Role.CUSTOMER, OrderStatus.PLACED));
         model.addAttribute("revenue", orderRepository.revenueExcluding(OrderStatus.CANCELLED).subtract(returnService.totalRefunded()));
         model.addAttribute("refunded", returnService.totalRefunded());
@@ -67,8 +83,9 @@ public class AdminController {
         model.addAttribute("autoOrders", orderRepository.countBySource(OrderSource.AUTO_REORDER));
         model.addAttribute("activePlans", planRepository.countByActiveTrue());
         model.addAttribute("recentOrders", orderRepository.findTop8ByUserRoleOrderByCreatedAtDesc(Role.CUSTOMER));
-        model.addAttribute("lowStock", medicineService.lowStock(MedicineService.LOW_STOCK_BELOW));
+        model.addAttribute("lowStock", storeCatalog.lowStock(null));
         model.addAttribute("deliveryAreas", deliveryAreas.activeCount());
+        model.addAttribute("stores", storeService.all());
 
         // people and traffic
         LocalDate today = LocalDate.now();
@@ -107,10 +124,12 @@ public class AdminController {
 
     /**
      * Sales, orders and returns for a date range, a month or a financial year, shown day by day or month by month.
-     * Defaults to the last 30 days; financial years and long ranges default to month-wise.
+     * Defaults to the last 30 days; financial years and long ranges default to month-wise. With a store chosen every
+     * figure is that store's alone; without one, a store-by-store table compares them over the same period.
      */
     @GetMapping("/sales")
     public String sales(@RequestParam(defaultValue = "range") String period,
+                        @RequestParam(required = false) Long store,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                         @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
@@ -118,8 +137,9 @@ public class AdminController {
                         @RequestParam(required = false) String group,
                         @RequestParam(defaultValue = "false") boolean hideEmpty, Model model) {
         ReportPeriod p = salesReport.resolve(period, from, to, month, fy);
+        Store scope = store == null ? null : storeService.get(store);
         boolean monthly = groupMonthly(p, group);
-        List<SalesDay> rows = new ArrayList<>(monthly ? salesReport.monthly(p.getFrom(), p.getTo()) : salesReport.daily(p.getFrom(), p.getTo()));
+        List<SalesDay> rows = new ArrayList<>(monthly ? salesReport.monthly(p.getFrom(), p.getTo(), store) : salesReport.daily(p.getFrom(), p.getTo(), store));
         Collections.reverse(rows);   // newest first on screen
         LocalDate today = LocalDate.now();
         String thisFy = SalesReportService.financialYear(today);
@@ -130,8 +150,11 @@ public class AdminController {
         model.addAttribute("hideEmpty", hideEmpty);
         model.addAttribute("rows", hideEmpty ? rows.stream().filter(d -> !d.isEmpty()).toList() : rows);
         model.addAttribute("period", SalesDay.total(rows));
-        model.addAttribute("today", salesReport.day(today));
-        model.addAttribute("allTime", salesReport.allTime());
+        model.addAttribute("today", salesReport.day(today, store));
+        model.addAttribute("allTime", salesReport.allTime(store));
+        model.addAttribute("store", scope);
+        model.addAttribute("stores", storeService.all());
+        if (scope == null) model.addAttribute("byStore", salesReport.byStore(p.getFrom(), p.getTo()));
         model.addAttribute("fys", salesReport.financialYears());
         model.addAttribute("thisFy", thisFy);
         model.addAttribute("lastFy", SalesReportService.financialYear(today.minusYears(1)));
@@ -149,23 +172,25 @@ public class AdminController {
     @GetMapping("/sales.xlsx")
     public ResponseEntity<byte[]> salesExcel(
             @RequestParam(defaultValue = "range") String period,
+            @RequestParam(required = false) Long store,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
             @RequestParam(required = false) String fy,
             @RequestParam(required = false) List<SalesExcelService.Section> sheets) {
         ReportPeriod p = salesReport.resolve(period, from, to, month, fy);
+        Store scope = store == null ? null : storeService.get(store);
         Set<SalesExcelService.Section> chosen = sheets == null || sheets.isEmpty()
                 ? EnumSet.allOf(SalesExcelService.Section.class) : EnumSet.copyOf(sheets);
         // Built in memory: even a busy financial year is a few MB
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         try {
-            salesExcel.write(p, chosen, buffer);
+            salesExcel.write(p, scope, chosen, buffer);
         } catch (IOException e) {
             throw new BusinessException("The Excel file couldn't be created. Try again.");
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"medizon-sales-" + p.getFileSuffix() + ".xlsx\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"medizon-sales-" + storeSuffix(scope) + p.getFileSuffix() + ".xlsx\"")
                 .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(buffer.toByteArray());
     }
@@ -173,17 +198,26 @@ public class AdminController {
     @GetMapping(value = "/sales.csv", produces = "text/csv")
     public ResponseEntity<String> salesCsv(
             @RequestParam(defaultValue = "range") String period,
+            @RequestParam(required = false) Long store,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
             @RequestParam(required = false) String fy,
             @RequestParam(required = false) String group) {
         ReportPeriod p = salesReport.resolve(period, from, to, month, fy);
-        List<SalesDay> rows = groupMonthly(p, group) ? salesReport.monthly(p.getFrom(), p.getTo()) : salesReport.daily(p.getFrom(), p.getTo());
+        Store scope = store == null ? null : storeService.get(store);
+        List<SalesDay> rows = groupMonthly(p, group) ? salesReport.monthly(p.getFrom(), p.getTo(), store) : salesReport.daily(p.getFrom(), p.getTo(), store);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"medizon-sales-" + p.getFileSuffix() + ".csv\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"medizon-sales-" + storeSuffix(scope) + p.getFileSuffix() + ".csv\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
                 .body(salesReport.csv(rows, SalesDay.total(rows)));
+    }
+
+    /** "apollo-sector-14-" for a store's export file names; nothing for all stores. */
+    private static String storeSuffix(Store s) {
+        if (s == null) return "";
+        String slug = s.getName().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+        return slug.isEmpty() ? "store-" + s.getId() + "-" : slug + "-";
     }
 
     /** Month-wise when asked, for financial years and ranges over 3 months by default, and always past a year. */
@@ -210,7 +244,7 @@ public class AdminController {
                         || (u.getPhone() != null && u.getPhone().contains(term)))
                 .filter(u -> switch (show) {
                     case "customers" -> u.getRole() == Role.CUSTOMER;
-                    case "admins" -> u.getRole() == Role.ADMIN;
+                    case "staff" -> u.isStaff();
                     case "disabled" -> !u.isEnabled();
                     case "online" -> online.contains(u.getEmail().toLowerCase());
                     case "new" -> u.getCreatedAt() != null && !u.getCreatedAt().toLocalDate().isBefore(weekStart);
@@ -227,6 +261,8 @@ public class AdminController {
         model.addAttribute("newSince", weekStart.atStartOfDay());
         model.addAttribute("q", q);
         model.addAttribute("show", show);
+        model.addAttribute("roles", Role.assignable());
+        model.addAttribute("stores", storeService.all());
         model.addAttribute("active", "users");
         return "admin/users";
     }
@@ -239,15 +275,25 @@ public class AdminController {
         return "redirect:/admin/users";
     }
 
-    @PostMapping("/users/admins")
-    public String createAdmin(@Valid @ModelAttribute("adminForm") AdminForm form, BindingResult result, RedirectAttributes ra) {
+    /** The admin creates an account with a role: a customer, or staff limited to that role's pages. */
+    @PostMapping("/users")
+    public String createUser(@Valid @ModelAttribute("userForm") NewUserForm form, BindingResult result, RedirectAttributes ra) {
         if (result.hasErrors()) {
             ra.addFlashAttribute("error", result.getAllErrors().get(0).getDefaultMessage());
-            return "redirect:/admin/users?show=admins";
+            return "redirect:/admin/users";
         }
-        User u = userService.createAdmin(form, currentUser.get());
-        ra.addFlashAttribute("success", "Admin account created for " + u.getFullName() + " (" + u.getEmail() + ").");
-        return "redirect:/admin/users?show=admins";
+        User u = userService.createUser(form, currentUser.get());
+        ra.addFlashAttribute("success", u.getRole().getLabel() + " account created for " + u.getFullName() + " (" + u.getEmail() + ")"
+                + (u.getStore() != null ? " at " + u.getStore().getName() : "") + ".");
+        return "redirect:/admin/users" + (u.isStaff() ? "?show=staff" : "");
+    }
+
+    /** Deletes an account; orders and invoices stay for the accounts without the personal details. */
+    @PostMapping("/users/{id}/delete")
+    public String deleteUser(@PathVariable Long id, RedirectAttributes ra) {
+        String name = accountDeletion.deleteByAdmin(id, currentUser.get());
+        ra.addFlashAttribute("success", name + "'s account is deleted. Their orders and invoices are kept for the accounts.");
+        return "redirect:/admin/users";
     }
 
     @PostMapping("/users/{id}/sign-out")
@@ -264,20 +310,44 @@ public class AdminController {
 
     // ---------------------------------------------------------------- delivery areas
 
+    /** PIN codes, and which stores deliver to each, quickest first. */
     @GetMapping("/locations")
     public String locations(Model model) {
         model.addAttribute("pincodes", deliveryAreas.all());
         model.addAttribute("activeCount", deliveryAreas.activeCount());
+        model.addAttribute("servedBy", storeService.areasByPincode());
+        model.addAttribute("stores", storeService.all());
         model.addAttribute("active", "locations");
         return "admin/locations";
     }
 
+    /** Adds PIN codes, and with a store chosen, has that store deliver there. */
     @PostMapping("/locations")
     public String addLocations(@RequestParam String pincodes, @RequestParam(required = false) String area,
                                @RequestParam(required = false) String city, @RequestParam(required = false) String state,
-                               @RequestParam(required = false) Integer extraDeliveryDays, RedirectAttributes ra) {
-        int n = deliveryAreas.add(pincodes, area, city, state, extraDeliveryDays);
-        ra.addFlashAttribute("success", n == 1 ? "PIN code saved. Customers there can now order." : n + " PIN codes saved. Customers there can now order.");
+                               @RequestParam(required = false) Long storeId,
+                               @RequestParam(defaultValue = "1") int minDays, @RequestParam(defaultValue = "3") int maxDays,
+                               RedirectAttributes ra) {
+        int n = deliveryAreas.add(pincodes, area, city, state);
+        if (storeId != null) storeService.serve(storeId, pincodes, minDays, maxDays);
+        ra.addFlashAttribute("success", (n == 1 ? "PIN code saved." : n + " PIN codes saved.")
+                + (storeId != null ? " " + storeService.get(storeId).getName() + " delivers there now." : " Choose a store to deliver there."));
+        return "redirect:/admin/locations";
+    }
+
+    /** One store starts delivering to a PIN code, or changes how long it takes there. */
+    @PostMapping("/locations/serve")
+    public String serve(@RequestParam Long storeId, @RequestParam String pincode, @RequestParam int minDays,
+                        @RequestParam int maxDays, RedirectAttributes ra) {
+        storeService.serve(storeId, pincode, minDays, maxDays);
+        ra.addFlashAttribute("success", storeService.get(storeId).getName() + " delivers to " + pincode + ".");
+        return "redirect:/admin/locations";
+    }
+
+    @PostMapping("/locations/areas/{areaId}/delete")
+    public String stopServing(@PathVariable Long areaId, RedirectAttributes ra) {
+        StoreArea a = storeService.stopServing(areaId);
+        ra.addFlashAttribute("success", a.getStore().getName() + " no longer delivers to " + a.getPincode() + ".");
         return "redirect:/admin/locations";
     }
 
@@ -285,15 +355,6 @@ public class AdminController {
     public String setLocationActive(@PathVariable Long id, @RequestParam boolean active, RedirectAttributes ra) {
         ServiceablePincode p = deliveryAreas.setActive(id, active);
         ra.addFlashAttribute("success", active ? "Delivering to " + p.getPincode() + " again." : "Deliveries to " + p.getPincode() + " paused.");
-        return "redirect:/admin/locations";
-    }
-
-    @PostMapping("/locations/{id}/delivery-days")
-    public String setLocationDeliveryDays(@PathVariable Long id, @RequestParam int extraDeliveryDays, RedirectAttributes ra) {
-        ServiceablePincode p = deliveryAreas.setExtraDeliveryDays(id, extraDeliveryDays);
-        ra.addFlashAttribute("success", p.getExtraDeliveryDays() == 0
-                ? p.getPincode() + " now gets each product's own delivery time."
-                : p.getPincode() + " now adds " + p.getExtraDeliveryDays() + " day(s) to every delivery.");
         return "redirect:/admin/locations";
     }
 
@@ -318,71 +379,33 @@ public class AdminController {
         return "admin/reviews";
     }
 
-    // ---------------------------------------------------------------- medicines
-
-    @GetMapping("/medicines")
-    public String medicines(Model model) {
-        model.addAttribute("medicines", medicineService.all());
-        model.addAttribute("active", "medicines");
-        return "admin/medicines";
-    }
-
-    @GetMapping("/medicines/new")
-    public String newMedicine(Model model) {
-        return medicineForm(new Medicine(), model);
-    }
-
-    @GetMapping("/medicines/{id}/edit")
-    public String editMedicine(@PathVariable Long id, Model model) {
-        return medicineForm(medicineService.get(id), model);
-    }
-
-    private String medicineForm(Medicine m, Model model) {
-        model.addAttribute("medicine", m);
-        model.addAttribute("categories", medicineService.categories());
-        model.addAttribute("active", "medicines");
-        return "admin/medicine-form";
-    }
-
-    @PostMapping("/medicines/save")
-    public String saveMedicine(@Valid @ModelAttribute("medicine") Medicine medicine, BindingResult result,
-                               @RequestParam(required = false) MultipartFile imageFile,
-                               @RequestParam(required = false) String imageLink,
-                               @RequestParam(defaultValue = "false") boolean removeImage,
-                               Model model, RedirectAttributes ra) {
-        if (result.hasErrors()) {
-            medicine.setImageUrl(medicineService.currentImage(medicine.getId()));
-            model.addAttribute("categories", medicineService.categories());
-            model.addAttribute("active", "medicines");
-            return "admin/medicine-form";
-        }
-        medicineService.save(medicine, imageFile, imageLink, removeImage);
-        ra.addFlashAttribute("success", medicine.getName() + " saved.");
-        return "redirect:/admin/medicines";
-    }
-
-    @PostMapping("/medicines/{id}/toggle")
-    public String toggleMedicine(@PathVariable Long id) {
-        medicineService.toggleActive(id);
-        return "redirect:/admin/medicines";
-    }
-
     // ---------------------------------------------------------------- orders
 
+    /** Orders: a store account sees its own store's; everyone else every store's, optionally filtered by store. */
     @GetMapping("/orders")
-    public String orders(@RequestParam(required = false) OrderStatus status, Model model) {
-        model.addAttribute("orders", orderService.adminList(status));
-        model.addAttribute("counts", orderService.adminCounts());
+    public String orders(@RequestParam(required = false) OrderStatus status, @RequestParam(required = false) Long store,
+                         Model model) {
+        User me = currentUser.get();
+        Store scope = storeService.scopeOf(me).orElse(store == null ? null : storeService.get(store));
+        model.addAttribute("orders", orderService.adminList(status, scope));
+        model.addAttribute("counts", orderService.adminCounts(scope));
         model.addAttribute("statuses", OrderStatus.values());
         model.addAttribute("selected", status);
+        model.addAttribute("store", scope);
+        model.addAttribute("stores", me.isStoreStaff() ? List.of() : storeService.all());
+        model.addAttribute("canManage", me.isAdmin() || me.isStoreStaff());
         model.addAttribute("active", "orders");
         return "admin/orders";
     }
 
     @GetMapping("/orders/{id}")
     public String order(@PathVariable Long id, Model model) {
+        User me = currentUser.get();
         Order o = orderService.get(id);
+        storeService.checkAccess(me, o);
         model.addAttribute("o", o);
+        model.addAttribute("placedWith", orderService.placedWith(o));
+        model.addAttribute("canManage", me.isAdmin() || me.isStoreStaff());
         model.addAttribute("review", reviewService.forOrder(o).orElse(null));
         model.addAttribute("returns", returnService.forOrder(o));
         model.addAttribute("adminView", true);
@@ -391,7 +414,9 @@ public class AdminController {
 
     @GetMapping("/orders/{id}/invoice")
     public String invoice(@PathVariable Long id, Model model) {
-        model.addAttribute("inv", invoiceService.forOrder(orderService.get(id)));
+        Order o = orderService.get(id);
+        storeService.checkAccess(currentUser.get(), o);
+        model.addAttribute("inv", invoiceService.forOrder(o));
         model.addAttribute("adminView", true);
         model.addAttribute("active", "orders");
         return "orders/invoice";
@@ -401,6 +426,7 @@ public class AdminController {
     public String updateStatus(@PathVariable Long id, @RequestParam OrderStatus status,
                                @RequestHeader(value = "Referer", required = false) String referer,
                                RedirectAttributes ra) {
+        storeService.checkAccess(currentUser.get(), orderService.get(id));
         Order o = orderService.updateStatus(id, status);
         ra.addFlashAttribute("success", "Order " + o.getOrderNumber() + " marked " + status.getLabel().toLowerCase() + ".");
         return "redirect:" + (referer != null ? referer : "/admin/orders");

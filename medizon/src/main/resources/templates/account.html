@@ -22,7 +22,7 @@
         <div class="col-lg-4">
             <nav class="mz-account-nav" aria-label="Account">
                 <a href="#signin"><i class="bi bi-person-badge" aria-hidden="true"></i>Sign-in details</a>
-                <a href="#password"><i class="bi bi-key" aria-hidden="true"></i>Change password</a>
+                <a href="#password" th:unless="${me.admin}"><i class="bi bi-key" aria-hidden="true"></i>Change password</a>
                 <a href="#devices"><i class="bi bi-laptop" aria-hidden="true"></i>Signed-in devices</a>
                 <a th:href="@{/profile}"><i class="bi bi-person" aria-hidden="true"></i>Profile</a>
                 <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/addresses}"><i class="bi bi-geo-alt" aria-hidden="true"></i>Saved addresses</a>
@@ -30,6 +30,7 @@
                 <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/members}"><i class="bi bi-people" aria-hidden="true"></i>Family members</a>
                 <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/orders}"><i class="bi bi-box-seam" aria-hidden="true"></i>Your orders</a>
                 <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/notifications/settings}"><i class="bi bi-sliders" aria-hidden="true"></i>Alerts on this device</a>
+                <a sec:authorize="hasRole('CUSTOMER')" href="#delete" class="text-danger"><i class="bi bi-trash" aria-hidden="true"></i>Delete account</a>
             </nav>
         </div>
 
@@ -39,7 +40,7 @@
                 <dl class="mz-account-dl mb-0">
                     <dt>Email</dt><dd th:text="${me.email}"></dd>
                     <dt>Mobile</dt><dd th:text="${me.phone} ?: 'Not added'"></dd>
-                    <dt>Account type</dt><dd th:text="${me.admin} ? 'Admin' : 'Customer'"></dd>
+                    <dt>Account type</dt><dd th:text="${me.role.label} + (${me.store != null} ? ' · ' + ${me.store.name} : '')"></dd>
                     <dt>Member since</dt><dd th:text="${#temporals.format(me.createdAt, 'd MMM yyyy')}"></dd>
                     <dt th:if="${me.lastLoginAt != null}">Last sign-in</dt>
                     <dd th:if="${me.lastLoginAt != null}" th:text="${#temporals.format(me.lastLoginAt, 'd MMM yyyy, h:mm a')}"></dd>
@@ -47,7 +48,13 @@
                 <a th:href="@{/profile}" class="btn btn-sm btn-outline-primary mt-3">Edit name and mobile</a>
             </section>
 
-            <section class="mz-panel mb-4" id="password">
+            <section class="mz-panel mb-4" th:if="${me.admin}" id="password">
+                <h2 class="h5 mb-2">Password</h2>
+                <p class="small text-muted mb-0">The admin's email and password are set on the server with MEDIZON_ADMIN_EMAIL and
+                    MEDIZON_ADMIN_PASSWORD. Change them there and restart to update them.</p>
+            </section>
+
+            <section class="mz-panel mb-4" th:unless="${me.admin}" id="password">
                 <h2 class="h5 mb-3">Change password</h2>
                 <!-- Two steps: confirm the current password, then choose the new one. Without JavaScript all fields show. -->
                 <form th:action="@{/account/password}" method="post" autocomplete="off" data-mz-password-form>
@@ -115,6 +122,26 @@
                         <button class="btn btn-outline-danger" type="submit"><i class="bi bi-box-arrow-right me-1"></i>Sign out</button>
                     </form>
                 </div>
+            </section>
+
+            <section class="mz-panel mt-4 mz-danger-zone" id="delete" sec:authorize="hasRole('CUSTOMER')">
+                <h2 class="h5 mb-1">Delete account</h2>
+                <p class="small text-muted mb-2">This can't be undone. We delete your profile, addresses, family members, medicines
+                    and reminders, prescriptions, cart, reviews, feedback and alerts, and you're signed out everywhere.</p>
+                <p class="small text-muted mb-3">By law we keep your past orders and tax invoices for the accounts: amounts, GST,
+                    invoice numbers and the state they were delivered to, without your name, phone or address.
+                    <a th:href="@{/help} + '#help-delete'">More in the FAQ</a></p>
+                <form th:action="@{/account/delete}" method="post" class="row g-2 align-items-end" autocomplete="off"
+                      data-mz-confirm="Your account and personal data will be deleted for good."
+                      data-mz-confirm-title="Delete your account?" data-mz-confirm-ok="Delete account">
+                    <div class="col-sm-7">
+                        <label class="form-label small" for="deletePassword">Your password, to confirm</label>
+                        <input class="form-control" id="deletePassword" name="password" type="password" required autocomplete="current-password">
+                    </div>
+                    <div class="col-sm-5">
+                        <button class="btn btn-danger w-100" type="submit"><i class="bi bi-trash me-1"></i>Delete my account</button>
+                    </div>
+                </form>
             </section>
         </div>
     </div>

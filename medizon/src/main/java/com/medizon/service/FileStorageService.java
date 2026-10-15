@@ -91,6 +91,14 @@ public class FileStorageService {
         return name;
     }
 
+    /** Deletes a private upload (prescription or return photo); a missing file is fine. */
+    public void delete(String name) {
+        if (name == null || name.isBlank()) return;
+        Path p = root.resolve(name).normalize();
+        if (!p.startsWith(root)) return;
+        try { Files.deleteIfExists(p); } catch (IOException ignored) { }
+    }
+
     public Resource load(String name) {
         Path p = root.resolve(name).normalize();
         if (!p.startsWith(root) || !Files.exists(p)) throw new BusinessException("File not found.");

@@ -7,11 +7,22 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <h1 class="mz-page-title mb-3">Customer orders</h1>
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+        <h1 class="mz-page-title mb-0" th:text="${store != null} ? 'Orders · ' + ${store.name} : 'Customer orders'">Customer orders</h1>
+        <!-- Store accounts only ever see their own store; everyone else can narrow to one -->
+        <form th:unless="${#lists.isEmpty(stores)}" th:action="@{/admin/orders}" method="get" class="d-flex gap-2">
+            <input type="hidden" name="status" th:value="${selected}">
+            <select name="store" class="form-select form-select-sm" aria-label="Store" onchange="this.form.submit()">
+                <option value="">All stores</option>
+                <option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}" th:selected="${store != null and store.id == s.id}"></option>
+            </select>
+            <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Show</button></noscript>
+        </form>
+    </div>
     <div class="mz-chip-scroll mb-4">
-        <a class="mz-chip" th:classappend="${selected == null} ? 'active'" th:href="@{/admin/orders}">All</a>
+        <a class="mz-chip" th:classappend="${selected == null} ? 'active'" th:href="@{/admin/orders(store=${store?.id})}">All</a>
         <a th:each="s : ${statuses}" class="mz-chip" th:classappend="${s == selected} ? 'active'"
-           th:href="@{/admin/orders(status=${s})}">
+           th:href="@{/admin/orders(status=${s}, store=${store?.id})}">
             <span th:text="${s.label}"></span> <span class="opacity-75" th:text="'(' + ${counts.get(s)} + ')'"></span></a>
     </div>
 
@@ -19,7 +30,7 @@
     <div th:unless="${#lists.isEmpty(orders)}" class="mz-panel-flush">
         <div class="table-responsive">
             <table class="table align-middle mb-0">
-                <thead><tr><th>Order</th><th>Customer</th><th>Placed</th><th>Total</th><th>Payment</th><th>Status</th><th>Move to</th></tr></thead>
+                <thead><tr><th>Order</th><th>Customer</th><th th:if="${store == null}">Store</th><th>Placed</th><th>Total</th><th>Payment</th><th>Status</th><th th:if="${canManage}">Move to</th></tr></thead>
                 <tbody>
                 <tr th:each="o : ${orders}">
                     <td><a class="fw-semibold" th:href="@{/admin/orders/{id}(id=${o.id})}" th:text="${o.orderNumber}"></a>
@@ -28,13 +39,14 @@
                     <td><span th:text="${o.user.fullName}"></span>
                         <div th:if="${o.deliverTo != o.user.fullName}" class="small" th:text="'For ' + ${o.deliverTo}"></div>
                         <div class="small text-muted" th:text="${o.contactPhone}"></div></td>
+                    <td th:if="${store == null}" class="small" th:text="${o.store != null} ? ${o.store.name} : '–'"></td>
                     <td class="text-nowrap" th:text="${#temporals.format(o.createdAt, 'd MMM, h:mm a')}"></td>
                     <td th:text="'₹' + ${o.total}"></td>
                     <td class="small" th:text="${o.paymentMethod.name()} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></td>
                     <td><span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
                         <a th:if="${o.invoiceAvailable}" th:href="@{/admin/orders/{id}/invoice(id=${o.id})}" class="d-block small mt-1">
                             <i class="bi bi-receipt"></i> Invoice</a></td>
-                    <td>
+                    <td th:if="${canManage}">
                         <form th:unless="${#lists.isEmpty(o.status.nextStatuses)}" th:action="@{/admin/orders/{id}/status(id=${o.id})}" method="post" class="d-flex gap-1">
                             <select name="status" class="form-select form-select-sm" aria-label="New status">
                                 <option th:each="s : ${o.status.nextStatuses}" th:value="${s}" th:text="${s.label}"></option>

@@ -3,6 +3,7 @@ package com.medizon.service;
 import com.medizon.domain.InvoiceCounter;
 import com.medizon.domain.Order;
 import com.medizon.domain.OrderItem;
+import com.medizon.domain.Store;
 import com.medizon.dto.Invoice;
 import com.medizon.repository.InvoiceCounterRepository;
 import lombok.RequiredArgsConstructor;
@@ -66,7 +67,7 @@ public class InvoiceService {
 
     /** The tax worked out for any order, without issuing an invoice number; used by the sales export too. */
     public Invoice breakdown(Order o) {
-        Invoice.Seller seller = seller();
+        Invoice.Seller seller = seller(o.getStore());
         String buyerState = o.getShippingState() != null ? o.getShippingState() : o.getUser().getState();
         String buyerCode = GstStates.code(buyerState);
         boolean interState = seller.getStateCode() != null && buyerCode != null && !seller.getStateCode().equals(buyerCode);
@@ -129,8 +130,25 @@ public class InvoiceService {
                 gross.setScale(2, RoundingMode.HALF_UP));
     }
 
+    /** MediZon's own details from configuration: the site footer and reports. */
     public Invoice.Seller seller() {
         return new Invoice.Seller(sellerName, sellerGstin, sellerDrugLicense, sellerAddress, sellerState,
                 GstStates.code(sellerState), sellerPhone, sellerEmail);
+    }
+
+    /**
+     * Who sells an order: the store that fulfils it, with MediZon's configured details for anything the store hasn't
+     * filled in. The seller's state decides CGST + SGST or IGST, so each store's invoices follow its own state.
+     */
+    public Invoice.Seller seller(Store s) {
+        if (s == null) return seller();
+        String state = or(s.getState(), sellerState);
+        return new Invoice.Seller(s.getName(), or(s.getGstin(), sellerGstin), or(s.getDrugLicense(), sellerDrugLicense),
+                or(s.getFormattedAddress(), sellerAddress), state, GstStates.code(state), or(s.getPhone(), sellerPhone),
+                or(s.getEmail(), sellerEmail));
+    }
+
+    private static String or(String value, String fallback) {
+        return value == null || value.isBlank() ? (fallback == null ? "" : fallback) : value;
     }
 }

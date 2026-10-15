@@ -16,8 +16,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Returns: the customer picks packs from a delivered order, gives a reason and photos; an admin approves or rejects;
- * approved returns are picked up (supply at home goes down, packs optionally go back on the shelf) and refunded.
+ * Returns: the customer picks packs from a delivered order, gives a reason and photos; the store that sold it (or the
+ * admin) approves or rejects; approved returns are picked up (supply at home goes down, packs optionally go back on
+ * that store's shelf) and refunded.
  */
 @Service
 @RequiredArgsConstructor
@@ -31,7 +32,7 @@ public class ReturnService {
     private final MedicationPlanService planService;
     private final FileStorageService storage;
     private final NotificationService notifications;
-    private final UserRepository users;
+    private final StaffAlerts staffAlerts;
 
     // ------------------------------------------------------------------ customer
 
@@ -128,10 +129,9 @@ public class ReturnService {
         notifications.notify(user, NotificationType.RETURN_UPDATE, "Return requested",
                 "We got your return request " + r.getReturnNumber() + " for order " + o.getOrderNumber()
                         + ". A pharmacist will review it, usually within a day.", "/orders/" + o.getId());
-        users.findByRole(Role.ADMIN).forEach(admin -> notifications.notify(admin, NotificationType.RETURN_UPDATE,
-                "Return to review: " + r.getReturnNumber(),
+        staffAlerts.notifyStore(o.getStore(), true, NotificationType.RETURN_UPDATE, "Return to review: " + r.getReturnNumber(),
                 user.getFullName() + " wants to return " + r.getPackCount() + " pack(s) from order " + o.getOrderNumber()
-                        + " (" + reason.getLabel().toLowerCase() + ").", "/admin/returns/" + r.getId()));
+                        + " (" + reason.getLabel().toLowerCase() + ").", "/admin/returns/" + r.getId());
         return r;
     }
 
@@ -139,10 +139,14 @@ public class ReturnService {
 
     public List<ReturnRequest> forUser(User user) { return returns.findByUserOrderByCreatedAtDesc(user); }
 
-    /** Owners and admins can see a return's photos; anyone else gets "not found". */
+    /** The customer, the admin and the store that sold the order can see a return's photos; anyone else gets "not found". */
     @Transactional(readOnly = true)
     public ReturnImage image(Long returnId, int index, User viewer) {
         ReturnRequest r = viewer.isAdmin() ? get(returnId)
+                : viewer.isStoreStaff() ? returns.findById(returnId)
+                        .filter(x -> viewer.getStore() != null && x.getOrder().getStore() != null
+                                && viewer.getStore().getId().equals(x.getOrder().getStore().getId()))
+                        .orElseThrow(() -> new BusinessException("File not found."))
                 : returns.findByIdAndUser(returnId, viewer).orElseThrow(() -> new BusinessException("File not found."));
         if (index < 0 || index >= r.getImages().size()) throw new BusinessException("File not found.");
         return r.getImages().get(index);
@@ -156,14 +160,24 @@ public class ReturnService {
         return returns.findById(id).orElseThrow(() -> new BusinessException("Return not found."));
     }
 
-    public List<ReturnRequest> adminList(ReturnStatus status) {
+    /** Returns for the back office: one store's, or every store's when {@code store} is null. */
+    public List<ReturnRequest> adminList(ReturnStatus status, Store store) {
+        if (store != null) {
+            return status == null ? returns.findByOrderStoreOrderByCreatedAtDesc(store) : returns.findByOrderStoreAndStatusOrderByCreatedAtAsc(store, status);
+        }
         return status == null ? returns.findAllByOrderByCreatedAtDesc() : returns.findByStatusOrderByCreatedAtAsc(status);
     }
 
-    public Map<ReturnStatus, Long> adminCounts() {
+    public Map<ReturnStatus, Long> adminCounts(Store store) {
         Map<ReturnStatus, Long> counts = new EnumMap<>(ReturnStatus.class);
-        for (ReturnStatus s : ReturnStatus.values()) counts.put(s, returns.countByStatus(s));
+        for (ReturnStatus s : ReturnStatus.values()) {
+            counts.put(s, store != null ? returns.countByOrderStoreAndStatus(store, s) : returns.countByStatus(s));
+        }
         return counts;
+    }
+
+    public long countAwaitingReview(Store store) {
+        return store == null ? returns.countByStatus(ReturnStatus.REQUESTED) : returns.countByOrderStoreAndStatus(store, ReturnStatus.REQUESTED);
     }
 
     public long countAwaitingReview() { return returns.countByStatus(ReturnStatus.REQUESTED); }
@@ -190,10 +204,7 @@ public class ReturnService {
         r.setPickedUpAt(LocalDateTime.now());
         for (ReturnItem ri : r.getItems()) {
             planService.onItemsReturned(ri.getOrderItem(), ri.getQuantity());
-            if (restock) {
-                Medicine m = ri.getOrderItem().getMedicine();
-                m.setStock(m.getStock() + ri.getQuantity());
-            }
+            if (restock) orderService.restock(r.getOrder(), ri.getOrderItem().getMedicine(), ri.getQuantity());
         }
         r.setRestocked(restock);
         notifyCustomer(r, "Return picked up", "We've collected the packs for return " + r.getReturnNumber()

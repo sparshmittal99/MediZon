@@ -20,7 +20,7 @@ class ReturnableItemsTest {
     private final ReturnRequestRepository returns = mock(ReturnRequestRepository.class);
     private final OrderService orders = mock(OrderService.class);
     private final ReturnService service = new ReturnService(returns, orders, mock(MedicationPlanService.class),
-            mock(FileStorageService.class), mock(NotificationService.class), mock(UserRepository.class));
+            mock(FileStorageService.class), mock(NotificationService.class), mock(StaffAlerts.class));
 
     private static OrderItem item(long id, String name, Boolean returnableAtOrder, boolean medicineReturnable) {
         Medicine m = new Medicine();

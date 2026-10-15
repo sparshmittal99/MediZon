@@ -54,7 +54,7 @@ public class ReminderService {
         for (Reminder r : due) {
             User u = r.getUser();
             notifications.notify(u, NotificationType.INFO, "Reminder: " + r.getText(),
-                    "You asked MediZon Assistant to remind you: " + r.getText() + ".", u.isAdmin() ? "/admin" : null);
+                    "You asked MediZon Assistant to remind you: " + r.getText() + ".", u.isStaff() ? "/admin" : null);
             r.setSent(true);
         }
         return due.size();

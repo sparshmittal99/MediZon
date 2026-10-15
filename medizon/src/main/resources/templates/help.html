@@ -34,7 +34,7 @@
             </div>
 
             <!-- Customers and visitors -->
-            <th:block sec:authorize="!hasRole('ADMIN')">
+            <th:block sec:authorize="!hasRole('STAFF')">
                 <section class="mz-faq-group" id="help-start">
                     <h2 class="mz-faq-title"><i class="bi bi-rocket-takeoff" aria-hidden="true"></i>Getting started</h2>
                     <div class="mz-faq">
@@ -74,8 +74,21 @@
                         <details class="mz-faq-item">
                             <summary>When will my order arrive?</summary>
                             <div>Each medicine's page shows when it arrives at your delivery location, for example
-                                <em>Delivery in 3–5 days</em> with the dates. Some medicines come the same day if you order before 6 PM.
+                                <em>Delivery in 3–5 days</em> with the dates. Some stores deliver the same day if you order before 6 PM.
                                 Choose your location at the top of the page to see the date for your PIN code.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Which store sends my medicines?</summary>
+                            <div>MediZon works with several pharmacy stores. The shop shows what the stores that deliver to your location
+                                sell. Each medicine comes from the nearest of them that has it in stock, at that store's price and delivery
+                                time; if the nearest is out of it, the next nearest sends it. Prescription medicines cost the same at every
+                                store.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Why did my cart become more than one order?</summary>
+                            <div>When the medicines in your cart come from different stores, each store sends its part as its own order,
+                                with its own tracking and tax invoice. You check out and pay once, and the delivery charge is worked out on
+                                the whole cart.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>How do I track my order?</summary>
@@ -250,6 +263,17 @@
                             <div>Yes. Choose a language from the selector at the bottom of any page. English, Hindi and other Indian
                                 languages are available.</div>
                         </details>
+                        <details class="mz-faq-item" id="help-delete">
+                            <summary>How do I delete my account, and what happens to my data?</summary>
+                            <div>Open <strong>Account settings → Delete account</strong> and confirm with your password. It can't be undone.
+                                We delete your profile, saved addresses, family members, medicines and reminders, prescriptions and their
+                                files, cart, reviews, feedback, alerts and devices, and sign you out everywhere.
+                                <br><br>
+                                The law requires us to keep tax records, so your past orders, their tax invoices and any refunds stay in
+                                our accounts: amounts, GST, invoice numbers and the state each order went to, without your name, phone
+                                or address. If you entered a business GSTIN for billing, its invoices keep that GSTIN and business name, as
+                                GST rules require. These records are used only for accounting and tax.</div>
+                        </details>
                         <details class="mz-faq-item">
                             <summary>Is MediZon's information medical advice?</summary>
                             <div>No. Information on MediZon, including answers from the assistant, is general guidance and doesn't replace
@@ -259,15 +283,31 @@
                 </section>
             </th:block>
 
-            <!-- Store staff -->
-            <th:block sec:authorize="hasRole('ADMIN')">
+            <!-- Staff -->
+            <th:block sec:authorize="hasRole('STAFF')">
                 <section class="mz-faq-group" id="help-admin">
                     <h2 class="mz-faq-title"><i class="bi bi-shop" aria-hidden="true"></i>Running the store</h2>
                     <div class="mz-faq">
                         <details class="mz-faq-item">
+                            <summary>Who can do what?</summary>
+                            <div>There's one <strong>admin</strong>, whose email and password are set on the server; the admin can do
+                                everything and creates every other account. <strong>Pharmacists</strong> review prescriptions.
+                                <strong>Support</strong> reads feedback and reviews and can look orders up. <strong>Finance</strong> has the
+                                sales and GST reports. <strong>Store</strong> accounts run one store: its catalogue, orders, deliveries and
+                                returns. Each account only sees its own pages.</div>
+                        </details>
+                        <details class="mz-faq-item">
                             <summary>How do I process customer orders?</summary>
                             <div>Open <strong>Orders</strong>, filter by status and move each order along as it's confirmed, shipped and
-                                delivered. Marking an order delivered adds its packs to the customer's supply at home.</div>
+                                delivered. Store accounts see their own store's orders. Marking an order delivered adds its packs to the
+                                customer's supply at home.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How do stores and catalogues work?</summary>
+                            <div>The admin keeps the master catalogue: every product with its MRP, GST and HSN, and the price
+                                prescription medicines sell at in every store. Each store lists the products it sells with its own stock,
+                                batch expiry and, for OTC medicines, its own price (never above the MRP). A store can add a product that
+                                isn't in the master catalogue yet.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>How do returns work?</summary>
@@ -282,23 +322,24 @@
                         </details>
                         <details class="mz-faq-item">
                             <summary>How do delivery areas work?</summary>
-                            <div>Customers can only order to the PIN codes in <strong>Delivery areas</strong>. Add one or many at once,
-                                separated by commas, spaces or new lines. The header's location picker checks them.</div>
+                            <div>The admin lists PIN codes in <strong>Delivery areas</strong> and chooses which stores deliver to each,
+                                with each store's delivery time there. The quickest store is the nearest: it sends what it has, and the next
+                                nearest sends the rest. Customers can only order to PIN codes an open store delivers to.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>How are product prices and tax set?</summary>
-                            <div>Prices include GST. Invoices work out the tax inside each price from the medicine's GST rate and HSN code.
-                                Expired stock can't be ordered.</div>
+                            <div>Prices include GST. Invoices carry the selling store's details and work out the tax inside each price from
+                                the medicine's GST rate and HSN code. Expired stock can't be ordered.</div>
                         </details>
                         <details class="mz-faq-item">
-                            <summary>How do I add another admin?</summary>
-                            <div>In <strong>Users</strong>, create an admin with an email that isn't already registered. Admin accounts
-                                manage orders, prescriptions, the catalog and users; they can't shop. Customer accounts can't be turned
-                                into admins. Disabled accounts keep their orders and history.</div>
+                            <summary>How do I add accounts for my team?</summary>
+                            <div>The admin creates them in <strong>Users</strong>, choosing a role (and a store, for store accounts). There
+                                is only one admin. The admin can disable or delete any other account; customers can delete their own.
+                                Deleted accounts lose their personal data, while orders and invoices stay for the accounts.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>What counts as a visit?</summary>
-                            <div>One browser session per day. Admin pages aren't counted.</div>
+                            <div>One browser session per day. Staff pages aren't counted.</div>
                         </details>
                     </div>
                 </section>

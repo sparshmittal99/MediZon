@@ -3,10 +3,11 @@ package com.medizon.service;
 import com.medizon.domain.BillingAddress;
 import com.medizon.domain.Role;
 import com.medizon.domain.User;
-import com.medizon.dto.AdminForm;
+import com.medizon.dto.NewUserForm;
 import com.medizon.dto.BillingForm;
 import com.medizon.dto.ProfileForm;
 import com.medizon.dto.RegisterForm;
+import com.medizon.repository.StoreRepository;
 import com.medizon.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.session.SessionInformation;
@@ -29,6 +30,7 @@ public class UserService {
     private final UserRepository users;
     private final PasswordEncoder passwordEncoder;
     private final SessionRegistry sessionRegistry;
+    private final StoreRepository stores;
 
     @Transactional
     public User register(RegisterForm form) {
@@ -92,6 +94,7 @@ public class UserService {
      */
     @Transactional
     public int changePassword(User user, String current, String next, String confirm, String keepSessionId) {
+        if (user.isAdmin()) throw new BusinessException("The admin password is set with MEDIZON_ADMIN_PASSWORD on the server.");
         if (current == null || !passwordEncoder.matches(current, user.getPassword())) {
             throw new BusinessException("Your current password isn't right.");
         }
@@ -125,31 +128,43 @@ public class UserService {
 
     // ------------------------------------------------------------------ admin: manage accounts
 
-    public List<User> all() { return users.findAllByOrderByCreatedAtDesc(); }
+    /** Every account except deleted ones, newest first. */
+    public List<User> all() { return users.findAllByOrderByCreatedAtDesc().stream().filter(u -> !u.isDeleted()).toList(); }
 
     public User get(Long id) { return users.findById(id).orElseThrow(() -> new BusinessException("User not found.")); }
 
     @Transactional
     public User setEnabled(Long id, boolean enabled, User actingAdmin) {
         User u = guardedTarget(id, actingAdmin);
+        if (enabled && u.isAdmin()) throw new BusinessException("There's only one admin, set by MEDIZON_ADMIN_EMAIL. Delete this old admin account instead.");
         u.setEnabled(enabled);
         if (!enabled) signOutEverywhere(u);
         return u;
     }
 
-    /** Admin accounts are separate from customer accounts and can only be created by an existing admin. */
+    /**
+     * The admin creates an account with a role: a customer, or a staff account limited to that role's work. There is
+     * only ever one admin, so that role can't be given. Store accounts belong to one store.
+     */
     @Transactional
-    public User createAdmin(AdminForm form, User actingAdmin) {
-        if (!actingAdmin.isAdmin()) throw new BusinessException("Only an admin can create admin accounts.");
+    public User createUser(NewUserForm form, User actingAdmin) {
+        if (!actingAdmin.isAdmin()) throw new BusinessException("Only the admin can create accounts.");
+        if (!Role.assignable().contains(form.getRole())) throw new BusinessException("There's only one admin; choose another role.");
         String email = form.getEmail().trim().toLowerCase();
-        if (users.existsByEmailIgnoreCase(email)) {
-            throw new BusinessException("An account with this email already exists. Admin accounts need their own email.");
+        if (users.existsByEmailIgnoreCase(email)) throw new BusinessException("An account with this email already exists.");
+        if (form.getPassword() == null || form.getPassword().length() < 8) {
+            throw new BusinessException("Use at least 8 characters for the password.");
         }
         User u = new User();
         u.setFullName(form.getFullName().trim());
         u.setEmail(email);
+        u.setPhone(form.getPhone() == null || form.getPhone().isBlank() ? null : form.getPhone().trim());
         u.setPassword(passwordEncoder.encode(form.getPassword()));
-        u.setRole(Role.ADMIN);
+        u.setRole(form.getRole());
+        if (form.getRole() == Role.STORE) {
+            if (form.getStoreId() == null) throw new BusinessException("Choose the store this account works for.");
+            u.setStore(stores.findById(form.getStoreId()).orElseThrow(() -> new BusinessException("That store doesn't exist.")));
+        }
         return users.save(u);
     }
 
@@ -161,8 +176,11 @@ public class UserService {
     }
 
     private User guardedTarget(Long id, User actingAdmin) {
+        if (!actingAdmin.isAdmin()) throw new BusinessException("Only the admin can manage accounts.");
         if (id.equals(actingAdmin.getId())) throw new BusinessException("You can't change your own account here.");
-        return get(id);
+        User u = get(id);
+        if (u.isDeleted()) throw new BusinessException("That account has been deleted.");
+        return u;
     }
 
     // ------------------------------------------------------------------ who is online

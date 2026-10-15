@@ -4,6 +4,7 @@ import com.medizon.domain.Order;
 import com.medizon.domain.OrderItem;
 import com.medizon.domain.ReturnRequest;
 import com.medizon.domain.ReturnStatus;
+import com.medizon.domain.Store;
 import com.medizon.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -21,6 +22,9 @@ public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Lo
     List<ReturnRequest> findAllByOrderByCreatedAtDesc();
     List<ReturnRequest> findByStatusOrderByCreatedAtAsc(ReturnStatus status);
     long countByStatus(ReturnStatus status);
+    List<ReturnRequest> findByOrderStoreOrderByCreatedAtDesc(Store store);
+    List<ReturnRequest> findByOrderStoreAndStatusOrderByCreatedAtAsc(Store store, ReturnStatus status);
+    long countByOrderStoreAndStatus(Store store, ReturnStatus status);
     List<ReturnRequest> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(LocalDateTime from, LocalDateTime to);
 
     /** Packs of an order line already returned or on their way back (anything not rejected). */

@@ -39,6 +39,9 @@ public class AssistantService {
     public record Result(AssistantReply reply, JsonNode state) {}
 
     public Result chat(User user, String message, JsonNode payload, JsonNode state) {
+        if (user.isStaff() && !user.isAdmin()) {
+            return new Result(AssistantReply.text("The assistant helps customers and the admin. Your account's pages are in the menu above."), state);
+        }
         ObjectNode req = mapper.createObjectNode();
         req.put("role", user.isAdmin() ? "admin" : "customer");
         req.putObject("user").put("first_name", user.getFirstName());

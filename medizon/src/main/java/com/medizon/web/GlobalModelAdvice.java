@@ -32,7 +32,7 @@ public class GlobalModelAdvice {
     private final InvoiceService invoiceService;
     private final DeliveryLocations deliveryLocations;
     private final AddressService addressService;
-    private final MedicineService medicineService;
+    private final CatalogService catalog;
 
     @ModelAttribute
     public void common(Model model, HttpServletRequest request, HttpServletResponse response) {
@@ -40,7 +40,10 @@ public class GlobalModelAdvice {
         model.addAttribute("freeDeliveryAbove", CartService.FREE_DELIVERY_ABOVE);
         Optional<User> signedIn = currentUser.find();
         // Shop by category: the header's category bar and the "All" menu
-        if (signedIn.map(u -> !u.isAdmin()).orElse(true)) model.addAttribute("navCategories", medicineService.categories());
+        // Shop by category: what the stores delivering to the shopper sell
+        if (signedIn.map(u -> !u.isStaff()).orElse(true)) {
+            model.addAttribute("navCategories", catalog.categories(deliveryLocations.pincode(request)));
+        }
         if (signedIn.isEmpty()) {
             HttpSession session = request.getSession(false);
             model.addAttribute("cartCount", cartService.guestCount(session));
@@ -49,7 +52,7 @@ public class GlobalModelAdvice {
             return;
         }
         signedIn.ifPresent(u -> {
-            if (!u.isAdmin()) {
+            if (!u.isStaff()) {
                 // Signed in through a remember-me cookie: the login handler didn't run, so move the visitor cart here.
                 if (CartService.hasGuestCart(request.getSession(false))) cartService.mergeGuestCart(u, request.getSession(false));
                 deliveryLocations.current(request, u).ifPresent(l -> model.addAttribute("deliverTo", l));
@@ -59,7 +62,7 @@ public class GlobalModelAdvice {
             model.addAttribute("me", u);
             model.addAttribute("cartCount", cartService.count(u));
             NotificationDevice device = null;
-            if (!u.isAdmin()) {
+            if (!u.isStaff()) {
                 model.addAttribute("cartQuantities", cartService.quantities(u));
                 device = deviceService.current(u, request, response);
                 model.addAttribute("device", device);

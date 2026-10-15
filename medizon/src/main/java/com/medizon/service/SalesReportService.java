@@ -9,18 +9,22 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Date;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * Date-wise and month-wise sales, orders and returns for the admin. Aggregated in SQL so long ranges stay cheap.
  * Orders and sales count on the day an order was placed; returns on the day they were requested;
- * refunds on the day they were paid out.
+ * refunds on the day they were paid out. Every figure can be narrowed to one store (an order's store; for a return,
+ * its order's store); a null store means all of them.
  */
 @Service
 @RequiredArgsConstructor
@@ -99,37 +103,70 @@ public class SalesReportService {
     // ------------------------------------------------------------------ rows
 
     /** One row per day, oldest first, including days with nothing. */
-    public List<SalesDay> daily(LocalDate from, LocalDate to) {
-        Map<LocalDate, SalesDay> days = collect(from, to);
+    public List<SalesDay> daily(LocalDate from, LocalDate to) { return daily(from, to, null); }
+
+    public List<SalesDay> daily(LocalDate from, LocalDate to, Long storeId) {
+        Map<LocalDate, SalesDay> days = collect(from, to, storeId);
         List<SalesDay> out = new ArrayList<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) out.add(days.getOrDefault(d, new SalesDay(d)));
         return out;
     }
 
     /** One row per calendar month touching the range, oldest first; partial months only count days in the range. */
-    public List<SalesDay> monthly(LocalDate from, LocalDate to) {
+    public List<SalesDay> monthly(LocalDate from, LocalDate to) { return monthly(from, to, null); }
+
+    public List<SalesDay> monthly(LocalDate from, LocalDate to, Long storeId) {
         Map<YearMonth, SalesDay> months = new LinkedHashMap<>();
         for (YearMonth m = YearMonth.from(from); !m.isAfter(YearMonth.from(to)); m = m.plusMonths(1)) months.put(m, new SalesDay(m));
-        collect(from, to).forEach((day, row) -> months.get(YearMonth.from(day)).add(row));
+        collect(from, to, storeId).forEach((day, row) -> months.get(YearMonth.from(day)).add(row));
         return new ArrayList<>(months.values());
     }
 
-    public SalesDay day(LocalDate day) { return collect(day, day).getOrDefault(day, new SalesDay(day)); }
+    public SalesDay day(LocalDate day) { return day(day, null); }
 
-    public SalesDay allTime() { return SalesDay.total(collect(BEGINNING, LocalDate.now().plusDays(1)).values()); }
+    public SalesDay day(LocalDate day, Long storeId) { return collect(day, day, storeId).getOrDefault(day, new SalesDay(day)); }
 
-    private Map<LocalDate, SalesDay> collect(LocalDate from, LocalDate to) {
+    public SalesDay allTime() { return allTime(null); }
+
+    public SalesDay allTime(Long storeId) { return SalesDay.total(collect(BEGINNING, LocalDate.now().plusDays(1), storeId).values()); }
+
+    /** One store's totals for a period; {@code id} is null for orders that have no store. */
+    public record StoreSales(Long id, String name, boolean active, SalesDay totals) {
+        /** This store's sales as a percentage of {@code total}, to one decimal place. */
+        public BigDecimal shareOf(BigDecimal total) {
+            return total.signum() == 0 ? BigDecimal.ZERO
+                    : totals.getSales().multiply(BigDecimal.valueOf(100)).divide(total, 1, RoundingMode.HALF_UP);
+        }
+    }
+
+    /**
+     * Each store's totals for the period, highest sales first, to compare stores side by side. Every store is listed,
+     * even with nothing in the period; orders without a store get a row of their own only when there are some.
+     */
+    public List<StoreSales> byStore(LocalDate from, LocalDate to) {
         Date start = Date.valueOf(from), end = Date.valueOf(to.plusDays(1));
-        Map<LocalDate, SalesDay> days = new TreeMap<>();
+        Map<Long, StoreSales> stores = new LinkedHashMap<>();
+        jdbc.query("select id, name, active from stores order by name", rs -> {
+            stores.put(rs.getLong("id"), new StoreSales(rs.getLong("id"), rs.getString("name"), rs.getBoolean("active"), new SalesDay((LocalDate) null)));
+        });
+        Function<ResultSet, SalesDay> row = rs -> {
+            try {
+                long id = rs.getLong("store_id");
+                Long key = rs.wasNull() ? null : id;
+                return stores.computeIfAbsent(key, k -> new StoreSales(null, "(no store)", false, new SalesDay((LocalDate) null))).totals();
+            } catch (SQLException e) {
+                throw new IllegalStateException(e);
+            }
+        };
 
         jdbc.query("""
-                select cast(created_at as date) as day, count(*) as orders,
+                select store_id, count(*) as orders,
                        count(*) filter (where status = 'CANCELLED') as cancelled,
                        coalesce(sum(total) filter (where status <> 'CANCELLED'), 0) as sales,
                        coalesce(sum(round_off) filter (where status <> 'CANCELLED'), 0) as round_off
                 from orders where created_at >= ? and created_at < ? group by 1""",
                 rs -> {
-                    SalesDay d = days.computeIfAbsent(rs.getDate("day").toLocalDate(), SalesDay::new);
+                    SalesDay d = row.apply(rs);
                     d.setOrders(rs.getLong("orders"));
                     d.setCancelled(rs.getLong("cancelled"));
                     d.setSales(rs.getBigDecimal("sales"));
@@ -137,26 +174,77 @@ public class SalesReportService {
                 }, start, end);
 
         jdbc.query("""
-                select cast(o.created_at as date) as day, coalesce(sum(i.quantity), 0) as packs
+                select o.store_id, coalesce(sum(i.quantity), 0) as packs
                 from order_item i join orders o on o.id = i.order_id
                 where o.status <> 'CANCELLED' and o.created_at >= ? and o.created_at < ? group by 1""",
+                rs -> { row.apply(rs).setPacks(rs.getLong("packs")); }, start, end);
+
+        jdbc.query("""
+                select o.store_id, count(*) as returns
+                from return_requests r join orders o on o.id = r.order_id
+                where r.created_at >= ? and r.created_at < ? group by 1""",
+                rs -> { row.apply(rs).setReturns(rs.getLong("returns")); }, start, end);
+
+        jdbc.query("""
+                select o.store_id, count(*) as refunds, coalesce(sum(r.refund_amount), 0) as amount
+                from return_requests r join orders o on o.id = r.order_id
+                where r.status = 'REFUNDED' and r.refunded_at >= ? and r.refunded_at < ? group by 1""",
+                rs -> {
+                    SalesDay d = row.apply(rs);
+                    d.setRefundCount(rs.getLong("refunds"));
+                    d.setRefunds(rs.getBigDecimal("amount"));
+                }, start, end);
+
+        List<StoreSales> out = new ArrayList<>(stores.values());
+        out.sort(Comparator.comparing((StoreSales s) -> s.totals().getSales()).reversed());
+        return out;
+    }
+
+    private Map<LocalDate, SalesDay> collect(LocalDate from, LocalDate to, Long storeId) {
+        Date start = Date.valueOf(from), end = Date.valueOf(to.plusDays(1));
+        Map<LocalDate, SalesDay> days = new TreeMap<>();
+        // One store only: each query gets the filter, with the store id as its last parameter
+        String orderStore = storeId == null ? "" : " and store_id = ?";
+        String joinedStore = storeId == null ? "" : " and o.store_id = ?";
+        Object[] args = storeId == null ? new Object[]{start, end} : new Object[]{start, end, storeId};
+
+        jdbc.query("""
+                select cast(created_at as date) as day, count(*) as orders,
+                       count(*) filter (where status = 'CANCELLED') as cancelled,
+                       coalesce(sum(total) filter (where status <> 'CANCELLED'), 0) as sales,
+                       coalesce(sum(round_off) filter (where status <> 'CANCELLED'), 0) as round_off
+                from orders where created_at >= ? and created_at < ?""" + orderStore + " group by 1",
+                rs -> {
+                    SalesDay d = days.computeIfAbsent(rs.getDate("day").toLocalDate(), SalesDay::new);
+                    d.setOrders(rs.getLong("orders"));
+                    d.setCancelled(rs.getLong("cancelled"));
+                    d.setSales(rs.getBigDecimal("sales"));
+                    d.setRoundOff(rs.getBigDecimal("round_off"));
+                }, args);
+
+        jdbc.query("""
+                select cast(o.created_at as date) as day, coalesce(sum(i.quantity), 0) as packs
+                from order_item i join orders o on o.id = i.order_id
+                where o.status <> 'CANCELLED' and o.created_at >= ? and o.created_at < ?""" + joinedStore + " group by 1",
                 rs -> { days.computeIfAbsent(rs.getDate("day").toLocalDate(), SalesDay::new).setPacks(rs.getLong("packs")); },
-                start, end);
+                args);
 
         jdbc.query("""
-                select cast(created_at as date) as day, count(*) as returns
-                from return_requests where created_at >= ? and created_at < ? group by 1""",
+                select cast(r.created_at as date) as day, count(*) as returns
+                from return_requests r join orders o on o.id = r.order_id
+                where r.created_at >= ? and r.created_at < ?""" + joinedStore + " group by 1",
                 rs -> { days.computeIfAbsent(rs.getDate("day").toLocalDate(), SalesDay::new).setReturns(rs.getLong("returns")); },
-                start, end);
+                args);
 
         jdbc.query("""
-                select cast(refunded_at as date) as day, count(*) as refunds, coalesce(sum(refund_amount), 0) as amount
-                from return_requests where status = 'REFUNDED' and refunded_at >= ? and refunded_at < ? group by 1""",
+                select cast(r.refunded_at as date) as day, count(*) as refunds, coalesce(sum(r.refund_amount), 0) as amount
+                from return_requests r join orders o on o.id = r.order_id
+                where r.status = 'REFUNDED' and r.refunded_at >= ? and r.refunded_at < ?""" + joinedStore + " group by 1",
                 rs -> {
                     SalesDay d = days.computeIfAbsent(rs.getDate("day").toLocalDate(), SalesDay::new);
                     d.setRefundCount(rs.getLong("refunds"));
                     d.setRefunds(rs.getBigDecimal("amount"));
-                }, start, end);
+                }, args);
         return days;
     }
 

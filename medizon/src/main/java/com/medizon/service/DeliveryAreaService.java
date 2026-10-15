@@ -2,6 +2,7 @@ package com.medizon.service;
 
 import com.medizon.domain.ServiceablePincode;
 import com.medizon.repository.ServiceablePincodeRepository;
+import com.medizon.repository.StoreAreaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,7 +15,10 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Where MediZon delivers: a list of PIN codes kept by admins. */
+/**
+ * Where MediZon delivers: PIN codes kept by the admin, each served by one or more stores (see {@link StoreService}).
+ * A PIN code is served when it's active and at least one open store delivers there.
+ */
 @Service
 @RequiredArgsConstructor
 public class DeliveryAreaService {
@@ -23,6 +27,7 @@ public class DeliveryAreaService {
     private static final Pattern PIN_IN_TEXT = Pattern.compile("(?<![0-9])[1-9][0-9]{5}(?![0-9])");
 
     private final ServiceablePincodeRepository pincodes;
+    private final StoreAreaRepository storeAreas;
 
     /** "400 050" or " 400050 " become "400050"; anything that isn't a 6 digit PIN code becomes null. */
     public static String normalize(String pincode) {
@@ -32,6 +37,12 @@ public class DeliveryAreaService {
     }
 
     public boolean isServiceable(String pincode) {
+        String p = normalize(pincode);
+        return p != null && pincodes.existsByPincodeAndActiveTrue(p) && !storeAreas.serving(p).isEmpty();
+    }
+
+    /** Listed and switched on by the admin, whether or not a store serves it yet. */
+    public boolean isListed(String pincode) {
         String p = normalize(pincode);
         return p != null && pincodes.existsByPincodeAndActiveTrue(p);
     }
@@ -45,9 +56,7 @@ public class DeliveryAreaService {
     public void requireServiceable(String pincode) {
         String p = normalize(pincode);
         if (p == null) throw new BusinessException("Add a valid 6 digit PIN code to your delivery address.");
-        if (!pincodes.existsByPincodeAndActiveTrue(p)) {
-            throw new BusinessException("Sorry, we don't deliver to PIN code " + p + " yet.");
-        }
+        if (!isServiceable(p)) throw new BusinessException("Sorry, we don't deliver to PIN code " + p + " yet.");
     }
 
     // ------------------------------------------------------------------ admin
@@ -61,13 +70,8 @@ public class DeliveryAreaService {
      * each; PIN codes already listed are updated and switched back on. Returns how many were added or updated.
      */
     @Transactional
-    public int add(String text, String area, String city, String state, Integer extraDeliveryDays) {
-        Set<String> found = new LinkedHashSet<>();
-        if (text != null) {
-            Matcher m = PIN_IN_TEXT.matcher(text);
-            while (m.find()) found.add(m.group());
-        }
-        if (found.isEmpty()) throw new BusinessException("Enter at least one 6 digit PIN code.");
+    public int add(String text, String area, String city, String state) {
+        List<String> found = parse(text);
         List<ServiceablePincode> saved = new ArrayList<>();
         for (String p : found) {
             ServiceablePincode s = pincodes.findByPincode(p).orElseGet(() -> {
@@ -78,12 +82,22 @@ public class DeliveryAreaService {
             if (blankToNull(area) != null) s.setArea(area.trim());
             if (blankToNull(city) != null) s.setCity(city.trim());
             if (blankToNull(state) != null) s.setState(state.trim());
-            if (extraDeliveryDays != null) s.setExtraDeliveryDays(checkDays(extraDeliveryDays));
             s.setActive(true);
             saved.add(s);
         }
         pincodes.saveAll(saved);
         return saved.size();
+    }
+
+    /** PIN codes typed one by one or pasted as a list ("400050, 400051 400052"), in order, without repeats. */
+    public static List<String> parse(String text) {
+        Set<String> found = new LinkedHashSet<>();
+        if (text != null) {
+            Matcher m = PIN_IN_TEXT.matcher(text);
+            while (m.find()) found.add(m.group());
+        }
+        if (found.isEmpty()) throw new BusinessException("Enter at least one 6 digit PIN code.");
+        return new ArrayList<>(found);
     }
 
     @Transactional
@@ -93,22 +107,10 @@ public class DeliveryAreaService {
         return s;
     }
 
-    /** Days added to every product's delivery time at this PIN code. */
-    @Transactional
-    public ServiceablePincode setExtraDeliveryDays(Long id, int days) {
-        ServiceablePincode s = get(id);
-        s.setExtraDeliveryDays(checkDays(days));
-        return s;
-    }
-
-    private static int checkDays(int days) {
-        if (days < 0 || days > 30) throw new BusinessException("Extra delivery days must be between 0 and 30.");
-        return days;
-    }
-
     @Transactional
     public ServiceablePincode delete(Long id) {
         ServiceablePincode s = get(id);
+        storeAreas.deleteByPincode(s.getPincode());
         pincodes.delete(s);
         return s;
     }

@@ -6,6 +6,7 @@ import com.medizon.domain.Member;
 import com.medizon.domain.Shares;
 import com.medizon.domain.User;
 import com.medizon.dto.CartSummary;
+import com.medizon.dto.Offer;
 import com.medizon.repository.CartItemRepository;
 import com.medizon.repository.MedicineRepository;
 import jakarta.servlet.http.HttpSession;
@@ -16,6 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.*;
 
+/**
+ * The cart. What can go in it, and at what price, depends on where it's going: {@code pincode} is the shopper's
+ * delivery location (null when they haven't picked one, which allows anything some store has in stock). Checkout
+ * checks every line again against the delivery address.
+ */
 @Service
 @RequiredArgsConstructor
 public class CartService {
@@ -26,6 +32,7 @@ public class CartService {
     private final CartItemRepository cart;
     private final MedicineRepository medicines;
     private final MemberService memberService;
+    private final CatalogService catalog;
 
     public static BigDecimal deliveryFeeFor(BigDecimal subtotal) {
         if (subtotal.signum() == 0 || subtotal.compareTo(FREE_DELIVERY_ABOVE) >= 0) return BigDecimal.ZERO;
@@ -33,8 +40,8 @@ public class CartService {
     }
 
     @Transactional
-    public void add(User user, Long medicineId, int quantity) {
-        add(user, medicineId, quantity, List.of());
+    public void add(User user, Long medicineId, int quantity, String pincode) {
+        add(user, medicineId, quantity, List.of(), pincode);
     }
 
     /**
@@ -42,13 +49,13 @@ public class CartService {
      * an existing line gives the packs to its first person; given members share the new packs evenly.
      */
     @Transactional
-    public void add(User user, Long medicineId, int quantity, Collection<Member> forMembers) {
-        if (user.isAdmin()) throw new BusinessException("Admin accounts can't shop.");
+    public void add(User user, Long medicineId, int quantity, Collection<Member> forMembers, String pincode) {
+        if (user.isStaff()) throw new BusinessException("Staff accounts can't shop.");
         Medicine m = medicines.findById(medicineId)
                 .orElseThrow(() -> new BusinessException("That medicine doesn't exist."));
         int qty = Math.max(1, quantity);
         CartItem item = lineFor(user, m);
-        checkSellable(m, item.getQuantity() + qty);
+        checkSellable(m, item.getQuantity() + qty, pincode);
 
         Map<Member, Integer> alloc = new LinkedHashMap<>(item.getAllocation());
         List<Member> to = forMembers.isEmpty()
@@ -70,8 +77,8 @@ public class CartService {
      * fewer packs come off the last person first. Returns the new quantity.
      */
     @Transactional
-    public int setQuantity(User user, Long medicineId, int quantity) {
-        if (user.isAdmin()) throw new BusinessException("Admin accounts can't shop.");
+    public int setQuantity(User user, Long medicineId, int quantity, String pincode) {
+        if (user.isStaff()) throw new BusinessException("Staff accounts can't shop.");
         Medicine m = medicines.findById(medicineId)
                 .orElseThrow(() -> new BusinessException("That medicine doesn't exist."));
         Optional<CartItem> existing = cart.findByUserAndMedicine(user, m);
@@ -79,7 +86,7 @@ public class CartService {
             existing.ifPresent(cart::delete);
             return 0;
         }
-        checkSellable(m, quantity);
+        checkSellable(m, quantity, pincode);
         CartItem item = lineFor(user, m);
         Map<Member, Integer> alloc = new LinkedHashMap<>(item.getAllocation());
         if (alloc.isEmpty()) alloc.put(memberService.self(user), 0);
@@ -107,7 +114,7 @@ public class CartService {
      * patient, so they can't go on the common shelf.
      */
     @Transactional
-    public CartItem setAllocation(User user, Long medicineId, Map<Long, Integer> packsByMember) {
+    public CartItem setAllocation(User user, Long medicineId, Map<Long, Integer> packsByMember, String pincode) {
         Medicine m = medicines.findById(medicineId)
                 .orElseThrow(() -> new BusinessException("That medicine doesn't exist."));
         CartItem item = cart.findByUserAndMedicine(user, m)
@@ -125,7 +132,7 @@ public class CartService {
         if (m.isPrescriptionRequired() && alloc.keySet().stream().anyMatch(Member::isCommon)) {
             throw new BusinessException(m.getName() + " needs a prescription, so it has to be for a named person, not the common shelf.");
         }
-        checkSellable(m, alloc.values().stream().mapToInt(Integer::intValue).sum());
+        checkSellable(m, alloc.values().stream().mapToInt(Integer::intValue).sum(), pincode);
         item.allocate(alloc);
         return cart.save(item);
     }
@@ -147,10 +154,20 @@ public class CartService {
         return out;
     }
 
+    /** The cart priced for delivery to {@code pincode}: each line by the store that would deliver it. */
     @Transactional(readOnly = true)
-    public CartSummary summary(User user) {
-        List<CartItem> items = cart.findByUserOrderByIdAsc(user);
-        BigDecimal subtotal = items.stream().map(CartItem::getLineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+    public CartSummary summary(User user, String pincode) {
+        return price(cart.findByUserOrderByIdAsc(user), pincode);
+    }
+
+    /** Works out each line's store and price; lines nobody here can supply don't count towards the totals. */
+    private CartSummary price(List<CartItem> items, String pincode) {
+        Map<Medicine, Integer> wanted = new LinkedHashMap<>();
+        items.forEach(i -> wanted.put(i.getMedicine(), i.getQuantity()));
+        Map<Long, Offer> offers = catalog.offers(wanted, pincode);
+        items.forEach(i -> i.setOffer(offers.get(i.getMedicine().getId())));
+        BigDecimal subtotal = items.stream().filter(CartItem::isAvailable).map(CartItem::getLineTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal fee = deliveryFeeFor(subtotal);
         boolean rx = items.stream().anyMatch(i -> i.getMedicine().isPrescriptionRequired());
         return new CartSummary(items, subtotal, fee, rx);
@@ -181,14 +198,14 @@ public class CartService {
 
     /** Sets how many packs of a medicine are in a visitor's cart; 0 removes it. Returns the new quantity. */
     @Transactional(readOnly = true)
-    public int setGuestQuantity(HttpSession session, Long medicineId, int quantity) {
+    public int setGuestQuantity(HttpSession session, Long medicineId, int quantity, String pincode) {
         Medicine m = medicines.findById(medicineId)
                 .orElseThrow(() -> new BusinessException("That medicine doesn't exist."));
         Map<Long, Integer> items = guest(session, true);
         if (quantity <= 0) {
             items.remove(medicineId);
         } else {
-            checkSellable(m, quantity);
+            checkSellable(m, quantity, pincode);
             items.put(medicineId, quantity);
         }
         session.setAttribute(GUEST_CART, items);   // re-set so clustered sessions see the change
@@ -196,9 +213,9 @@ public class CartService {
     }
 
     @Transactional(readOnly = true)
-    public void addGuest(HttpSession session, Long medicineId, int quantity) {
+    public void addGuest(HttpSession session, Long medicineId, int quantity, String pincode) {
         int now = guest(session, false).getOrDefault(medicineId, 0);
-        setGuestQuantity(session, medicineId, now + Math.max(1, quantity));
+        setGuestQuantity(session, medicineId, now + Math.max(1, quantity), pincode);
     }
 
     public Map<Long, Integer> guestQuantities(HttpSession session) {
@@ -214,7 +231,7 @@ public class CartService {
 
     /** The visitor's cart priced like an account cart. Lines aren't saved, so they have no id and no members yet. */
     @Transactional(readOnly = true)
-    public CartSummary guestSummary(HttpSession session) {
+    public CartSummary guestSummary(HttpSession session, String pincode) {
         List<CartItem> items = new ArrayList<>();
         guest(session, false).forEach((id, qty) -> medicines.findById(id).filter(Medicine::isActive).ifPresent(m -> {
             CartItem c = new CartItem();
@@ -222,41 +239,39 @@ public class CartService {
             c.setQuantity(qty);
             items.add(c);
         }));
-        BigDecimal subtotal = items.stream().map(CartItem::getLineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal fee = deliveryFeeFor(subtotal);
-        boolean rx = items.stream().anyMatch(i -> i.getMedicine().isPrescriptionRequired());
-        return new CartSummary(items, subtotal, fee, rx);
+        return price(items, pincode);
     }
 
     /**
      * Moves a visitor's cart into the account they just signed in to. Packs add to what the account cart already
-     * has, up to the stock; medicines that can no longer be sold are skipped. Admin accounts just drop it.
+     * has; medicines that are no longer sold are skipped, and the cart page flags any that no store can supply.
+     * Staff accounts just drop it.
      */
     @Transactional
     public void mergeGuestCart(User user, HttpSession session) {
         if (!hasGuestCart(session)) return;
         Map<Long, Integer> items = guest(session, false);
         session.removeAttribute(GUEST_CART);
-        if (user.isAdmin()) return;
-        items.forEach((id, qty) -> medicines.findById(id).ifPresent(m -> {
-            int already = cart.findByUserAndMedicine(user, m).map(CartItem::getQuantity).orElse(0);
-            int target = Math.min(m.getStock(), already + qty);
-            if (target <= already) return;
-            try {
-                setQuantity(user, id, target);
-            } catch (BusinessException ignored) {
-                // no longer sold or expired since it was added: leave it out
-            }
+        if (user.isStaff()) return;
+        items.forEach((id, qty) -> medicines.findById(id).filter(Medicine::isActive).ifPresent(m -> {
+            if (qty == null || qty <= 0) return;
+            CartItem item = lineFor(user, m);
+            Map<Member, Integer> alloc = new LinkedHashMap<>(item.getAllocation());
+            if (alloc.isEmpty()) alloc.put(memberService.self(user), 0);
+            alloc.merge(alloc.keySet().iterator().next(), qty, Integer::sum);
+            item.allocate(alloc);
+            cart.save(item);
         }));
     }
 
-    private static void checkSellable(Medicine m, int quantity) {
+    /** Throws unless a store that delivers to {@code pincode} (any store, without one) can supply these packs. */
+    private void checkSellable(Medicine m, int quantity, String pincode) {
         if (!m.isActive()) throw new BusinessException(m.getName() + " is no longer sold.");
-        if (m.isExpired()) throw new BusinessException(m.getName() + " is past its expiry date and can't be sold right now.");
-        if (quantity > m.getStock()) {
-            throw new BusinessException(m.getStock() == 0
-                    ? m.getName() + " is out of stock."
-                    : "Only " + m.getStock() + " packs of " + m.getName() + " are in stock.");
-        }
+        Offer o = catalog.offer(m, pincode, quantity);
+        if (o.canSell(quantity)) return;
+        String where = pincode == null ? "" : " for delivery to " + pincode;
+        if (!o.isListed()) throw new BusinessException(m.getName() + " isn't sold" + where + ".");
+        if (o.stock() == 0) throw new BusinessException(m.getName() + " is out of stock" + where + ".");
+        throw new BusinessException("Only " + o.stock() + " packs of " + m.getName() + " are available" + where + ".");
     }
 }

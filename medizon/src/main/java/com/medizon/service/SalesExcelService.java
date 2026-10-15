@@ -4,6 +4,7 @@ import com.medizon.domain.Order;
 import com.medizon.domain.OrderStatus;
 import com.medizon.domain.ReturnRequest;
 import com.medizon.domain.ReturnStatus;
+import com.medizon.domain.Store;
 import com.medizon.dto.Invoice;
 import com.medizon.dto.ReportPeriod;
 import com.medizon.dto.SalesDay;
@@ -37,7 +38,8 @@ public class SalesExcelService {
     public enum Section {
         MONTHLY("Month-wise", "Orders, sales, returns and net revenue for each month"),
         DAILY("Day-wise", "The same, for each day"),
-        ORDERS("Orders", "Every order with its invoice number and GST split"),
+        ORDERS("Orders", "Every order with its store, invoice number and GST split"),
+        STORES("Store-wise", "Orders, sales and GST for each store"),
         MEDICINES("Medicines sold", "Packs and sales for each medicine"),
         HSN("HSN summary", "Taxable value and GST by HSN code and rate, for GST returns"),
         RETURNS("Returns", "Every return request and refund");
@@ -61,31 +63,43 @@ public class SalesExcelService {
 
     @Transactional(readOnly = true)
     public void write(ReportPeriod period, Set<Section> sheets, OutputStream out) throws IOException {
+        write(period, null, sheets, out);
+    }
+
+    /** The workbook for one store only, or for every store when {@code store} is null. */
+    @Transactional(readOnly = true)
+    public void write(ReportPeriod period, Store store, Set<Section> sheets, OutputStream out) throws IOException {
         LocalDateTime start = period.getFrom().atStartOfDay(), end = period.getTo().plusDays(1).atStartOfDay();
+        Long storeId = store == null ? null : store.getId();
         List<Order> placed = orders.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(start, end);
+        if (store != null) placed = placed.stream().filter(o -> inStore(o, storeId)).toList();
         Map<Long, Invoice> tax = new HashMap<>();
         placed.stream().filter(o -> o.getStatus() != OrderStatus.CANCELLED).forEach(o -> tax.put(o.getId(), invoices.breakdown(o)));
-        List<SalesDay> days = report.daily(period.getFrom(), period.getTo());
+        List<SalesDay> days = report.daily(period.getFrom(), period.getTo(), storeId);
 
         try (SXSSFWorkbook wb = new SXSSFWorkbook(200)) {
             Styles st = new Styles(wb);
-            summary(wb, st, period, SalesDay.total(days), tax.values());
-            if (sheets.contains(Section.MONTHLY)) salesTable(wb, st, Section.MONTHLY.title, report.monthly(period.getFrom(), period.getTo()));
+            summary(wb, st, period, store, SalesDay.total(days), tax.values());
+            if (sheets.contains(Section.MONTHLY)) salesTable(wb, st, Section.MONTHLY.title, report.monthly(period.getFrom(), period.getTo(), storeId));
             if (sheets.contains(Section.DAILY)) salesTable(wb, st, Section.DAILY.title, days);
             if (sheets.contains(Section.ORDERS)) ordersSheet(wb, st, placed, tax);
+            if (sheets.contains(Section.STORES)) storesSheet(wb, st, placed, tax);
             if (sheets.contains(Section.MEDICINES)) medicinesSheet(wb, st, tax.values());
             if (sheets.contains(Section.HSN)) hsnSheet(wb, st, tax.values());
             if (sheets.contains(Section.RETURNS)) {
-                returnsSheet(wb, st, returns.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(start, end));
+                List<ReturnRequest> list = returns.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(start, end);
+                returnsSheet(wb, st, store == null ? list : list.stream().filter(x -> inStore(x.getOrder(), storeId)).toList());
             }
             wb.setForceFormulaRecalculation(true);
             wb.write(out);
         }
     }
 
+    private static boolean inStore(Order o, Long storeId) { return o.getStore() != null && o.getStore().getId().equals(storeId); }
+
     // ------------------------------------------------------------------ sheets
 
-    private void summary(SXSSFWorkbook wb, Styles st, ReportPeriod p, SalesDay t, Collection<Invoice> tax) {
+    private void summary(SXSSFWorkbook wb, Styles st, ReportPeriod p, Store store, SalesDay t, Collection<Invoice> tax) {
         Sheet s = wb.createSheet("Summary");
         s.setColumnWidth(0, 34 * 256);
         s.setColumnWidth(1, 22 * 256);
@@ -94,6 +108,7 @@ public class SalesExcelService {
         text(s.createRow(r++), 0, "MediZon sales report", st.title);
         text(s.createRow(r++), 0, seller.getName() + (seller.getGstin().isBlank() ? "" : "  ·  GSTIN " + seller.getGstin()), st.muted);
         r++;
+        r = pair(s, r, "Store", store == null ? "All stores" : store.getName(), st);
         r = pair(s, r, "Period", p.getLabel(), st);
         r = pair(s, r, "From", p.getFrom(), st);
         r = pair(s, r, "To", p.getTo(), st);
@@ -175,8 +190,8 @@ public class SalesExcelService {
         SXSSFSheet s = wb.createSheet(Section.ORDERS.title);
         header(s, st, new String[]{"Order date", "Order no.", "Invoice no.", "Invoice date", "Customer", "Place of supply",
                         "Status", "Payment", "Payment status", "Packs", "Items value", "Delivery", "Round off", "Order total",
-                        "Taxable value", "CGST", "SGST", "IGST", "Total GST"},
-                new int[]{14, 17, 19, 14, 22, 18, 12, 18, 14, 8, 13, 11, 11, 13, 14, 11, 11, 11, 12});
+                        "Taxable value", "CGST", "SGST", "IGST", "Total GST", "Store", "Seller GSTIN"},
+                new int[]{14, 17, 19, 14, 22, 18, 12, 18, 14, 8, 13, 11, 11, 13, 14, 11, 11, 11, 12, 22, 18});
         int r = 1;
         for (Order o : placed) {
             Row row = s.createRow(r++);
@@ -201,7 +216,9 @@ public class SalesExcelService {
                 money(row, 16, inv.getSgstTotal(), st.money);
                 money(row, 17, inv.getIgstTotal(), st.money);
                 money(row, 18, inv.getTaxTotal(), st.money);
+                text(row, 20, inv.getSeller().getGstin(), null);
             }
+            text(row, 19, o.getStore() != null ? o.getStore().getName() : "", null);
         }
         // Totals leave cancelled orders out, like the rest of the report
         Row total = s.createRow(r);
@@ -212,8 +229,35 @@ public class SalesExcelService {
             formula(total, c, r == 1 ? "0" : "SUMIF(" + status + ",\"<>" + OrderStatus.CANCELLED.getLabel() + "\"," + col + "2:" + col + r + ")",
                     c == 9 ? st.totalInteger : st.totalMoney);
         }
-        s.setAutoFilter(new CellRangeAddress(0, Math.max(0, r - 1), 0, 18));
+        s.setAutoFilter(new CellRangeAddress(0, Math.max(0, r - 1), 0, 20));
         s.createFreezePane(2, 1);
+    }
+
+    /** Each store's orders, sales and GST in the period; cancelled orders count as orders but not as sales. */
+    private void storesSheet(SXSSFWorkbook wb, Styles st, List<Order> placed, Map<Long, Invoice> tax) {
+        Map<String, BigDecimal[]> byStore = new TreeMap<>();   // orders, cancelled, sales, round off, taxable, gst
+        for (Order o : placed) {
+            BigDecimal[] a = byStore.computeIfAbsent(o.getStore() != null ? o.getStore().getName() : "(no store)", k -> zeros(6));
+            a[0] = a[0].add(BigDecimal.ONE);
+            if (o.getStatus() == OrderStatus.CANCELLED) { a[1] = a[1].add(BigDecimal.ONE); continue; }
+            a[2] = a[2].add(o.getTotal());
+            a[3] = a[3].add(o.getRoundOff() == null ? BigDecimal.ZERO : o.getRoundOff());
+            Invoice inv = tax.get(o.getId());
+            if (inv != null) { a[4] = a[4].add(inv.getTaxableTotal()); a[5] = a[5].add(inv.getTaxTotal()); }
+        }
+        SXSSFSheet s = wb.createSheet(Section.STORES.title);
+        header(s, st, new String[]{"Store", "Orders placed", "Cancelled", "Sales", "Round off", "Taxable value", "GST"},
+                new int[]{28, 14, 11, 15, 12, 15, 13});
+        int r = 1;
+        for (Map.Entry<String, BigDecimal[]> e : byStore.entrySet()) {
+            Row row = s.createRow(r++);
+            text(row, 0, e.getKey(), null);
+            num(row, 1, e.getValue()[0].longValue(), st.integer);
+            num(row, 2, e.getValue()[1].longValue(), st.integer);
+            for (int i = 2; i <= 5; i++) money(row, i + 1, e.getValue()[i], st.money);
+        }
+        totals(s, st, r, 1, 6, Set.of(3, 4, 5, 6));
+        s.createFreezePane(1, 1);
     }
 
     private void medicinesSheet(SXSSFWorkbook wb, Styles st, Collection<Invoice> tax) {
