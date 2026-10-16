@@ -147,7 +147,7 @@
     </div>
 
     <!-- Category bar: everything at one tap, scrolls sideways on small screens -->
-    <nav class="mz-catbar" sec:authorize="!hasRole('STAFF')" aria-label="Shop by section">
+    <nav class="mz-catbar" sec:authorize="!hasRole('STAFF')" th:unless="${hideCatbar}" aria-label="Shop by section">
         <div class="container">
             <div class="mz-catbar-scroll">
                 <button type="button" class="mz-catbar-all" data-bs-toggle="offcanvas" data-bs-target="#mzMenu" aria-controls="mzMenu">

@@ -21,6 +21,10 @@ public class AuthController {
 
     private final UserService userService;
 
+    /** Sign-in and sign-up pages keep the header simple: no category bar. */
+    @ModelAttribute("hideCatbar")
+    boolean hideCatbar() { return true; }
+
     /**
      * Someone already signed in (back button after signing in, an old tab, a bookmark) goes to their home page
      * instead of a sign-in form under a "Hello, name" header.
