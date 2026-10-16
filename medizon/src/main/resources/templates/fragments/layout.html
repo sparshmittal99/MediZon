@@ -30,7 +30,8 @@
 <th:block th:fragment="navbar">
     <nav class="mz-nav" aria-label="Main">
         <div class="container mz-nav-row">
-            <button type="button" class="mz-burger d-lg-none" sec:authorize="!hasRole('STAFF')"
+            <!-- On wide screens the category bar's "All" opens the menu; pages without the bar keep this button -->
+            <button type="button" class="mz-burger" th:classappend="${showCatbar} ? 'd-lg-none'" sec:authorize="!hasRole('STAFF')"
                     data-bs-toggle="offcanvas" data-bs-target="#mzMenu" aria-controls="mzMenu" aria-label="Open menu">
                 <i class="bi bi-list"></i>
             </button>
@@ -147,7 +148,8 @@
     </div>
 
     <!-- Category bar: everything at one tap, scrolls sideways on small screens -->
-    <nav class="mz-catbar" sec:authorize="!hasRole('STAFF')" th:unless="${hideCatbar}" aria-label="Shop by section">
+    <!-- Front page only (HomeController); elsewhere the header's menu button opens the same side menu -->
+    <nav class="mz-catbar" sec:authorize="!hasRole('STAFF')" th:if="${showCatbar}" aria-label="Shop by section">
         <div class="container">
             <div class="mz-catbar-scroll">
                 <button type="button" class="mz-catbar-all" data-bs-toggle="offcanvas" data-bs-target="#mzMenu" aria-controls="mzMenu">

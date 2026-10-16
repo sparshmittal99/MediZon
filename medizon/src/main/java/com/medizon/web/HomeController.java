@@ -24,6 +24,7 @@ public class HomeController {
         if (currentUser.find().map(User::isStaff).orElse(false)) return "redirect:/admin";
         // What the stores delivering to the shopper sell; everything on sale anywhere until they pick a location
         String pin = deliveryLocations.pincode(request);
+        model.addAttribute("showCatbar", true);     // the category bar is for the front page only
         model.addAttribute("featured", catalog.featured(pin));
         model.addAttribute("deals", catalog.deals(4, pin));
         model.addAttribute("shelves", catalog.shelves(5, 4, pin));

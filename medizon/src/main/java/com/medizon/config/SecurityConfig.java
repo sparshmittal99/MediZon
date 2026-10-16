@@ -34,7 +34,11 @@ import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.savedrequest.RequestCache;
+import org.springframework.security.web.util.matcher.AndRequestMatcher;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -114,7 +118,9 @@ public class SecurityConfig {
                 // Browsers report JavaScript errors and page load times, signed in or not
                 .requestMatchers("/api/monitoring/**").permitAll()
                 .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/register", "/login",
-                        "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png", "/error").permitAll()
+                        "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/error").permitAll()
+                // Site icons, also under their content-hashed names (favicon-3f9a….svg) from the resource chain
+                .requestMatchers("/favicon*", "/apple-touch-icon*").permitAll()
                 // Visitors can fill a cart and pick a delivery location before signing in; checkout needs an account.
                 // Admin accounts are turned away in CartController / CartService.
                 .requestMatchers("/cart", "/cart/add", "/cart/*/remove", "/api/cart", "/api/cart/*", "/api/location/**").permitAll()
@@ -167,6 +173,7 @@ public class SecurityConfig {
                 .key(rememberMeKey(rememberMeKey))
                 .userDetailsService(userDetailsService)
                 .tokenValiditySeconds(14 * 24 * 3600))
+            .requestCache(cache -> cache.requestCache(pageVisitsOnly()))
             .sessionManagement(session -> session
                 .maximumSessions(-1)            // no limit on concurrent sessions per account
                 .sessionRegistry(sessionRegistry)
@@ -226,6 +233,23 @@ public class SecurityConfig {
             response.sendRedirect(request.getContextPath()
                     + (exception instanceof DisabledException ? "/login?disabled" : "/login?error"));
         };
+    }
+
+    /**
+     * What sign-in returns to: only a page the visitor opened (a GET asking for HTML outside /api). Without this, a
+     * background request made while signed out (the notification check after a restart ended the session, a site
+     * icon) became the place to land after signing in, showing raw JSON or a full-screen icon.
+     */
+    private static RequestCache pageVisitsOnly() {
+        HttpSessionRequestCache cache = new HttpSessionRequestCache();
+        cache.setRequestMatcher(new AndRequestMatcher(
+                new AntPathRequestMatcher("/**", "GET"),
+                new NegatedRequestMatcher(API),
+                request -> {
+                    String accept = request.getHeader("Accept");
+                    return accept != null && accept.contains("text/html");
+                }));
+        return cache;
     }
 
     /** Runs before the password is checked, so a locked-out email can't be guessed at, even with the right password. */
