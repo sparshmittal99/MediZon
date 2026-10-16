@@ -106,6 +106,20 @@
                     <i class="bi bi-arrow-return-left me-1"></i>Return items</a>
             </div>
 
+            <!-- Support: tickets about this order, and raising one -->
+            <section th:unless="${adminView}" class="mz-panel mt-4">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div>
+                        <h2 class="h6 mb-0">Need help with this order?</h2>
+                        <div class="small text-muted">Late, missing, damaged or a payment problem: our support team will sort it out.</div>
+                    </div>
+                    <a th:href="@{/support(order=${o.id})}" class="btn btn-outline-primary"><i class="bi bi-headset me-1"></i>Get help</a>
+                </div>
+                <div th:unless="${#lists.isEmpty(tickets)}" class="mz-panel-flush mt-3">
+                    <th:block th:each="t : ${tickets}"><a th:replace="~{support/thread :: ticketRow(${t})}"></a></th:block>
+                </div>
+            </section>
+
             <!-- Review: shown once delivered -->
             <div th:if="${review != null}" class="mz-panel mt-4">
                 <h2 class="h6 mb-2" th:text="${adminView} ? 'Customer review' : 'Your review'">Your review</h2>

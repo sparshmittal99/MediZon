@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Help & support')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <h1 class="mz-page-title mb-1">Help &amp; support</h1>
+    <p class="text-muted mb-4">Get a quick answer, or tell us what's wrong and our team will sort it out.</p>
+
+    <!-- Came from an order's "Get help" -->
+    <div th:if="${order != null}" class="mz-panel mz-panel-soft d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-4">
+        <i class="bi bi-box-seam text-primary" aria-hidden="true"></i>
+        <span class="flex-grow-1">Getting help with order <a th:href="@{/orders/{id}(id=${order.id})}" class="fw-semibold" th:text="${order.orderNumber}"></a>
+            <span class="badge ms-1" th:classappend="${order.status.badge}" th:text="${order.status.label}"></span></span>
+        <a th:href="@{/support}" class="small">Not about this order</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <!-- General questions: answered right away by the assistant -->
+            <section class="mz-panel mb-4" aria-labelledby="quickTitle">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="bi bi-lightning-charge text-primary fs-5" aria-hidden="true"></i>
+                    <h2 class="h5 mb-0" id="quickTitle">Quick answers</h2>
+                </div>
+                <p class="small text-muted mb-3">Common questions, answered instantly by the MediZon Assistant.</p>
+                <div class="mz-quick-asks">
+                    <button type="button" class="mz-quick-ask" data-mz-ask="Where is my order?"><i class="bi bi-truck" aria-hidden="true"></i>Where is my order?</button>
+                    <button type="button" class="mz-quick-ask" data-mz-ask="What is your return policy?"><i class="bi bi-arrow-return-left" aria-hidden="true"></i>Return policy</button>
+                    <button type="button" class="mz-quick-ask" data-mz-ask="How do refunds work?"><i class="bi bi-cash-coin" aria-hidden="true"></i>Refunds</button>
+                    <button type="button" class="mz-quick-ask" data-mz-ask="What are the delivery charges?"><i class="bi bi-box-seam" aria-hidden="true"></i>Delivery charges</button>
+                    <button type="button" class="mz-quick-ask" data-mz-ask="How can I pay?"><i class="bi bi-credit-card" aria-hidden="true"></i>Payment options</button>
+                    <button type="button" class="mz-quick-ask" data-mz-ask="Can I cancel my order?"><i class="bi bi-x-circle" aria-hidden="true"></i>Cancel an order</button>
+                    <button type="button" class="mz-quick-ask" data-mz-ask="How do I upload a prescription?"><i class="bi bi-file-earmark-medical" aria-hidden="true"></i>Prescriptions</button>
+                </div>
+                <p class="small mb-0 mt-3"><a th:href="@{/help}">Browse all questions in Help &amp; FAQ <i class="bi bi-arrow-right" aria-hidden="true"></i></a></p>
+            </section>
+
+            <!-- Anything else: a ticket with the support team -->
+            <section class="mz-panel mz-raise" aria-labelledby="raiseTitle">
+                <div class="mz-raise-icon" aria-hidden="true"><i class="bi bi-headset"></i></div>
+                <div class="flex-grow-1">
+                    <h2 class="h5 mb-1" id="raiseTitle">Still need help?</h2>
+                    <p class="text-muted small mb-3">For a problem with an order, a payment, a return or anything else, raise a ticket. A real person
+                        from our support team will reply, and bring in the pharmacy, payments or store team if needed.</p>
+                    <a class="btn btn-primary" th:href="${order != null} ? @{/support/new(order=${order.id})} : @{/support/new}">
+                        <i class="bi bi-plus-lg me-1"></i>Raise a ticket</a>
+                </div>
+            </section>
+        </div>
+
+        <!-- The customer's tickets -->
+        <div class="col-lg-5">
+            <section aria-labelledby="mineTitle">
+                <h2 class="mz-section-title" id="mineTitle">Your tickets</h2>
+                <div th:if="${#lists.isEmpty(openTickets) and #lists.isEmpty(closedTickets)}" class="mz-panel mz-empty">
+                    <i class="bi bi-chat-square-text"></i><p class="mb-0">No tickets yet. When you raise one, you can follow it here.</p>
+                </div>
+
+                <div th:unless="${#lists.isEmpty(openTickets)}" class="mz-panel-flush mb-3">
+                    <th:block th:each="t : ${openTickets}"><a th:replace="~{support/thread :: ticketRow(${t})}"></a></th:block>
+                </div>
+
+                <details th:unless="${#lists.isEmpty(closedTickets)}" class="mz-closed-tickets" th:open="${#lists.isEmpty(openTickets)}">
+                    <summary class="small fw-semibold" th:text="'Closed (' + ${#lists.size(closedTickets)} + ')'">Closed</summary>
+                    <div class="mz-panel-flush mt-2">
+                        <th:block th:each="t : ${closedTickets}"><a th:replace="~{support/thread :: ticketRow(${t})}"></a></th:block>
+                    </div>
+                </details>
+            </section>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

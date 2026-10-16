@@ -1,6 +1,7 @@
 package com.medizon.repository;
 
 import com.medizon.domain.AppError;
+import com.medizon.domain.ErrorSeverity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,8 @@ public interface AppErrorRepository extends JpaRepository<AppError, Long> {
     List<AppError> findTop100ByResolvedOrderByLastSeenDesc(boolean resolved);
     long countByResolvedFalse();
     long countByResolvedFalseAndLastSeenAfter(LocalDateTime since);
+    long countByResolvedFalseAndSeverity(ErrorSeverity severity);
+    List<AppError> findBySeverityIsNull();
 
     @Modifying
     @Query("update AppError e set e.resolved = true, e.resolvedAt = :now where e.resolved = false")

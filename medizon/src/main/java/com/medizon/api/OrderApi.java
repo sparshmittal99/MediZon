@@ -45,13 +45,13 @@ public class OrderApi {
         }
     }
 
-    public record OrderDetail(Long id, String orderNumber, Long cartId, String status, String statusLabel, String store,
+    public record OrderDetail(Long id, String orderNumber, String status, String statusLabel, String store,
                               String paymentMethod, String paymentStatus, LocalDateTime placedAt, LocalDateTime deliveredAt,
                               String deliverTo, String shippingAddress, String contactPhone, List<OrderLine> items,
                               BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal roundOff, BigDecimal total,
                               boolean cancellable, boolean invoiceAvailable, String invoiceNumber) {
         static OrderDetail of(Order o) {
-            return new OrderDetail(o.getId(), o.getOrderNumber(), o.getCart() != null ? o.getCart().getId() : null, o.getStatus().name(), o.getStatus().getLabel(),
+            return new OrderDetail(o.getId(), o.getOrderNumber(), o.getStatus().name(), o.getStatus().getLabel(),
                     o.getStore() != null ? o.getStore().getName() : null, o.getPaymentMethod().getLabel(),
                     o.getPaymentStatus().name(), o.getCreatedAt(), o.getDeliveredAt(), o.getDeliverTo(),
                     o.getShippingAddress(), o.getContactPhone(), o.getItems().stream().map(OrderLine::of).toList(),

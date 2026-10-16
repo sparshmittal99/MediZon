@@ -2,7 +2,12 @@ package com.medizon.config;
 
 import com.medizon.service.CartService;
 import com.medizon.service.UserService;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,17 +29,66 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.web.filter.OncePerRequestFilter;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.util.HexFormat;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    /**
+     * Where pages may load code and data from: this site, jsDelivr (Bootstrap, Bootstrap Icons, Leaflet), Google
+     * Translate (the language picker), OpenStreetMap (address search; map tiles are images) and Google Fonts. Images
+     * may come from any https site, since a product's picture can be a link. No inline scripts or event handlers;
+     * inline styles are allowed (Bootstrap and the translator use them). What the browser blocks is reported to
+     * Admin > Monitoring as a browser error.
+     */
+    static final String CONTENT_SECURITY_POLICY = String.join("; ",
+            "default-src 'self'",
+            "script-src 'self' https://cdn.jsdelivr.net https://translate.google.com https://translate.googleapis.com"
+                    + " https://translate-pa.googleapis.com https://www.gstatic.com",
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://www.gstatic.com"
+                    + " https://translate.googleapis.com",
+            "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
+            "img-src 'self' data: blob: https:",
+            "connect-src 'self' https://nominatim.openstreetmap.org https://translate.googleapis.com"
+                    + " https://translate-pa.googleapis.com",
+            "frame-src https://translate.google.com https://translate.googleapis.com",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+            "report-uri /api/monitoring/csp-report");
+
+    /**
+     * Google's website translator injects inline scripts, so a visitor who picked another language gets the same
+     * policy with inline scripts allowed. Everyone browsing in English keeps the strict one.
+     */
+    static final String CONTENT_SECURITY_POLICY_TRANSLATED =
+            CONTENT_SECURITY_POLICY.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'");
+
+    /** The footer's language picker stores the choice in Google's "googtrans" cookie (see medizon.js). */
+    private static boolean usesTranslator(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) return false;
+        for (Cookie c : cookies) {
+            if ("googtrans".equals(c.getName()) && c.getValue() != null && !c.getValue().isBlank()) return true;
+        }
+        return false;
+    }
 
     private static final RequestMatcher API = new AntPathRequestMatcher("/api/**");
 
@@ -46,9 +100,12 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, AppUserDetailsService userDetailsService,
                                            SessionRegistry sessionRegistry, @Lazy UserService userService,
-                                           @Lazy CartService cartService,
-                                           @Value("${medizon.monitoring.token:}") String monitoringToken) throws Exception {
+                                           @Lazy CartService cartService, LoginThrottle loginThrottle,
+                                           @Value("${medizon.monitoring.token:}") String monitoringToken,
+                                           @Value("${medizon.security.remember-me-key:}") String rememberMeKey) throws Exception {
         http
+            // Refuses sign-in while an email or address is locked out for too many wrong passwords
+            .addFilterBefore(loginThrottleFilter(loginThrottle), UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 // Monitoring: health for load balancers and uptime checks; Prometheus with a bearer token or as an admin
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
@@ -71,15 +128,25 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/admin/orders/**").hasAnyRole("ADMIN", "STORE")
                 .requestMatchers("/admin/orders/**").hasAnyRole("ADMIN", "STORE", "SUPPORT", "FINANCE")
                 .requestMatchers("/admin").hasRole("STAFF")
+                // Every staff role has a support desk: support and the admin see all tickets, each team its own (SupportService)
+                .requestMatchers("/admin/support", "/admin/support/**").hasRole("STAFF")
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 .requestMatchers("/prescriptions/*/file", "/returns/*/images/*").authenticated()   // owner or admin, checked in the service
+                .requestMatchers("/support/attachments/**").authenticated()   // the customer or the staff on the ticket (SupportService)
                 // Shopping and dose reminders are for customers; admin accounts only run the store.
                 // The assistant API is open to both roles; each role gets its own actions in AssistantTools.
                 .requestMatchers("/cart/**", "/api/cart/**", "/api/orders/**", "/checkout", "/orders/**", "/plans/**",
-                        "/prescriptions/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**").hasRole("CUSTOMER")
+                        "/prescriptions/**", "/support", "/support/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
             // sendBeacon can't send the CSRF header; these endpoints only record telemetry
             .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**"))
+            // On top of Spring's defaults (nosniff, X-Frame-Options DENY, HSTS over HTTPS, no-store)
+            .headers(headers -> headers
+                .addHeaderWriter((request, response) -> response.setHeader("Content-Security-Policy",
+                        usesTranslator(request) ? CONTENT_SECURITY_POLICY_TRANSLATED : CONTENT_SECURITY_POLICY))
+                .referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                .addHeaderWriter(new StaticHeadersWriter("Permissions-Policy",
+                        "geolocation=(self), camera=(), microphone=(), payment=(), usb=(), interest-cohort=()")))
             // The JSON API answers 401 instead of sending the caller to the login page
             .exceptionHandling(ex -> ex
                 .defaultAuthenticationEntryPointFor((request, response, e) ->
@@ -88,8 +155,8 @@ public class SecurityConfig {
             .formLogin(form -> form
                 .loginPage("/login")
                 .usernameParameter("email")
-                .successHandler(successHandler(userService, cartService))
-                .failureHandler(failureHandler())
+                .successHandler(successHandler(userService, cartService, loginThrottle))
+                .failureHandler(failureHandler(loginThrottle))
                 .permitAll())
             .logout(logout -> logout
                 .logoutSuccessUrl("/?signedOut")
@@ -97,7 +164,7 @@ public class SecurityConfig {
                 .deleteCookies("mz_pin", "mz_loc", "mz_addr", "mz_loc_by")
                 .permitAll())
             .rememberMe(rm -> rm
-                .key("medizon-remember-me")
+                .key(rememberMeKey(rememberMeKey))
                 .userDetailsService(userDetailsService)
                 .tokenValiditySeconds(14 * 24 * 3600))
             .sessionManagement(session -> session
@@ -111,10 +178,12 @@ public class SecurityConfig {
      * Admins land on the dashboard; customers go back to what they were doing (checkout, when they signed in from
      * the cart). Anything put in the cart before signing in moves into the account's cart.
      */
-    private AuthenticationSuccessHandler successHandler(UserService userService, CartService cartService) {
+    private AuthenticationSuccessHandler successHandler(UserService userService, CartService cartService,
+                                                        LoginThrottle loginThrottle) {
         SavedRequestAwareAuthenticationSuccessHandler customer = new SavedRequestAwareAuthenticationSuccessHandler();
         customer.setDefaultTargetUrl("/");
         return (request, response, authentication) -> {
+            loginThrottle.succeeded(authentication.getName());
             userService.recordLogin(authentication.getName())
                     .ifPresent(u -> cartService.mergeGuestCart(u, request.getSession(false)));
             boolean staff = authentication.getAuthorities().stream()
@@ -151,9 +220,41 @@ public class SecurityConfig {
         };
     }
 
-    private AuthenticationFailureHandler failureHandler() {
-        return (request, response, exception) -> response.sendRedirect(request.getContextPath()
-                + (exception instanceof DisabledException ? "/login?disabled" : "/login?error"));
+    private AuthenticationFailureHandler failureHandler(LoginThrottle loginThrottle) {
+        return (request, response, exception) -> {
+            loginThrottle.failed(request.getParameter("email"), request.getRemoteAddr());
+            response.sendRedirect(request.getContextPath()
+                    + (exception instanceof DisabledException ? "/login?disabled" : "/login?error"));
+        };
+    }
+
+    /** Runs before the password is checked, so a locked-out email can't be guessed at, even with the right password. */
+    private static OncePerRequestFilter loginThrottleFilter(LoginThrottle loginThrottle) {
+        RequestMatcher signIn = new AntPathRequestMatcher("/login", "POST");
+        return new OncePerRequestFilter() {
+            @Override
+            protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+                    throws ServletException, IOException {
+                if (signIn.matches(request) && loginThrottle.isBlocked(request.getParameter("email"), request.getRemoteAddr())) {
+                    response.sendRedirect(request.getContextPath() + "/login?locked");
+                    return;
+                }
+                chain.doFilter(request, response);
+            }
+        };
+    }
+
+    /**
+     * Remember-me cookies are signed with this key, so it must be secret: anyone with it and a password hash (from a
+     * database backup) could forge a sign-in cookie. Without REMEMBER_ME_KEY a random key is made at startup, which is
+     * safe but signs everyone's "Keep me signed in" out on every restart.
+     */
+    private static String rememberMeKey(String configured) {
+        if (!configured.isBlank()) return configured;
+        log.warn("REMEMBER_ME_KEY isn't set: using a random key, so \"Keep me signed in\" ends when the app restarts");
+        byte[] random = new byte[32];
+        new SecureRandom().nextBytes(random);
+        return HexFormat.of().formatHex(random);
     }
 
     @Bean

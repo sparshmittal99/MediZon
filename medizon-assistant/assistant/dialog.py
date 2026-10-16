@@ -157,7 +157,8 @@ def help_(ctx: Ctx, slots, step, answer) -> Reply:
                     "• **Dose reminders**: 'remind me to take metformin at 8 am and 8 pm'\n"
                     "• **Today's doses** and marking them taken\n"
                     "• **Refills** for medicines running low\n"
-                    "• **Order tracking**, **feedback** and other reminders", CUSTOMER_CHIPS)
+                    "• **Order tracking**, **feedback** and other reminders\n"
+                    "• **Store policies**: returns, refunds, delivery charges, payment, cancelling", CUSTOMER_CHIPS)
 
 
 def thanks(ctx: Ctx, slots, step, answer) -> Reply:
@@ -698,10 +699,44 @@ def navigate(ctx: Ctx, slots, step, answer) -> Reply:
 
 
 def pharmacist(ctx: Ctx, slots, step, answer) -> Reply:
-    return say(ctx, "For advice about your health, please talk to your doctor or a pharmacist. I can pass a question "
-                    "to the MediZon pharmacist team and they'll get back to you.",
-               [chip("Send a question to the pharmacist",
+    return say(ctx, "For advice about your health, please talk to your doctor or a pharmacist. For a problem with an order, "
+                    "a payment or a return, raise a support ticket and a person from our team will reply.",
+               [chip("Raise a support ticket", href="/support/new"),
+                chip("Send a question to the pharmacist",
                      payload={"intent": "feedback", "category": "Pharmacist question", "kind": "question"})])
+
+
+# Store rules, as the Java app applies them (ReturnService, CartService, Order.isCancellable, PaymentMethod).
+# Checked in order: "cancel and refund" is about cancelling, "refund for my return" about refunds.
+POLICIES = [
+    (r"\bcancel", "**Cancelling an order:** you can cancel until it ships, while it's *Placed* or *Confirmed*. Open the "
+                  "order and tap **Cancel order**. Once it has shipped, you can return eligible items after delivery instead.",
+     [chip("Your orders", href="/orders")]),
+    (r"\brefund|money back", "**Refunds:** after a returned item is picked up, the refund goes back to how you paid "
+                             "(UPI or card). It can take **5 to 7 working days** to show up. You'll get a notification "
+                             "at each step.", [chip("Your returns", href="/orders?tab=returns")]),
+    (r"\breturn|send (it )?back|exchange|damaged|expired|wrong (medicine|item)",
+     "**Returns:** damaged, wrong or expired medicines can be returned within **7 days of delivery**. Open the order, "
+     "tap **Return items**, choose the packs and add a photo. A pharmacist reviews it, usually within a day. Some "
+     "medicines can't be returned for safety reasons; the product page says so.", [chip("Your orders", href="/orders")]),
+    (r"\bdeliver|shipping|ship\b", "**Delivery:** free on orders of **₹499 or more**, otherwise ₹40. When it arrives "
+                                   "depends on your PIN code; the cart and checkout show the expected date.",
+     [chip("Track my order", "where is my order")]),
+    (r"\bpay|upi|card|cash|cod\b", "**Payment:** pay by **UPI**, **debit or credit card**, or **cash on delivery**. "
+                                  "You choose at checkout.", [chip("Go to cart", href="/cart")]),
+]
+
+
+def policy(ctx: Ctx, slots, step, answer) -> Reply:
+    t = normalize(ctx.message)
+    more = chip("Still need help? Raise a ticket", href="/support/new")
+    for pattern, text, chips in POLICIES:
+        if re.search(pattern, t):
+            return say(ctx, text, chips + [more])
+    return say(ctx, "Which policy would you like to know about?",
+               [chip("Returns", "what is your return policy"), chip("Refunds", "how do refunds work"),
+                chip("Delivery charges", "what are the delivery charges"), chip("Payment options", "how can i pay"),
+                chip("Cancelling an order", "can i cancel my order"), more])
 
 
 # ====================================================================== admin intents
@@ -826,13 +861,13 @@ HANDLERS: dict[str, Callable[..., Reply]] = {
     "search_medicine": search, "medicine_info": medicine_info, "add_to_cart": add_to_cart, "view_cart": view_cart,
     "checkout": checkout, "track_order": track_order, "set_reminder": set_reminder, "my_reminders": my_reminders,
     "todays_doses": todays_doses, "mark_dose": mark_dose, "refill": refill,
-    "upload_prescription": upload_prescription, "feedback": feedback, "pharmacist": pharmacist,
+    "upload_prescription": upload_prescription, "feedback": feedback, "pharmacist": pharmacist, "policy": policy,
     # admin
     "review_insights": review_insights, "store_tasks": store_tasks, "low_stock": low_stock, "stock_check": stock_check,
 }
 CUSTOMER_ONLY = {"search_medicine", "medicine_info", "add_to_cart", "view_cart", "checkout", "track_order",
                  "set_reminder", "my_reminders", "todays_doses", "mark_dose", "refill", "upload_prescription",
-                 "feedback", "pharmacist"}
+                 "feedback", "pharmacist", "policy"}
 ADMIN_ONLY = {"review_insights", "store_tasks", "low_stock", "stock_check"}
 
 

@@ -10,7 +10,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 mz-no-print">
         <a th:href="${adminView} ? @{/admin/orders/{id}(id=${o.id})} : @{/orders/{id}(id=${o.id})}" class="small">
             <i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
-        <button type="button" class="btn btn-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print or save as PDF</button>
+        <button type="button" class="btn btn-primary" data-mz-print><i class="bi bi-printer me-1"></i>Print or save as PDF</button>
     </div>
 
     <div th:if="${adminView and !s.complete}" class="alert alert-warning small mz-no-print">

@@ -30,7 +30,11 @@
             <div class="mz-stat-label">Server error rate</div><div class="mz-stat-sub" th:text="${#numbers.formatInteger(totals.errors, 1)} + ' failed request(s)'"></div></div></div>
         <div class="col"><a href="#errors" class="text-decoration-none text-reset"><div class="mz-stat" th:classappend="${openErrors > 0} ? 'is-attention'">
             <div class="mz-stat-value" th:text="${openErrors}">0</div><div class="mz-stat-label">Open errors</div>
-            <div class="mz-stat-sub" th:text="${errorsToday} + ' seen in the last 24 hours'"></div></div></a></div>
+            <div class="mz-stat-sub" th:text="${errorsToday} + ' seen in the last 24 hours'"></div>
+            <div class="mz-stat-sub" th:if="${openCritical + openHigh > 0}">
+                <span class="text-danger fw-semibold" th:if="${openCritical > 0}" th:text="${openCritical} + ' critical'"></span><span
+                    th:if="${openCritical > 0 and openHigh > 0}">, </span><span class="fw-semibold" th:if="${openHigh > 0}" th:text="${openHigh} + ' high'"></span>
+            </div></div></a></div>
         <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${#numbers.formatDecimal(system.heapUsed / 1048576, 1, 0)} + ' MB'">0</div>
             <div class="mz-stat-label">Memory in use</div>
             <div class="mz-stat-sub" th:text="'of ' + ${#numbers.formatDecimal(system.heapMax / 1048576, 1, 0)} + ' MB · CPU ' + ${#numbers.formatDecimal(system.cpu * 100, 1, 0)} + '%'"></div></div></div>
@@ -84,9 +88,26 @@
     <div th:unless="${#lists.isEmpty(errors)}" class="mz-panel-flush mb-4">
         <div class="table-responsive">
             <table class="table align-middle mb-0">
-                <thead><tr><th>Error</th><th>Where</th><th class="text-end">Times</th><th>Last seen</th><th></th></tr></thead>
+                <thead><tr><th>Severity</th><th>Error</th><th>Where</th><th class="text-end">Times</th><th>Last seen</th><th></th></tr></thead>
                 <tbody>
                 <tr th:each="e : ${errors}">
+                    <td class="text-nowrap">
+                        <!-- Rated automatically; an admin can set it, and it then stays as set until put back to automatic -->
+                        <div class="dropdown">
+                            <button type="button" class="badge border-0 dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"
+                                    data-bs-popper-config='{"strategy":"fixed"}' title="Change severity"
+                                    th:classappend="${e.severity != null} ? ${e.severity.badge} : 'text-bg-light border'"
+                                    th:text="${e.severity != null} ? ${e.severity.label} : 'Unrated'">High</button>
+                            <form class="dropdown-menu" th:action="@{/admin/monitoring/errors/{id}/severity(id=${e.id})}" method="post">
+                                <button th:each="s : ${severities}" type="submit" name="severity" th:value="${s.name()}"
+                                        class="dropdown-item" th:classappend="${s == e.severity} ? 'active'" th:text="${s.label}">High</button>
+                                <hr class="dropdown-divider">
+                                <button type="submit" name="severity" value="AUTO" class="dropdown-item"
+                                        th:classappend="${!e.severityPinned} ? 'active'">Automatic</button>
+                            </form>
+                        </div>
+                        <div class="small text-muted mt-1" th:if="${e.severityPinned}">Set by admin</div>
+                    </td>
                     <td style="min-width: 22rem">
                         <span class="badge text-bg-light border me-1" th:text="${e.source.label}">Server</span>
                         <strong class="text-break" th:text="${#strings.substring(e.type, e.type.lastIndexOf('.') + 1)}">NullPointerException</strong>

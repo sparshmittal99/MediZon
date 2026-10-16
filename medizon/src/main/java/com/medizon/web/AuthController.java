@@ -5,6 +5,8 @@ import com.medizon.service.BusinessException;
 import com.medizon.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -19,11 +21,18 @@ public class AuthController {
 
     private final UserService userService;
 
+    /**
+     * Someone already signed in (back button after signing in, an old tab, a bookmark) goes to their home page
+     * instead of a sign-in form under a "Hello, name" header.
+     */
     @GetMapping("/login")
-    public String login() { return "auth/login"; }
+    public String login(Authentication auth) {
+        return signedIn(auth) ? home(auth) : "auth/login";
+    }
 
     @GetMapping("/register")
-    public String registerForm(Model model) {
+    public String registerForm(Authentication auth, Model model) {
+        if (signedIn(auth)) return home(auth);
         model.addAttribute("form", new RegisterForm());
         return "auth/register";
     }
@@ -39,5 +48,15 @@ public class AuthController {
         }
         ra.addFlashAttribute("success", "Account created. Sign in to continue.");
         return "redirect:/login";
+    }
+
+    private static boolean signedIn(Authentication auth) {
+        return auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken);
+    }
+
+    /** Staff land on the back office, customers on the shop, as after signing in. */
+    private static String home(Authentication auth) {
+        boolean staff = auth.getAuthorities().stream().anyMatch(a -> "ROLE_STAFF".equals(a.getAuthority()));
+        return staff ? "redirect:/admin" : "redirect:/";
     }
 }

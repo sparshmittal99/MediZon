@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${t.number})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-narrow" th:attr="data-mz-ticket-poll=@{/support/tickets/{id}/latest(id=${t.id})},data-latest=${t.latestCustomerMessageId}">
+    <a th:href="@{/support}" class="small"><i class="bi bi-arrow-left"></i> Help &amp; support</a>
+
+    <header class="mz-ticket-head mt-2 mb-3">
+        <div class="min-w-0">
+            <h1 class="mz-page-title mb-1 text-break" th:text="${t.subject}">Subject</h1>
+            <p class="small text-muted mb-0">
+                <span th:text="${t.number}"></span> · <span th:text="${t.topic.label}"></span>
+                <th:block th:if="${t.order != null}"> · <a th:href="@{/orders/{id}(id=${t.order.id})}" th:text="'Order ' + ${t.order.orderNumber}"></a></th:block>
+                · <span th:text="'Opened ' + ${#temporals.format(t.createdAt, 'd MMM yyyy')}"></span>
+            </p>
+        </div>
+        <span class="badge fs-6" th:classappend="${t.status.badge}" th:text="${t.customerStatus}">Open</span>
+    </header>
+
+    <div class="mz-new-reply alert alert-info py-2" data-mz-ticket-new hidden role="status">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-chat-dots" aria-hidden="true"></i><span class="flex-grow-1">There's a new reply.</span>
+            <a href="#" class="btn btn-sm btn-primary" data-mz-ticket-refresh>Show it</a>
+        </div>
+    </div>
+
+    <section class="mz-panel mz-thread-panel mb-3">
+        <ol th:replace="~{support/thread :: thread(${t}, false)}"></ol>
+    </section>
+
+    <!-- Reply while it's open -->
+    <form th:unless="${t.status.closed}" th:action="@{/support/tickets/{id}/reply(id=${t.id})}" method="post"
+          enctype="multipart/form-data" class="mz-panel mz-reply" data-mz-reply>
+        <label class="form-label fw-semibold" for="body">Reply</label>
+        <textarea class="form-control" id="body" name="body" rows="3" maxlength="2000" required placeholder="Write a message…"></textarea>
+        <div class="mz-photo-previews mt-2" data-mz-photo-previews></div>
+        <div class="mz-qty-error small" data-mz-photo-error role="alert" hidden></div>
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+            <label class="btn btn-sm btn-outline-secondary mb-0">
+                <i class="bi bi-image me-1" aria-hidden="true"></i>Add photos
+                <input type="file" name="images" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden
+                       data-mz-return-photos th:attr="data-max=${maxImages}">
+            </label>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Send</button>
+        </div>
+    </form>
+
+    <th:block th:if="${t.status.closed}">
+        <!-- Rate the experience, once -->
+        <form th:if="${t.canRate()}" th:action="@{/support/tickets/{id}/rate(id=${t.id})}" method="post" class="mz-panel mb-3">
+            <h2 class="h5 mb-1">How did we do?</h2>
+            <p class="small text-muted mb-2">Rate how this ticket was handled.</p>
+            <fieldset class="mb-2">
+                <legend class="visually-hidden">Rating</legend>
+                <div class="mz-star-input">
+                    <th:block th:each="n : ${#numbers.sequence(5, 1, -1)}">
+                        <input type="radio" name="rating" th:id="'star' + ${n}" th:value="${n}" required>
+                        <label th:for="'star' + ${n}" th:title="${n} + ' star' + (${n} > 1 ? 's' : '')">
+                            <i class="bi bi-star-fill" aria-hidden="true"></i>
+                            <span class="visually-hidden" th:text="${n} + ' star' + (${n} > 1 ? 's' : '')"></span>
+                        </label>
+                    </th:block>
+                </div>
+            </fieldset>
+            <label class="form-label small" for="comment">Anything to add? <span class="text-muted">(optional)</span></label>
+            <textarea class="form-control mb-2" id="comment" name="comment" rows="2" maxlength="500"></textarea>
+            <button class="btn btn-primary btn-sm" type="submit">Send rating</button>
+        </form>
+
+        <div th:if="${t.rating != null}" class="mz-panel mb-3">
+            <h2 class="h6 mb-1">Your rating</h2>
+            <div class="mz-stars" th:attr="aria-label=${t.rating} + ' out of 5 stars'">
+                <i th:each="n : ${#numbers.sequence(1, 5)}" class="bi" th:classappend="${n <= t.rating} ? 'bi-star-fill' : 'bi-star'" aria-hidden="true"></i>
+            </div>
+            <p th:if="${t.ratingComment}" class="small mb-0 mt-1" th:text="${t.ratingComment}"></p>
+        </div>
+
+        <!-- Not fixed after all: reopen within the window -->
+        <details th:if="${t.canReopen(now)}" class="mz-panel">
+            <summary class="fw-semibold">Still not resolved? Reopen this ticket</summary>
+            <form th:action="@{/support/tickets/{id}/reopen(id=${t.id})}" method="post" class="mt-3">
+                <label class="form-label small" for="reason">What's still wrong?</label>
+                <textarea class="form-control mb-2" id="reason" name="reason" rows="3" maxlength="2000" required></textarea>
+                <button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-arrow-counterclockwise me-1"></i>Reopen ticket</button>
+            </form>
+            <p class="small text-muted mb-0 mt-2" th:text="'You can reopen it until ' + ${#temporals.format(t.reopenUntil, 'd MMM yyyy')} + '.'"></p>
+        </details>
+        <p th:unless="${t.canReopen(now)}" class="small text-muted">
+            This ticket is closed. Still need help? <a th:href="${t.order != null} ? @{/support/new(order=${t.order.id})} : @{/support/new}">Raise a new ticket</a>.
+        </p>
+    </th:block>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

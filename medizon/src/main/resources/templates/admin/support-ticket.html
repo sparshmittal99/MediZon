@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head(${t.number})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" th:attr="data-mz-ticket-poll=@{/admin/support/{id}/latest(id=${t.id})},data-latest=${t.latestMessageId}">
+    <a th:href="@{/admin/support}" class="small"><i class="bi bi-arrow-left"></i> Support desk</a>
+
+    <header class="mz-ticket-head mt-2 mb-3">
+        <div class="min-w-0">
+            <h1 class="mz-page-title mb-1 text-break" th:text="${t.subject}">Subject</h1>
+            <p class="small text-muted mb-0">
+                <span th:text="${t.number}"></span> · <i class="bi" th:classappend="${t.topic.icon}" aria-hidden="true"></i>
+                <span th:text="${t.topic.label}"></span> · <span th:text="'Opened ' + ${#temporals.format(t.createdAt, 'd MMM yyyy, h:mm a')}"></span>
+                <th:block th:if="${t.reopenCount > 0}"> · <span class="text-danger" th:text="'Reopened ' + ${t.reopenCount} + '×'"></span></th:block>
+            </p>
+        </div>
+        <span class="badge fs-6" th:classappend="${t.status.badge}"
+              th:text="${t.status.name() == 'WITH_TEAM'} ? 'With ' + ${t.teamLabel.toLowerCase()} : ${t.status.label}">Open</span>
+    </header>
+
+    <div class="row g-4">
+        <div class="col-lg-8 order-2 order-lg-1">
+            <div class="mz-new-reply alert alert-info py-2" data-mz-ticket-new hidden role="status">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-chat-dots" aria-hidden="true"></i><span class="flex-grow-1">There's something new on this ticket.</span>
+                    <a href="#" class="btn btn-sm btn-primary" data-mz-ticket-refresh>Show it</a>
+                </div>
+            </div>
+
+            <section class="mz-panel mz-thread-panel mb-3">
+                <ol th:replace="~{support/thread :: thread(${t}, true)}"></ol>
+            </section>
+
+            <!-- Reply to the customer, or a note for staff -->
+            <form th:if="${canReply or canNote}" th:action="@{/admin/support/{id}/reply(id=${t.id})}" method="post"
+                  enctype="multipart/form-data" class="mz-panel mz-reply" data-mz-reply>
+                <div class="mz-segmented mb-2" role="radiogroup" aria-label="Who sees this">
+                    <th:block th:if="${canReply}">
+                        <input type="radio" class="btn-check" name="internal" id="toCustomer" value="false" checked>
+                        <label class="btn btn-sm mz-day" for="toCustomer"><i class="bi bi-person me-1" aria-hidden="true"></i>Reply to customer</label>
+                    </th:block>
+                    <input type="radio" class="btn-check" name="internal" id="toStaff" value="true" th:checked="${!canReply}">
+                    <label class="btn btn-sm mz-day" for="toStaff"><i class="bi bi-lock me-1" aria-hidden="true"></i>Internal note</label>
+                </div>
+                <p th:unless="${canReply}" class="small text-muted mb-2"
+                   th:text="${t.status.name() == 'WITH_TEAM'} ? 'The ' + ${t.teamLabel.toLowerCase()} + ' is talking to the customer. You can follow along and add notes for them.'
+                       : 'Support is talking to the customer. You can add notes for them.'"></p>
+                <label class="visually-hidden" for="body">Message</label>
+                <textarea class="form-control" id="body" name="body" rows="3" maxlength="2000" required placeholder="Write a message…"></textarea>
+                <div class="mz-photo-previews mt-2" data-mz-photo-previews></div>
+                <div class="mz-qty-error small" data-mz-photo-error role="alert" hidden></div>
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+                    <label class="btn btn-sm btn-outline-secondary mb-0">
+                        <i class="bi bi-image me-1" aria-hidden="true"></i>Add photos
+                        <input type="file" name="images" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden
+                               data-mz-return-photos th:attr="data-max=${maxImages}">
+                    </label>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Send</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Customer, order and what can be done next -->
+        <aside class="col-lg-4 order-1 order-lg-2">
+            <section class="mz-panel mb-3">
+                <h2 class="h6">Customer</h2>
+                <p class="mb-0 fw-semibold" th:text="${t.user.fullName}"></p>
+                <p class="small text-muted mb-0 text-break" th:text="${t.user.email}"></p>
+                <p class="small text-muted mb-0" th:if="${t.user.phone}" th:text="${t.user.phone}"></p>
+                <th:block th:if="${t.order != null}">
+                    <hr>
+                    <h2 class="h6">Order</h2>
+                    <p class="mb-0">
+                        <a sec:authorize="hasAnyRole('ADMIN','STORE','SUPPORT','FINANCE')"
+                           th:href="@{/admin/orders/{id}(id=${t.order.id})}" th:text="${t.order.orderNumber}"></a>
+                        <span sec:authorize="hasRole('PHARMACIST')" th:text="${t.order.orderNumber}"></span>
+                        <span class="badge ms-1" th:classappend="${t.order.status.badge}" th:text="${t.order.status.label}"></span>
+                    </p>
+                    <p class="small text-muted mb-0" th:text="${#temporals.format(t.order.createdAt, 'd MMM yyyy')} + ' · ₹' + ${t.order.total}
+                        + (${t.store != null} ? ' · ' + ${t.store.name} : '')"></p>
+                </th:block>
+                <th:block th:if="${t.rating != null}">
+                    <hr>
+                    <h2 class="h6">Customer rating</h2>
+                    <div class="mz-stars"><i th:each="n : ${#numbers.sequence(1, 5)}" class="bi" th:classappend="${n <= t.rating} ? 'bi-star-fill' : 'bi-star'" aria-hidden="true"></i></div>
+                    <p th:if="${t.ratingComment}" class="small mb-0 mt-1" th:text="${t.ratingComment}"></p>
+                </th:block>
+            </section>
+
+            <!-- Support: pass it to a specialist team -->
+            <form th:if="${canRedirect}" th:action="@{/admin/support/{id}/redirect(id=${t.id})}" method="post" class="mz-panel mb-3">
+                <h2 class="h6 mb-1">Pass to a team</h2>
+                <p class="small text-muted mb-2">The customer is told it's with the team. You can still follow the ticket.</p>
+                <label class="form-label small" for="team">Team</label>
+                <select class="form-select form-select-sm mb-2" id="team" name="team" required>
+                    <option th:each="tm : ${teams}" th:value="${tm.role.name()}" th:selected="${tm.role == t.topic.suggestedTeam}"
+                            th:text="${tm.label}">Team</option>
+                </select>
+                <label class="form-label small" for="note">Note for the team</label>
+                <textarea class="form-control form-control-sm mb-2" id="note" name="note" rows="3" maxlength="2000" required
+                          placeholder="What's needed, and what you've checked so far"></textarea>
+                <button class="btn btn-sm btn-outline-primary w-100" type="submit"><i class="bi bi-forward me-1"></i>Pass to team</button>
+            </form>
+
+            <!-- The team: solved, back to support -->
+            <form th:if="${canHandBack}" th:action="@{/admin/support/{id}/hand-back(id=${t.id})}" method="post" class="mz-panel mb-3">
+                <h2 class="h6 mb-1">Solved?</h2>
+                <p class="small text-muted mb-2">Hand it back to support to close with the customer.</p>
+                <label class="form-label small" for="handBackNote">What was done</label>
+                <textarea class="form-control form-control-sm mb-2" id="handBackNote" name="note" rows="3" maxlength="2000" required
+                          placeholder="e.g. Replacement dispatched today, refund of ₹74 issued"></textarea>
+                <button class="btn btn-sm btn-success w-100" type="submit"><i class="bi bi-check2-circle me-1"></i>Solved, back to support</button>
+            </form>
+
+            <!-- Support or admin: close with a message to the customer -->
+            <form th:if="${canClose}" th:action="@{/admin/support/{id}/close(id=${t.id})}" method="post" class="mz-panel mb-3"
+                  data-mz-confirm="The customer is asked to rate the support they got, and can reopen it for a few days." data-mz-confirm-title="Close this ticket?"
+                  data-mz-confirm-ok="Close ticket">
+                <h2 class="h6 mb-1">Close ticket</h2>
+                <label class="form-label small" for="closeMessage">Message to the customer</label>
+                <textarea class="form-control form-control-sm mb-2" id="closeMessage" name="message" rows="4" maxlength="2000" required
+                          th:text="${closingMessage}"></textarea>
+                <button class="btn btn-sm btn-outline-secondary w-100" type="submit"><i class="bi bi-check2-all me-1"></i>Close ticket</button>
+            </form>
+
+            <p th:if="${t.team != null}" class="small text-muted mb-0"
+               th:text="'Last passed to the ' + ${t.teamLabel.toLowerCase()} + '.'"></p>
+        </aside>
+    </div>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

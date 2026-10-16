@@ -160,6 +160,10 @@ public class OrderService {
             Medicine m = medicines.findById(line.medicineId())
                     .orElseThrow(() -> new BusinessException("A medicine in your order no longer exists."));
             if (!m.isActive()) throw new BusinessException(m.getName() + " is no longer sold.");
+            // The cart already enforces this; checked again so a corrupt line can never make a negative order or stock
+            if (line.quantity() <= 0 || line.quantity() > CartService.MAX_PACKS_PER_LINE) {
+                throw new BusinessException("The quantity of " + m.getName() + " isn't valid. Change it in your cart and try again.");
+            }
             wanted.merge(m, line.quantity(), Integer::sum);
             byId.put(m.getId(), m);
         }

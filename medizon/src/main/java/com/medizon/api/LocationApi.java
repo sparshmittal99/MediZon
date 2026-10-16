@@ -9,6 +9,7 @@ import com.medizon.web.DeliveryLocations;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,8 +34,8 @@ public class LocationApi {
 
     /** Whether a PIN code is delivered to, without saving it. */
     @GetMapping("/check")
-    public ResponseEntity<Map<String, Object>> check(@RequestParam String pincode) {
-        if (DeliveryAreaService.normalize(pincode) == null) return invalid();
+    public ResponseEntity<Map<String, Object>> check(@RequestParam String pincode, HttpServletRequest request) {
+        if (DeliveryAreaService.normalize(pincode) == null) return invalid(request);
         return ResponseEntity.ok(body(locations.locate(pincode, null)));
     }
 
@@ -43,12 +44,13 @@ public class LocationApi {
                                                       HttpServletRequest request, HttpServletResponse response) {
         if (req.addressId() != null) {
             User user = currentUser.find().orElse(null);
-            if (user == null) return ResponseEntity.status(401).body(Map.of("error", "Sign in to use your saved addresses."));
+            if (user == null) return ApiErrors.of(HttpStatus.UNAUTHORIZED, "Sign in to use your saved addresses.", request);
             Address a = addressService.find(req.addressId(), user).orElse(null);
-            if (a == null) return ResponseEntity.badRequest().body(Map.of("error", "That address isn't saved on your account."));
+            // Someone else's address answers the same as one that doesn't exist
+            if (a == null) return ApiErrors.of(HttpStatus.NOT_FOUND, "That address isn't saved on your account.", request);
             return ResponseEntity.ok(body(locations.chooseAddress(a, request, response)));
         }
-        if (DeliveryAreaService.normalize(req.pincode()) == null) return invalid();
+        if (DeliveryAreaService.normalize(req.pincode()) == null) return invalid(request);
         DeliveryLocations.Location loc = locations.locate(req.pincode(), req.label());
         locations.remember(loc, request, response);
         return ResponseEntity.ok(body(loc));
@@ -62,7 +64,7 @@ public class LocationApi {
         return out;
     }
 
-    private static ResponseEntity<Map<String, Object>> invalid() {
-        return ResponseEntity.badRequest().body(Map.of("error", "Enter a valid 6 digit PIN code."));
+    private static ResponseEntity<Map<String, Object>> invalid(HttpServletRequest request) {
+        return ApiErrors.of(HttpStatus.BAD_REQUEST, "Enter a valid 6 digit PIN code.", request);
     }
 }

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  A ticket's conversation. "staff" is true on the support desk: internal notes show, and staff messages sit on the right.
+  The customer never gets notes; their own messages sit on the right.
+-->
+<ol th:fragment="thread(t, staff)" class="mz-thread" aria-label="Conversation">
+    <li th:each="m, s : ${staff ? t.messages : t.customerMessages}"
+        th:id="${s.last} ? 'latest' : null"
+        th:with="mine=${staff ? (m.kind.name() == 'STAFF' or m.kind.name() == 'NOTE') : m.kind.name() == 'CUSTOMER'}"
+        class="mz-msg"
+        th:classappend="${m.kind.name() == 'SYSTEM'} ? 'is-system' : ((${mine} ? 'is-mine' : '') + (${m.kind.name() == 'NOTE'} ? ' is-note' : ''))">
+
+        <!-- Automatic updates: hand-offs, closing, reopening -->
+        <th:block th:if="${m.kind.name() == 'SYSTEM'}">
+            <div class="mz-msg-system"><i class="bi bi-info-circle" aria-hidden="true"></i><span th:text="${m.body}"></span>
+                <time class="ms-1" th:datetime="${m.createdAt}" th:text="${#temporals.format(m.createdAt, 'd MMM, h:mm a')}"></time></div>
+        </th:block>
+
+        <th:block th:unless="${m.kind.name() == 'SYSTEM'}">
+            <div class="mz-msg-meta">
+                <span class="fw-semibold" th:if="${m.kind.name() == 'CUSTOMER'}"
+                      th:text="${staff} ? ${t.user.fullName} : 'You'">You</span>
+                <span class="fw-semibold" th:if="${m.kind.name() == 'STAFF' or m.kind.name() == 'NOTE'}"
+                      th:text="${m.staffLabel}">Priya · Support</span>
+                <span th:if="${m.kind.name() == 'NOTE'}" class="badge mz-note-badge"><i class="bi bi-lock me-1" aria-hidden="true"></i>Internal note</span>
+                <time th:datetime="${m.createdAt}" th:text="${#temporals.format(m.createdAt, 'd MMM, h:mm a')}"></time>
+            </div>
+            <div class="mz-msg-body" th:text="${m.body}">Message</div>
+            <div class="mz-msg-photos" th:unless="${#lists.isEmpty(m.attachments)}">
+                <a th:each="a, p : ${m.attachments}" th:href="@{/support/attachments/{m}/{i}(m=${m.id}, i=${p.index})}" target="_blank" rel="noopener">
+                    <img th:src="@{/support/attachments/{m}/{i}(m=${m.id}, i=${p.index})}" th:alt="'Photo ' + ${p.count}" loading="lazy">
+                </a>
+            </div>
+        </th:block>
+    </li>
+</ol>
+
+<!-- One ticket in a list -->
+<a th:fragment="ticketRow(t)" class="mz-ticket-row" th:href="@{/support/tickets/{id}(id=${t.id})}">
+    <span class="mz-ticket-icon" aria-hidden="true"><i class="bi" th:classappend="${t.topic.icon}"></i></span>
+    <span class="flex-grow-1 min-w-0">
+        <span class="d-flex justify-content-between gap-2">
+            <span class="fw-semibold text-truncate" th:text="${t.subject}">Subject</span>
+            <span class="badge flex-none" th:classappend="${t.status.badge}" th:text="${t.customerStatus}">Open</span>
+        </span>
+        <span class="d-block small text-muted text-truncate">
+            <span th:text="${t.number}"></span> · <span th:text="${t.topic.label}"></span>
+            <th:block th:if="${t.order != null}"> · <span th:text="${t.order.orderNumber}"></span></th:block>
+        </span>
+        <span class="d-block small text-muted" th:text="'Updated ' + ${#temporals.format(t.updatedAt, 'd MMM, h:mm a')}"></span>
+    </span>
+</a>
+</body>
+</html>

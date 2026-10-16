@@ -12,7 +12,7 @@
         <div class="d-flex flex-wrap gap-2">
             <!-- Each store's own catalogue: stock, expiry and OTC prices -->
             <form th:action="@{/admin/medicines}" method="get" class="d-flex gap-2" th:unless="${#lists.isEmpty(stores)}">
-                <select name="store" class="form-select" aria-label="Open a store's catalogue" onchange="this.form.submit()">
+                <select name="store" class="form-select" aria-label="Open a store's catalogue" data-mz-autosubmit>
                     <option value="">Open a store's catalogue…</option>
                     <option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}"></option>
                 </select>

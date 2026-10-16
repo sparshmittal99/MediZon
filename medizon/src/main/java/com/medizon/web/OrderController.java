@@ -33,6 +33,7 @@ public class OrderController {
     private final AddressService addressService;
     private final DeliveryLocations deliveryLocations;
     private final CurrentUser currentUser;
+    private final SupportService supportService;
 
     /**
      * Checkout starts on the address asked for (just added), else the one picked in the header, else the default,
@@ -117,6 +118,7 @@ public class OrderController {
     public String detail(@PathVariable Long id, Model model) {
         Order o = orderService.getForUser(id, currentUser.get());
         model.addAttribute("o", o);
+        model.addAttribute("tickets", supportService.forOrder(currentUser.get(), o));
         model.addAttribute("placedWith", orderService.placedWith(o));
         model.addAttribute("review", reviewService.forOrder(o).orElse(null));
         model.addAttribute("returns", returnService.forOrder(o));

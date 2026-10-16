@@ -28,7 +28,8 @@ public class NotificationService {
 
     private static final Set<NotificationType> EMAILED = EnumSet.of(
             NotificationType.DOSE_REMINDER, NotificationType.REORDER_ALERT,
-            NotificationType.AUTO_REORDER, NotificationType.PRESCRIPTION_UPDATE, NotificationType.EXPIRY_ALERT);
+            NotificationType.AUTO_REORDER, NotificationType.PRESCRIPTION_UPDATE, NotificationType.EXPIRY_ALERT,
+            NotificationType.ERROR_ALERT, NotificationType.SUPPORT_UPDATE);
 
     private static final Duration ALERT_WINDOW = Duration.ofMinutes(15);
 

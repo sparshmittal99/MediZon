@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Support desk')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+        <div>
+            <h1 class="mz-page-title mb-0">Support desk</h1>
+            <p class="small text-muted mb-0" th:text="${seesAll} ? 'Every customer ticket. Pass a ticket to a team when it needs a specialist.'
+                : 'Tickets support has passed to your team. Reply to the customer, then hand the ticket back to support once it is solved.'"></p>
+        </div>
+        <div th:if="${averageRating != null}" class="small text-muted">
+            <i class="bi bi-star-fill text-warning" aria-hidden="true"></i>
+            <span th:text="${#numbers.formatDecimal(averageRating, 1, 1)} + ' average rating'"></span>
+        </div>
+    </div>
+
+    <!-- What's waiting for me / with the teams / closed / everything -->
+    <div class="mz-chip-scroll mb-2" role="tablist" aria-label="Ticket views">
+        <a class="mz-chip" th:classappend="${view == 'queue'} ? 'active'" th:href="@{/admin/support(view='queue', topic=${topic})}">
+            <span th:text="${seesAll} ? 'Needs support' : 'With my team'">Needs support</span>
+            <span class="opacity-75" th:text="'(' + ${counts['queue']} + ')'"></span></a>
+        <a th:if="${seesAll}" class="mz-chip" th:classappend="${view == 'teams'} ? 'active'" th:href="@{/admin/support(view='teams', topic=${topic})}">
+            With teams <span class="opacity-75" th:text="'(' + ${counts['teams']} + ')'"></span></a>
+        <a class="mz-chip" th:classappend="${view == 'closed'} ? 'active'" th:href="@{/admin/support(view='closed', topic=${topic})}">
+            Closed <span class="opacity-75" th:text="'(' + ${counts['closed']} + ')'"></span></a>
+        <a class="mz-chip" th:classappend="${view == 'all'} ? 'active'" th:href="@{/admin/support(view='all', topic=${topic})}">
+            All <span class="opacity-75" th:text="'(' + ${counts['all']} + ')'"></span></a>
+    </div>
+    <form method="get" th:action="@{/admin/support}" class="d-flex gap-2 align-items-center mb-4" style="max-width: 22rem">
+        <input type="hidden" name="view" th:value="${view}">
+        <label class="small text-muted text-nowrap" for="topic">Topic</label>
+        <select class="form-select form-select-sm" id="topic" name="topic" data-mz-autosubmit>
+            <option value="">All topics</option>
+            <option th:each="tp : ${topics}" th:value="${tp.name()}" th:selected="${tp == topic}" th:text="${tp.label}"></option>
+        </select>
+    </form>
+
+    <div th:if="${#lists.isEmpty(tickets)}" class="mz-panel mz-empty"><i class="bi bi-inbox"></i><p class="mb-0">Nothing here.</p></div>
+
+    <!-- Wide screens: a table; phones: cards -->
+    <div th:unless="${#lists.isEmpty(tickets)}" class="mz-panel-flush">
+        <div class="table-responsive d-none d-md-block">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>Ticket</th><th>Customer</th><th>Topic</th><th>Status</th><th>Updated</th><th class="text-end">Rating</th></tr></thead>
+                <tbody>
+                <tr th:each="t : ${tickets}">
+                    <td style="min-width: 16rem">
+                        <a class="fw-semibold" th:href="@{/admin/support/{id}(id=${t.id})}" th:text="${t.subject}">Subject</a>
+                        <div class="small text-muted"><span th:text="${t.number}"></span>
+                            <th:block th:if="${t.order != null}"> · <span th:text="${t.order.orderNumber}"></span></th:block>
+                            <th:block th:if="${t.reopenCount > 0}"> · <span class="text-danger" th:text="'Reopened ' + ${t.reopenCount} + '×'"></span></th:block></div>
+                    </td>
+                    <td class="small" th:text="${t.user.fullName}"></td>
+                    <td class="small"><i class="bi me-1" th:classappend="${t.topic.icon}" aria-hidden="true"></i><span th:text="${t.topic.label}"></span></td>
+                    <td><span class="badge" th:classappend="${t.status.badge}"
+                              th:text="${t.status.name() == 'WITH_TEAM'} ? ${t.teamLabel} : ${t.status.label}"></span></td>
+                    <td class="small text-nowrap" th:text="${#temporals.format(t.updatedAt, 'd MMM, h:mm a')}"></td>
+                    <td class="text-end small text-nowrap">
+                        <span th:if="${t.rating != null}"><i class="bi bi-star-fill text-warning" aria-hidden="true"></i> <span th:text="${t.rating}"></span></span>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="d-md-none">
+            <a th:each="t : ${tickets}" class="mz-ticket-row" th:href="@{/admin/support/{id}(id=${t.id})}">
+                <span class="mz-ticket-icon" aria-hidden="true"><i class="bi" th:classappend="${t.topic.icon}"></i></span>
+                <span class="flex-grow-1 min-w-0">
+                    <span class="d-flex justify-content-between gap-2">
+                        <span class="fw-semibold text-truncate" th:text="${t.subject}"></span>
+                        <span class="badge flex-none" th:classappend="${t.status.badge}"
+                              th:text="${t.status.name() == 'WITH_TEAM'} ? ${t.teamLabel} : ${t.status.label}"></span>
+                    </span>
+                    <span class="d-block small text-muted text-truncate" th:text="${t.number} + ' · ' + ${t.user.fullName}"></span>
+                    <span class="d-block small text-muted" th:text="'Updated ' + ${#temporals.format(t.updatedAt, 'd MMM, h:mm a')}"></span>
+                </span>
+            </a>
+        </div>
+    </div>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

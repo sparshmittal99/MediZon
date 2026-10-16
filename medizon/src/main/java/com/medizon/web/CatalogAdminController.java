@@ -1,6 +1,8 @@
 package com.medizon.web;
 
 import com.medizon.domain.Medicine;
+import com.medizon.domain.NotificationType;
+import com.medizon.domain.Role;
 import com.medizon.domain.Store;
 import com.medizon.domain.StoreItem;
 import com.medizon.domain.User;
@@ -34,6 +36,7 @@ public class CatalogAdminController {
     private final StoreCatalogService storeCatalog;
     private final StoreService storeService;
     private final CurrentUser currentUser;
+    private final StaffAlerts staffAlerts;
 
     /** The image is chosen through upload / link fields, never posted directly. */
     @InitBinder("medicine")
@@ -80,6 +83,20 @@ public class CatalogAdminController {
         return "admin/medicine-form";
     }
 
+    /**
+     * What a store can't decide when it adds a product: whether it needs a prescription, how it's taxed and whether
+     * it can be returned. It starts prescription-only with the catalogue's defaults, whatever was posted, and the
+     * admin is asked to review it.
+     */
+    private static void applyStoreDefaults(Medicine m) {
+        Medicine defaults = new Medicine();
+        m.setPrescriptionRequired(true);
+        m.setHsnCode(defaults.getHsnCode());
+        m.setGstRate(defaults.getGstRate());
+        m.setReturnable(defaults.isReturnable());
+        m.setActive(true);
+    }
+
     /** The store a new product is listed in: a store account's own, or the one the admin chose (if any). */
     private Store listingStore(Long storeId) {
         User me = currentUser.get();
@@ -100,12 +117,18 @@ public class CatalogAdminController {
         if (!me.isAdmin() && medicine.getId() != null) {
             throw new BusinessException("Only the admin changes a product's details. You can change your price, stock and expiry.");
         }
+        if (!me.isAdmin()) applyStoreDefaults(medicine);
         Store listIn = medicine.getId() == null ? listingStore(listStoreId) : null;
         if (result.hasErrors()) {
             medicine.setImageUrl(medicineService.currentImage(medicine.getId()));
             return form(medicine, listIn, model);
         }
         Medicine saved = medicineService.save(medicine, imageFile, imageLink, removeImage);
+        if (!me.isAdmin()) {
+            staffAlerts.notify(Role.ADMIN, NotificationType.INFO, "New product to review: " + saved.getName(),
+                    (listIn != null ? listIn.getName() : me.getFullName()) + " added it. It sells only with a prescription,"
+                            + " at 5% GST, until you review it.", "/admin/medicines/" + saved.getId() + "/edit");
+        }
         if (listIn != null) {
             storeCatalog.list(listIn, saved.getId(), listPrice, listStock, listExpiry);
             ra.addFlashAttribute("success", saved.getName() + " added to the catalogue and listed at " + listIn.getName() + ".");

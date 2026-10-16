@@ -65,12 +65,17 @@ public class FileStorageService {
     }
 
     /** Saves a return photo privately (streamed through a controller like prescriptions) and returns its stored name. */
-    public String storeReturnImage(MultipartFile file) {
+    public String storeReturnImage(MultipartFile file) { return storePrivateImage(file, "returns"); }
+
+    /** Saves a photo on a support ticket privately and returns its stored name. */
+    public String storeSupportImage(MultipartFile file) { return storePrivateImage(file, "support"); }
+
+    private String storePrivateImage(MultipartFile file, String folder) {
         String ext = IMAGES.get(file.getContentType());
         if (ext == null) throw new BusinessException("Upload photos as JPG, PNG, WebP or GIF.");
-        String name = "returns/" + UUID.randomUUID() + ext;
+        String name = folder + "/" + UUID.randomUUID() + ext;
         try (InputStream in = file.getInputStream()) {
-            Files.createDirectories(root.resolve("returns"));
+            Files.createDirectories(root.resolve(folder));
             Files.copy(in, root.resolve(name), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             throw new BusinessException("The photo couldn't be saved. Try again.");

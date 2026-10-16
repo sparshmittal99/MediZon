@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Raise a ticket')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-narrow">
+    <a th:href="@{/support}" class="small"><i class="bi bi-arrow-left"></i> Help &amp; support</a>
+    <h1 class="mz-page-title mt-2 mb-1">Raise a ticket</h1>
+    <p class="text-muted mb-4">Tell us what's wrong. Our support team replies here, and you'll get a notification when they do.</p>
+
+    <form th:action="@{/support/new}" method="post" enctype="multipart/form-data" class="mz-panel">
+        <!-- Which team it's for -->
+        <fieldset class="mb-4">
+            <legend class="form-label fw-semibold">What's it about?</legend>
+            <div class="mz-topics">
+                <label th:each="tp : ${topics}" class="mz-topic">
+                    <input type="radio" name="topic" th:value="${tp.name()}" th:checked="${tp == topic}" required>
+                    <span class="mz-topic-card">
+                        <i class="bi" th:classappend="${tp.icon}" aria-hidden="true"></i>
+                        <span><span class="d-block fw-semibold" th:text="${tp.label}">Topic</span>
+                            <span class="d-block small text-muted" th:text="${tp.hint}">Hint</span></span>
+                    </span>
+                </label>
+            </div>
+        </fieldset>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="orderId">Order <span class="text-muted fw-normal">(optional)</span></label>
+            <select class="form-select" id="orderId" name="orderId">
+                <option value="">Not about an order</option>
+                <option th:each="o : ${orders}" th:value="${o.id}" th:selected="${o.id == orderId}"
+                        th:text="${o.orderNumber} + ' · ' + ${#temporals.format(o.createdAt, 'd MMM yyyy')} + ' · ₹' + ${o.total} + ' · ' + ${o.status.label}">Order</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="subject">Subject</label>
+            <input class="form-control" id="subject" name="subject" maxlength="120" required th:value="${subject}"
+                   placeholder="e.g. Received the wrong strength of Metformin">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="description">Describe the issue</label>
+            <textarea class="form-control" id="description" name="description" rows="6" maxlength="2000" required
+                      th:text="${description}" placeholder="What happened, and what would you like us to do?"></textarea>
+            <div class="form-text">Please don't share card numbers or passwords.</div>
+        </div>
+
+        <div class="mb-4">
+            <label class="form-label fw-semibold" for="images">Photos <span class="text-muted fw-normal" th:text="'(optional, up to ' + ${maxImages} + ')'">(optional)</span></label>
+            <input class="form-control" type="file" id="images" name="images" accept="image/jpeg,image/png,image/webp,image/gif" multiple
+                   data-mz-return-photos th:attr="data-max=${maxImages}">
+            <div class="form-text">A photo of the medicine, packaging or invoice helps us sort it out faster.</div>
+            <div class="mz-photo-previews mt-2" data-mz-photo-previews></div>
+            <div class="mz-qty-error small" data-mz-photo-error role="alert" hidden></div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Submit ticket</button>
+            <a th:href="@{/support}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

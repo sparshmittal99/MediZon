@@ -18,6 +18,19 @@
         sync();
     });
 
+    // ---- no inline handlers (the Content-Security-Policy blocks them): filters that apply on change, print buttons ----
+    document.addEventListener('change', (e) => {
+        if (e.target.matches && e.target.matches('select[data-mz-autosubmit]')) e.target.form.submit();
+    });
+    document.addEventListener('click', (e) => {
+        if (e.target.closest && e.target.closest('[data-mz-print]')) window.print();
+    });
+    // A product picture that doesn't load is removed, leaving the placeholder; some may have failed before this ran
+    document.addEventListener('error', (e) => {
+        if (e.target.matches && e.target.matches('img[data-mz-hide-broken]')) e.target.remove();
+    }, true);
+    document.querySelectorAll('img[data-mz-hide-broken]').forEach(img => { if (img.complete && img.naturalWidth === 0) img.remove(); });
+
     // ---- checkout: prices, stores and delivery times depend on the address, so changing it reloads the summary ----
     document.addEventListener('change', (e) => {
         const r = e.target;
@@ -269,29 +282,36 @@
         if (row && data.quantity > 0 && (row.classList.contains('mz-cart-unavailable') || !data.store)) { location.reload(); return; }
         const deliveries = summary.querySelector('[data-mz-deliveries]');
         if (deliveries) {
-            deliveries.hidden = (data.deliveries || 0) < 2;
-            deliveries.querySelector('span').textContent = `Comes from ${data.deliveries} stores, as separate orders paid for together.`;
+            deliveries.hidden = (data.shipmentCount || 0) < 2;
+            deliveries.querySelector('span').textContent = `Comes from ${data.shipmentCount} stores, as separate orders paid for together.`;
         }
         if (row) {
             if (data.quantity === 0) row.remove();
-            else row.querySelector('[data-mz-line-total]').textContent = data.lineTotal;
+            else row.querySelector('[data-mz-line-total]').textContent = rupees(data.lineTotal);
             const unit = row.querySelector('[data-mz-unit-price]');
-            if (unit && data.unitPrice) unit.textContent = data.unitPrice;
+            if (unit && data.unitPrice != null) unit.textContent = rupees(data.unitPrice);
             const store = row.querySelector('[data-mz-line-store]');
             if (store && data.store) store.textContent = data.store;
             const alloc = row.querySelector('[data-mz-alloc]');
             if (alloc && data.allocation) renderAlloc(alloc, data.allocation, data.quantity);
         }
-        summary.querySelector('[data-mz-subtotal]').textContent = data.subtotal;
-        summary.querySelector('[data-mz-delivery]').textContent = data.delivery;
+        const freeDelivery = Number(data.deliveryFee) === 0;
+        summary.querySelector('[data-mz-subtotal]').textContent = rupees(data.subtotal);
+        summary.querySelector('[data-mz-delivery]').textContent = freeDelivery ? 'Free' : rupees(data.deliveryFee);
         const roundOff = summary.querySelector('[data-mz-round-off]');
         if (roundOff) {
-            roundOff.hidden = !data.rounded;
-            roundOff.querySelector('[data-mz-round-off-value]').textContent = data.roundOff;
+            const r = Number(data.roundOff);
+            roundOff.hidden = r === 0;
+            roundOff.querySelector('[data-mz-round-off-value]').textContent = (r < 0 ? '−' : '+') + rupees(Math.abs(r));
         }
-        summary.querySelector('[data-mz-total]').textContent = data.total;
-        summary.querySelector('[data-mz-free-note]').hidden = data.freeDelivery;
+        summary.querySelector('[data-mz-total]').textContent = rupees(data.total);
+        summary.querySelector('[data-mz-free-note]').hidden = freeDelivery;
         summary.querySelector('[data-mz-rx-note]').hidden = !data.prescriptionRequired;
+    }
+
+    /** An amount from the API (a number of rupees) the way the pages print it: ₹1,234.50. */
+    function rupees(amount) {
+        return '₹' + Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
     document.addEventListener('submit', (e) => {
@@ -580,6 +600,29 @@
         });
     });
 
+    // ---- support ticket: notice a reply while the page is open. Shows it right away, unless a reply is being typed ----
+    (function () {
+        const page = document.querySelector('[data-mz-ticket-poll]');
+        if (!page) return;
+        const latest = Number(page.dataset.latest || 0);
+        const banner = document.querySelector('[data-mz-ticket-new]');
+        const typing = () => [...document.querySelectorAll('[data-mz-reply] textarea')].some(t => t.value.trim())
+            || [...document.querySelectorAll('[data-mz-reply] input[type=file]')].some(f => f.files.length);
+        const showLatest = () => { location.hash = 'latest'; location.reload(); };
+        const timer = setInterval(async () => {
+            if (document.hidden) return;
+            try {
+                const res = await fetch(page.dataset.mzTicketPoll, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+                if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) return;   // signed out, or offline
+                const data = await res.json();
+                if (Number(data.latest) <= latest) return;
+                clearInterval(timer);
+                if (typing()) banner.hidden = false; else showLatest();
+            } catch (e) { /* try again next time */ }
+        }, 15000);
+        document.querySelector('[data-mz-ticket-refresh]')?.addEventListener('click', (e) => { e.preventDefault(); showLatest(); });
+    })();
+
     // ---- admin sales report: show the inputs for the chosen period type; financial years read best month by month ----
     document.querySelectorAll('[data-mz-period-form]').forEach(form => {
         const sync = (changed) => {
@@ -842,9 +885,13 @@
             const css = document.createElement('link');
             css.rel = 'stylesheet';
             css.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+            css.integrity = 'sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H';
+            css.crossOrigin = 'anonymous';
             document.head.appendChild(css);
             const js = document.createElement('script');
             js.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+            js.integrity = 'sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH';
+            js.crossOrigin = 'anonymous';
             js.onload = ok;
             js.onerror = fail;
             document.head.appendChild(js);

@@ -15,8 +15,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+" crossorigin="anonymous">
     <link th:href="@{/css/medizon.css}" rel="stylesheet">
 </head>
 
@@ -105,6 +105,8 @@
                         <li><a class="dropdown-item" th:href="@{/notifications}"><i class="bi bi-bell me-2"></i>Notifications</a></li>
                         <li sec:authorize="hasRole('CUSTOMER')"><a class="dropdown-item" th:href="@{/notifications/settings}"><i class="bi bi-sliders me-2"></i>Alerts on this device</a></li>
                         <li><hr class="dropdown-divider"></li>
+                        <li sec:authorize="hasRole('CUSTOMER')"><a class="dropdown-item" th:href="@{/support}"><i class="bi bi-headset me-2"></i>Help &amp; support</a></li>
+                        <li sec:authorize="hasRole('STAFF')"><a class="dropdown-item" th:href="@{/admin/support}"><i class="bi bi-headset me-2"></i>Support desk</a></li>
                         <li><a class="dropdown-item" th:href="@{/help}"><i class="bi bi-question-circle me-2"></i>Help &amp; FAQ</a></li>
                         <li>
                             <form th:action="@{/logout}" method="post">
@@ -153,8 +155,6 @@
                 <a th:href="@{/medicines}">All medicines</a>
                 <th:block sec:authorize="hasRole('CUSTOMER')">
                     <a th:href="@{/plans}">My medicines</a>
-                    <a th:href="@{/orders}">Orders</a>
-                    <a th:href="@{/prescriptions}">Upload prescription</a>
                 </th:block>
                 <a th:each="c : ${navCategories}" th:href="@{/medicines(category=${c})}" th:text="${c}">Category</a>
                 <a th:href="@{/help}">Help</a>
@@ -192,7 +192,7 @@
 <!-- Small product tile for the home page's cards: picture, name, price -->
 <a th:fragment="tile(m)" class="mz-tile" th:href="@{/medicines/{id}(id=${m.id})}">
     <span class="mz-tile-img">
-        <img th:if="${m.imageUrl}" th:src="@{${m.imageUrl}}" alt="" loading="lazy" onerror="this.remove()">
+        <img th:if="${m.imageUrl}" th:src="@{${m.imageUrl}}" alt="" loading="lazy" data-mz-hide-broken>
         <i class="bi" th:classappend="${m.icon}" aria-hidden="true"></i>
         <span th:if="${m.discountPercent > 0}" class="mz-tile-off" th:text="${m.discountPercent} + '% off'"></span>
     </span>
@@ -204,7 +204,7 @@
 <!-- Medicine card used on home and shop pages -->
 <div th:fragment="medCard(m)" class="mz-med h-100">
     <a th:href="@{/medicines/{id}(id=${m.id})}" class="mz-med-thumb" th:aria-label="${m.name}">
-        <img th:if="${m.imageUrl}" th:src="@{${m.imageUrl}}" th:alt="${m.name}" onerror="this.remove()">
+        <img th:if="${m.imageUrl}" th:src="@{${m.imageUrl}}" th:alt="${m.name}" data-mz-hide-broken>
         <i class="bi" th:classappend="${m.icon}" aria-hidden="true"></i>
         <span th:if="${m.prescriptionRequired}" class="mz-rx" title="Prescription required">Rx</span>
     </a>
@@ -285,6 +285,7 @@
             <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'stores'} ? 'active'" th:href="@{/admin/stores}">Stores</a></li>
             <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'locations'} ? 'active'" th:href="@{/admin/locations}">Delivery areas</a></li>
             <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'users'} ? 'active'" th:href="@{/admin/users}">Users</a></li>
+            <li class="nav-item" sec:authorize="hasRole('STAFF')"><a class="nav-link" th:classappend="${active == 'support'} ? 'active'" th:href="@{/admin/support}">Support</a></li>
             <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','SUPPORT')"><a class="nav-link" th:classappend="${active == 'reviews'} ? 'active'" th:href="@{/admin/reviews}">Reviews</a></li>
             <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'monitoring'} ? 'active'" th:href="@{/admin/monitoring}">Monitoring</a></li>
         </ul>
@@ -463,6 +464,7 @@
                 <h3>Your MediZon</h3>
                 <a th:href="@{/plans}"><i class="bi bi-capsule-pill"></i>My medicines</a>
                 <a th:href="@{/orders}"><i class="bi bi-box-seam"></i>Your orders</a>
+                <a th:href="@{/support}"><i class="bi bi-headset"></i>Help &amp; support</a>
                 <a th:href="@{/prescriptions}"><i class="bi bi-file-earmark-medical"></i>Prescriptions</a>
                 <a th:href="@{/members}"><i class="bi bi-people"></i>Family members</a>
                 <a th:href="@{/notifications}"><i class="bi bi-bell"></i>Notifications</a>
@@ -571,7 +573,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script th:src="@{/js/medizon.js}"></script>
 
     <!-- MediZon Assistant: floating chat for signed-in users -->

@@ -46,6 +46,44 @@ public class MonitoringApi {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * What the Content-Security-Policy blocked, reported by the browser ({@code report-uri}). Grouped by the blocked
+     * origin and directive, so a script or font the policy is missing shows up once under Admin > Monitoring.
+     */
+    @PostMapping("/csp-report")
+    public ResponseEntity<Void> cspReport(@RequestBody(required = false) String body, HttpServletRequest request) {
+        JsonNode r = parse(body).path("csp-report");
+        String directive = text(r, "effective-directive", 60);
+        if (directive == null) directive = text(r, "violated-directive", 60);
+        if (directive == null || !allowed(request)) return ResponseEntity.noContent().build();
+        String blocked = origin(text(r, "blocked-uri", 300));
+        String page = origin(text(r, "document-uri", 300)) == null ? null : pathOf(text(r, "document-uri", 300));
+        errors.captureBrowser("csp", "Blocked " + (blocked == null ? "inline code" : blocked) + " (" + directive + ")",
+                text(r, "source-file", 300), r.hasNonNull("line-number") ? r.get("line-number").asInt() : null, null,
+                null, page, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** "https://host" of a URL, or what the browser sent for non-URLs ("inline", "eval"); null for nothing. */
+    private static String origin(String uri) {
+        if (uri == null) return null;
+        try {
+            java.net.URI u = java.net.URI.create(uri);
+            return u.getScheme() != null && u.getHost() != null ? u.getScheme() + "://" + u.getHost() : uri;
+        } catch (IllegalArgumentException e) {
+            return uri;
+        }
+    }
+
+    private static String pathOf(String uri) {
+        try {
+            String p = java.net.URI.create(uri).getPath();
+            return p == null || p.isEmpty() ? "/" : p;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     @PostMapping("/page-timing")
     public ResponseEntity<Void> pageTiming(@RequestBody(required = false) String body) {
         JsonNode t = parse(body);

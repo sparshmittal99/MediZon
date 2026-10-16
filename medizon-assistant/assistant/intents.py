@@ -134,6 +134,14 @@ CUSTOMER = {
         "go to shop", "open the shop", "go home", "open home page", "update my phone number",
         "take me to my medicines page", "open prescriptions page", "show notifications",
     ],
+    "policy": [
+        "what is your return policy", "return policy", "can i return medicines", "how do i return an item",
+        "how do refunds work", "when will i get my refund", "refund policy", "where is my refund",
+        "what are the delivery charges", "is delivery free", "delivery fee", "how much is shipping",
+        "how can i pay", "payment options", "do you accept upi", "can i pay cash on delivery", "do you take cards",
+        "can i cancel my order", "how do i cancel an order", "cancel my order", "cancellation policy",
+        "what are your policies", "store policy",
+    ],
     "pharmacist": [
         "talk to a pharmacist", "can i speak to someone", "contact support", "customer care number",
         "i want to talk to a human", "call me", "speak to pharmacist", "contact you", "support email",

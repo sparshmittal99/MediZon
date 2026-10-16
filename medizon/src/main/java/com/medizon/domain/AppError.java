@@ -59,6 +59,17 @@ public class AppError {
     @Column(length = 16)
     private String lastRequestId;
 
+    /** Rated by monitoring from what failed and where, unless an admin set it ({@link #severityPinned}). */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private ErrorSeverity severity;
+
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
+    private boolean severityPinned;
+
+    /** When admins were last alerted about it, so a flapping error doesn't alert over and over. */
+    private LocalDateTime alertedAt;
+
     private long occurrences;
 
     private LocalDateTime firstSeen;

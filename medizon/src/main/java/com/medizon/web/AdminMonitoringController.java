@@ -3,6 +3,7 @@ package com.medizon.web;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.medizon.ai.AssistantClient;
 import com.medizon.domain.AppError;
+import com.medizon.domain.ErrorSeverity;
 import com.medizon.monitoring.ErrorMonitor;
 import com.medizon.monitoring.PerformanceMonitor;
 import com.medizon.repository.AppErrorRepository;
@@ -64,8 +65,16 @@ public class AdminMonitoringController {
         model.addAttribute("pages", performance.pageTimings().stream().limit(25).toList());
         model.addAttribute("jobs", performance.jobs());
         model.addAttribute("errorsView", resolved ? "resolved" : "open");
-        model.addAttribute("errors", errors.findTop100ByResolvedOrderByLastSeenDesc(resolved));
+        List<AppError> list = errors.findTop100ByResolvedOrderByLastSeenDesc(resolved);
+        if (!resolved) {        // worst first, then most recent
+            list = list.stream().sorted(Comparator.comparing(AppError::getSeverity, Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(AppError::getLastSeen, Comparator.reverseOrder())).toList();
+        }
+        model.addAttribute("errors", list);
+        model.addAttribute("severities", ErrorSeverity.values());
         model.addAttribute("openErrors", errors.countByResolvedFalse());
+        model.addAttribute("openCritical", errors.countByResolvedFalseAndSeverity(ErrorSeverity.CRITICAL));
+        model.addAttribute("openHigh", errors.countByResolvedFalseAndSeverity(ErrorSeverity.HIGH));
         model.addAttribute("errorsToday", errors.countByResolvedFalseAndLastSeenAfter(LocalDateTime.now().minusHours(24)));
         model.addAttribute("assistant", assistantMetrics());
         return "admin/monitoring";
@@ -105,6 +114,24 @@ public class AdminMonitoringController {
         e.setResolvedAt(null);
         ra.addFlashAttribute("success", "Reopened.");
         return "redirect:/admin/monitoring?errorsView=resolved#errors";
+    }
+
+    /** An admin's rating sticks; "AUTO" hands it back to monitoring. */
+    @PostMapping("/errors/{id}/severity")
+    @Transactional
+    public String severity(@PathVariable Long id, @RequestParam String severity, RedirectAttributes ra) {
+        AppError e = find(id);
+        if ("AUTO".equals(severity)) {
+            e.setSeverityPinned(false);
+            e.setSeverity(ErrorMonitor.rate(e));
+        } else {
+            e.setSeverityPinned(true);
+            e.setSeverity(Arrays.stream(ErrorSeverity.values()).filter(s -> s.name().equals(severity)).findFirst()
+                    .orElseThrow(() -> new BusinessException("Unknown severity.")));
+        }
+        ra.addFlashAttribute("success", "Severity set to " + e.getSeverity().getLabel()
+                + (e.isSeverityPinned() ? "." : " (automatic)."));
+        return "redirect:/admin/monitoring" + (e.isResolved() ? "?errorsView=resolved" : "") + "#errors";
     }
 
     @PostMapping("/errors/resolve-all")

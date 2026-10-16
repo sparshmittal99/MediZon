@@ -37,6 +37,11 @@ public class CartService {
 
     public static final BigDecimal FREE_DELIVERY_ABOVE = new BigDecimal("499");
     public static final BigDecimal DELIVERY_FEE = new BigDecimal("40");
+    /**
+     * Most packs of one medicine in a cart. Also keeps quantities far from int overflow, which would otherwise wrap a
+     * huge request to a negative number that passes the stock check.
+     */
+    public static final int MAX_PACKS_PER_LINE = 50;
 
     private final CartItemRepository cart;
     private final CartRepository carts;
@@ -63,9 +68,9 @@ public class CartService {
         if (user.isStaff()) throw new BusinessException("Staff accounts can't shop.");
         Medicine m = medicines.findById(medicineId)
                 .orElseThrow(() -> new BusinessException("That medicine doesn't exist."));
-        int qty = Math.max(1, quantity);
+        int qty = Math.max(1, Math.min(quantity, MAX_PACKS_PER_LINE));
         CartItem item = lineFor(user, m);
-        checkSellable(m, item.getQuantity() + qty, pincode);
+        checkSellable(m, withinLimit(m, (long) item.getQuantity() + qty), pincode);
 
         Map<Member, Integer> alloc = new LinkedHashMap<>(item.getAllocation());
         List<Member> to = forMembers.isEmpty()
@@ -96,7 +101,7 @@ public class CartService {
             existing.ifPresent(cart::delete);
             return 0;
         }
-        checkSellable(m, quantity, pincode);
+        checkSellable(m, withinLimit(m, quantity), pincode);
         CartItem item = lineFor(user, m);
         Map<Member, Integer> alloc = new LinkedHashMap<>(item.getAllocation());
         if (alloc.isEmpty()) alloc.put(memberService.self(user), 0);
@@ -142,7 +147,7 @@ public class CartService {
         if (m.isPrescriptionRequired() && alloc.keySet().stream().anyMatch(Member::isCommon)) {
             throw new BusinessException(m.getName() + " needs a prescription, so it has to be for a named person, not the common shelf.");
         }
-        checkSellable(m, alloc.values().stream().mapToInt(Integer::intValue).sum(), pincode);
+        checkSellable(m, withinLimit(m, alloc.values().stream().mapToLong(Integer::longValue).sum()), pincode);
         item.allocate(alloc);
         return cart.save(item);
     }
@@ -253,7 +258,7 @@ public class CartService {
         if (quantity <= 0) {
             items.remove(medicineId);
         } else {
-            checkSellable(m, quantity, pincode);
+            checkSellable(m, withinLimit(m, quantity), pincode);
             items.put(medicineId, quantity);
         }
         session.setAttribute(GUEST_CART, items);   // re-set so clustered sessions see the change
@@ -263,7 +268,8 @@ public class CartService {
     @Transactional(readOnly = true)
     public void addGuest(HttpSession session, Long medicineId, int quantity, String pincode) {
         int now = guest(session, false).getOrDefault(medicineId, 0);
-        setGuestQuantity(session, medicineId, now + Math.max(1, quantity), pincode);
+        long total = (long) now + Math.max(1, Math.min(quantity, MAX_PACKS_PER_LINE));
+        setGuestQuantity(session, medicineId, (int) Math.min(total, MAX_PACKS_PER_LINE + 1L), pincode);
     }
 
     public Map<Long, Integer> guestQuantities(HttpSession session) {
@@ -304,12 +310,22 @@ public class CartService {
         items.forEach((id, qty) -> medicines.findById(id).filter(Medicine::isActive).ifPresent(m -> {
             if (qty == null || qty <= 0) return;
             CartItem item = lineFor(user, m);
+            int add = Math.min(qty, MAX_PACKS_PER_LINE - item.getQuantity());     // the account cart may already be full
+            if (add <= 0) return;
             Map<Member, Integer> alloc = new LinkedHashMap<>(item.getAllocation());
             if (alloc.isEmpty()) alloc.put(memberService.self(user), 0);
-            alloc.merge(alloc.keySet().iterator().next(), qty, Integer::sum);
+            alloc.merge(alloc.keySet().iterator().next(), add, Integer::sum);
             item.allocate(alloc);
             cart.save(item);
         }));
+    }
+
+    /** The packs, if within {@link #MAX_PACKS_PER_LINE}. Takes a long so a sum can't overflow before it's checked. */
+    private static int withinLimit(Medicine m, long packs) {
+        if (packs > MAX_PACKS_PER_LINE) {
+            throw new BusinessException("You can buy at most " + MAX_PACKS_PER_LINE + " packs of " + m.getName() + " at a time.");
+        }
+        return (int) packs;
     }
 
     /** Throws unless a store that delivers to {@code pincode} (any store, without one) can supply these packs. */

@@ -143,6 +143,8 @@ class IntentTests(unittest.TestCase):
             ("what should i take today", "todays_doses"), ("refill my metformin", "refill"),
             ("i have chest pain", "emergency"), ("remind me to call the doctor tomorrow", "set_general_reminder"),
             ("the delivery was late", "feedback"), ("show my cart", "view_cart"),
+            ("what is your return policy", "policy"), ("how do refunds work", "policy"),
+            ("can i cancel my order", "policy"), ("do you accept upi", "policy"),
         ])
 
     def test_admin(self):
@@ -178,6 +180,17 @@ class CustomerFlowTests(unittest.TestCase):
         c.send("add paracetamol")
         out = c.send("checkout")
         self.assertEqual(out["navigate"], "/checkout")
+
+    def test_policy_questions_get_the_store_rules(self):
+        for question, expected in [("What is your return policy?", "7 days of delivery"),
+                                   ("How do refunds work?", "5 to 7 working days"),
+                                   ("What are the delivery charges?", "₹499"),
+                                   ("How can I pay?", "cash on delivery"),
+                                   ("Can I cancel my order?", "until it ships")]:
+            with self.subTest(question=question):
+                out = Chat().send(question)
+                self.assertIn(expected, out["reply"])
+                self.assertIn("/support/new", [s.get("href") for s in out["suggestions"]])
 
     def test_checkout_empty_cart(self):
         out = Chat().send("checkout")

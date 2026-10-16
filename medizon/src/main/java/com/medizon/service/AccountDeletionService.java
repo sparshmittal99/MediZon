@@ -73,6 +73,14 @@ public class AccountDeletionService {
         jdbc.update("delete from return_images where return_id in (select id from return_requests where user_id = ?)", id);
         jdbc.update("update return_requests set details = null where user_id = ?", id);
 
+        // Support tickets are the customer's own words and photos: all of it goes
+        files.addAll(jdbc.queryForList("select a.stored_file_name from ticket_attachments a join ticket_messages m on m.id = a.message_id "
+                + "join support_tickets t on t.id = m.ticket_id where t.user_id = ?", String.class, id));
+        jdbc.update("delete from ticket_attachments where message_id in (select m.id from ticket_messages m join support_tickets t "
+                + "on t.id = m.ticket_id where t.user_id = ?)", id);
+        jdbc.update("delete from ticket_messages where ticket_id in (select id from support_tickets where user_id = ?)", id);
+        jdbc.update("delete from support_tickets where user_id = ?", id);
+
         jdbc.update("delete from reviews where user_id = ?", id);
         jdbc.update("delete from feedback where user_id = ?", id);
         jdbc.update("delete from prescription where user_id = ?", id);

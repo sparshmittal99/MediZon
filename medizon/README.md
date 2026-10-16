@@ -173,6 +173,23 @@ performance, with no outside service needed:
   rejects it with a note; approved returns are marked picked up (the packs leave the member's supply count, and can go
   back into stock) and then refunded.
 
+## Help & support
+
+- **Support** (in the category bar, the account menu and the side menu) starts with **Quick answers**: common questions
+  (where is my order, returns, refunds, delivery charges, payment, cancelling, prescriptions) answered by the assistant.
+  **Still need help?** raises a ticket: a topic, a subject, a description, optionally an order and up to 3 photos.
+  Each order page has **Get help** for a ticket about that order.
+- A ticket starts with the **support** team. Support replies, or passes it to a team: **pharmacy**, **payments**
+  (finance), the **store** that handled the order, or the **admin**. The customer is told it's with that team; the
+  handover note is internal. The team talks to the customer on the ticket and hands it back to support once solved;
+  support closes it with a message. Support can follow a ticket after passing it on and add internal notes; the admin
+  sees every ticket and can act on any that isn't closed.
+- Closed tickets can be rated (1 to 5 stars) and reopened for 7 days, which puts them back with support.
+- The customer is notified (in the app and by email) of every reply and change; staff get a notification when a
+  ticket reaches their team. An open ticket page shows new replies without reloading.
+- Staff work tickets under **Admin > Support**: what's waiting for them, what's with the teams, closed and all. A
+  customer can have 5 open tickets and raise 10 a day. Deleting an account deletes its tickets and photos.
+
 ## JSON API
 
 The site's pages are HTML (Thymeleaf). Everything under `/api` is JSON, errors included. POSTs need the CSRF token
@@ -180,11 +197,13 @@ The site's pages are HTML (Thymeleaf). Everything under `/api` is JSON, errors i
 
 | Endpoint | What it returns |
 |---|---|
-| `GET /api/cart` | `cartId` of the open cart (`null` before the first medicine goes in, and for a signed-out visitor, whose cart lives in the session), lines with `cartItemId`, totals |
+| `GET /api/cart` | `cartId` of the open cart (`null` before the first medicine goes in, and for a signed-out visitor, whose cart lives in the session), lines with `cartItemId`, totals, and `shipmentCount` (how many stores it ships from) |
 | `POST /api/cart/{medicineId}` `{"quantity": n}` | The line's new quantity and `cartItemId`, and the cart totals |
 | `GET /api/orders` | The signed-in customer's orders, newest first |
-| `GET /api/orders/{id}` | One order with its lines and the `cartId` it was checked out from |
+| `GET /api/orders/{id}` | One order with its lines and totals |
 | `GET /api/orders/{id}/invoice` | The GST invoice for an order that has shipped |
+
+Amounts are numbers in rupees (`1234.5`), never formatted text; the page adds the `₹` and the commas.
 
 An account has one open cart (`carts` table, status `ACTIVE`). It keeps its id across sign-ins and devices; checkout
 marks it `CHECKED_OUT`, the orders keep its id, and the next medicine added opens a new cart. Errors look like

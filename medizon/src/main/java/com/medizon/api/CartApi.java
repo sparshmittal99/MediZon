@@ -13,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -66,13 +65,13 @@ public class CartApi {
         out.put("roundOff", c.getRoundOff());
         out.put("total", c.getTotal());
         out.put("prescriptionRequired", c.isPrescriptionRequired());
-        out.put("deliveries", c.getByStore().size());
+        out.put("shipmentCount", c.getByStore().size());
         return out;
     }
 
     /**
-     * Sets the quantity and returns the new totals, already formatted the way the cart page shows them. Signed-out
-     * visitors change their session cart.
+     * Sets the quantity and returns the line and the new totals. Amounts are plain numbers in rupees, as in
+     * {@link #cart}; the page formats them. Signed-out visitors change their session cart.
      */
     @PostMapping("/{medicineId}")
     public Map<String, Object> setQuantity(@PathVariable Long medicineId, @RequestBody QuantityRequest req, HttpSession session,
@@ -99,21 +98,19 @@ public class CartApi {
         out.put("medicineId", medicineId);
         out.put("quantity", qty);
         out.put("cartCount", count);
-        out.put("lineTotal", money(line));
-        out.put("subtotal", money(c.getSubtotal()));
-        out.put("delivery", c.getDeliveryFee().signum() == 0 ? "Free" : "₹" + c.getDeliveryFee().toPlainString());
-        out.put("freeDelivery", c.getDeliveryFee().signum() == 0);
-        out.put("roundOff", c.getRoundOffLabel());
-        out.put("rounded", c.getRoundOff().signum() != 0);
-        out.put("total", money(c.getTotal()));
+        out.put("lineTotal", line);
+        out.put("subtotal", c.getSubtotal());
+        out.put("deliveryFee", c.getDeliveryFee());
+        out.put("roundOff", c.getRoundOff());
+        out.put("total", c.getTotal());
         out.put("prescriptionRequired", c.isPrescriptionRequired());
         out.put("empty", c.isEmpty());
-        out.put("deliveries", c.getByStore().size());
+        out.put("shipmentCount", c.getByStore().size());
         c.getItems().stream().filter(i -> i.getMedicine().getId().equals(medicineId)).findFirst().ifPresent(i -> {
             out.put("cartItemId", i.getId());   // null for a signed-out visitor's session cart
             out.put("allocation", i.getAllocationById());
             // A bigger quantity can move the line to another store, with its own price and delivery time
-            out.put("unitPrice", money(i.getUnitPrice()));
+            out.put("unitPrice", i.getUnitPrice());
             if (i.isAvailable()) out.put("store", i.getOffer().store().getName());
         });
         return out;
@@ -128,9 +125,5 @@ public class CartApi {
                                              HttpServletRequest request) {
         CartItem item = cartService.setAllocation(currentUser.get(), medicineId, req.packs(), deliveryLocations.pincode(request));
         return setQuantity(medicineId, new QuantityRequest(item.getQuantity()), session, request);
-    }
-
-    private static String money(BigDecimal v) {
-        return "₹" + new DecimalFormat("#,##0.00").format(v);
     }
 }
