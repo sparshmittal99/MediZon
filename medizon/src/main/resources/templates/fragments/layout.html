@@ -147,8 +147,7 @@
         </div>
     </div>
 
-    <!-- Category bar: everything at one tap, scrolls sideways on small screens -->
-    <!-- Front page only (HomeController); elsewhere the header's menu button opens the same side menu -->
+    <!-- Category bar: desktop front page only (HomeController); hidden below lg, where the side menu covers it -->
     <nav class="mz-catbar" sec:authorize="!hasRole('STAFF')" th:if="${showCatbar}" aria-label="Shop by section">
         <div class="container">
             <div class="mz-catbar-scroll">
@@ -159,7 +158,6 @@
                     <a th:href="@{/plans}">My medicines</a>
                 </th:block>
                 <a th:each="c : ${navCategories}" th:href="@{/medicines(category=${c})}" th:text="${c}">Category</a>
-                <a th:href="@{/help}">Help</a>
             </div>
         </div>
     </nav>

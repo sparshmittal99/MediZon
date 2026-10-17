@@ -244,7 +244,8 @@ public class AdminController {
                         || (u.getPhone() != null && u.getPhone().contains(term)))
                 .filter(u -> switch (show) {
                     case "customers" -> u.getRole() == Role.CUSTOMER;
-                    case "staff" -> u.isStaff();
+                    case "admin" -> u.isAdmin();
+                    case "staff" -> u.isStaff() && !u.isAdmin();   // the admin is listed under Admin, not Staff
                     case "disabled" -> !u.isEnabled();
                     case "online" -> online.contains(u.getEmail().toLowerCase());
                     case "new" -> u.getCreatedAt() != null && !u.getCreatedAt().toLocalDate().isBefore(weekStart);

@@ -691,11 +691,11 @@ a { text-underline-offset: 2px; }
     .mz-nav-icons { order: 2; }
     .mz-search { order: 3; flex: 0 0 100%; }
     .mz-search .form-control { height: 2.75rem; font-size: 1rem; }   /* 16px: no zoom-in on iOS */
-    .mz-account-k, .mz-account-caret, .mz-catbar-all { display: none; }
+    .mz-account-k, .mz-account-caret { display: none; }
+    .mz-catbar { display: none; }   /* the side menu already lists every category */
     .mz-account-ico { display: inline; }
     .mz-account-v { font-size: .9rem; max-width: 5.5rem; }
     .mz-icon-link, .mz-account { padding: .3rem .4rem; }
-    .mz-catbar-scroll a { font-size: .85rem; padding: .4rem .55rem; }
 }
 @media (max-width: 359.98px) { .mz-account-v { max-width: 3.5rem; } }
 
