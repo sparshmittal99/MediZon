@@ -336,3 +336,23 @@ class MonitoringTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnresolvedTests(unittest.TestCase):
+    """Messages we can't really answer are flagged so MediZon can ask its LLM instead."""
+
+    def test_unclear_message(self):
+        out = Chat().send("can I take dolo with alcohol")
+        self.assertTrue(out["unresolved"])
+        self.assertTrue(out["suggestions"])
+
+    def test_question_that_found_nothing(self):
+        self.assertTrue(Chat().send("is it safe to take paracetamol during pregnancy")["unresolved"])
+        self.assertTrue(Chat().send("what is the history of the roman empire")["unresolved"])
+
+    def test_product_name_not_found_stays_ours(self):
+        self.assertFalse(Chat().send("xyzzy plugh")["unresolved"])
+
+    def test_understood_message(self):
+        self.assertFalse(Chat().send("hi")["unresolved"])
+        self.assertFalse(Chat().send("paracetamol")["unresolved"])

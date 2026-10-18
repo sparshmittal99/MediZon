@@ -98,7 +98,6 @@
 
             <th:block sec:authorize="hasRole('CUSTOMER')">
                 <div th:replace="~{fragments/layout :: cartStepper(${m}, true)}"></div>
-                <p th:unless="${m.inStock or m.unavailable}" class="text-danger fw-semibold">Out of stock right now.</p>
                 <div class="d-flex flex-wrap gap-2 mb-4">
                     <a th:if="${reminderMemberId != null}" class="btn btn-outline-primary btn-sm"
                        th:href="@{/plans/new(medicineId=${m.id}, memberId=${reminderMemberId})}">
@@ -110,7 +109,6 @@
             </th:block>
             <th:block sec:authorize="!isAuthenticated()">
                 <div th:replace="~{fragments/layout :: cartStepper(${m}, true)}"></div>
-                <p th:unless="${m.inStock or m.unavailable}" class="text-danger fw-semibold">Out of stock right now.</p>
                 <div class="mb-4"></div>
             </th:block>
             <a sec:authorize="hasRole('STAFF')" th:href="@{/admin/medicines/{id}/edit(id=${m.id})}" class="btn btn-outline-primary mb-4">

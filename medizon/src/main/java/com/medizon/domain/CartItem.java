@@ -41,6 +41,10 @@ public class CartItem {
      * Packs per member id: how the line's packs are shared out. Always adds up to {@link #quantity}; lines from before
      * per-person packs have none and are split evenly (see {@link #getAllocation()}).
      */
+    /** Who the "Others" share is for, when it came from a prescription for someone outside the family. */
+    @Column(length = 100)
+    private String othersPatientName;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "cart_item_packs", joinColumns = @JoinColumn(name = "cart_item_id"))
     @MapKeyColumn(name = "member_id")
@@ -94,6 +98,13 @@ public class CartItem {
     }
 
     /** "Me (2), Asha (1)", or just "Me" when one person has every pack. */
+    /** The patients the packs are for, for checkout: "Asha Sharma, Ravi Kumar"; empty when none has a name. */
+    public String getPatientLabel() {
+        return getAllocation().keySet().stream()
+                .map(m -> m.isOthers() ? othersPatientName : m.getPatient())
+                .filter(n -> n != null && !n.isBlank()).distinct().collect(Collectors.joining(", "));
+    }
+
     public String getAllocationLabel() {
         Map<Member, Integer> a = getAllocation();
         if (a.size() == 1) return a.keySet().iterator().next().getLabel();

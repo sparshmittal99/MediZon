@@ -25,6 +25,13 @@ public class Member {
     @Column(nullable = false, length = 60)
     private String name;
 
+    /**
+     * Full name as written on their prescriptions ("Asha Sharma"), printed as the patient on invoices and used to put
+     * a prescription's medicines under the right person. The account holder's is their account name.
+     */
+    @Column(length = 100)
+    private String patientName;
+
     /** "Mother", "Son" ...; empty for the account holder. */
     @Column(length = 40)
     private String relation;
@@ -62,6 +69,15 @@ public class Member {
             case COMMON -> " (common)";
             case OTHERS -> " (for others)";
             case FAMILY -> " (" + name + ")";
+        };
+    }
+
+    /** The patient's name for invoices and checkout; null for the common shelf and "Others". */
+    public String getPatient() {
+        return switch (kind) {
+            case SELF -> user.getFullName();
+            case FAMILY -> patientName == null || patientName.isBlank() ? name : patientName;
+            case COMMON, OTHERS -> null;
         };
     }
 

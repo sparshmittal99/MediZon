@@ -39,8 +39,9 @@ public class MemberController {
 
     @PostMapping
     public String save(@RequestParam(required = false) Long id, @RequestParam String name,
+                       @RequestParam(required = false) String patientName,
                        @RequestParam(required = false) String relation, RedirectAttributes ra) {
-        Member m = memberService.save(currentUser.get(), id, name, relation);
+        Member m = memberService.save(currentUser.get(), id, name, patientName, relation);
         ra.addFlashAttribute("success", id == null
                 ? m.getName() + " added. Add their medicines from My medicines, or choose them in the cart."
                 : "Saved.");

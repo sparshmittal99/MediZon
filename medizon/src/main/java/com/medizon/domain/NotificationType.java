@@ -13,6 +13,8 @@ public enum NotificationType {
     SUPPORT_UPDATE("bi-headset"),
     /** A ticket for a staff team to look at. */
     SUPPORT_TICKET("bi-headset"),
+    /** A product the customer asked to hear about is in stock again. */
+    BACK_IN_STOCK("bi-bell"),
     INFO("bi-info-circle");
 
     private final String icon;

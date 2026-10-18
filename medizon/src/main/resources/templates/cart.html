@@ -48,6 +48,9 @@
                                         </th:block>
                                         <div th:replace="~{fragments/layout :: allocOption(${i}, ${others}, 'bi-person-walking', 'mz-pick-others', true)}"></div>
                                     </div>
+                                    <!-- The patient names of whoever's chosen; medizon.js keeps it in step with the picks -->
+                                    <div class="small text-muted mt-1" data-mz-patients th:hidden="${#strings.isEmpty(i.patientLabel)}">
+                                        Patient: <span th:text="${i.patientLabel}"></span></div>
                                     <div class="mz-qty-error small" role="alert" hidden></div>
                                 </div>
                             </td>

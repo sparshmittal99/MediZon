@@ -3,6 +3,8 @@ package com.medizon.web;
 import com.medizon.domain.*;
 import com.medizon.dto.DayTraffic;
 import com.medizon.dto.NewUserForm;
+import com.medizon.dto.PrescriptionReading;
+import com.medizon.dto.PrescriptionScore;
 import com.medizon.dto.ReportPeriod;
 import com.medizon.dto.SalesDay;
 import com.medizon.repository.*;
@@ -41,7 +43,9 @@ public class AdminController {
     private final MedicineService medicineService;
     private final OrderService orderService;
     private final PrescriptionService prescriptionService;
+    private final PrescriptionScanService scanService;
     private final OrderRepository orderRepository;
+    private final MedicineRepository medicineRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final MedicationPlanRepository planRepository;
     private final UserRepository userRepository;
@@ -61,7 +65,9 @@ public class AdminController {
 
     /** The admin's overview; other staff go straight to their own work. */
     @GetMapping
-    public String dashboard(@RequestParam(required = false) String denied, Model model, RedirectAttributes ra) {
+    public String dashboard(@RequestParam(required = false) String denied,
+                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate storeDay,
+                            Model model, RedirectAttributes ra) {
         User me = currentUser.get();
         if (!me.isAdmin()) {
             if (denied != null) ra.addFlashAttribute("error", "That page isn't part of your role.");
@@ -86,6 +92,15 @@ public class AdminController {
         model.addAttribute("lowStock", storeCatalog.lowStock(null));
         model.addAttribute("deliveryAreas", deliveryAreas.activeCount());
         model.addAttribute("stores", storeService.all());
+
+        // Each store's sales on one day (today unless the admin picks another), to compare stores day by day
+        LocalDate day = storeDay == null || storeDay.isAfter(LocalDate.now()) ? LocalDate.now() : storeDay;
+        List<SalesReportService.StoreSales> byStore = salesReport.byStore(day, day);
+        SalesDay dayTotal = SalesDay.total(byStore.stream().map(SalesReportService.StoreSales::totals).toList());
+        model.addAttribute("storeDay", day);
+        model.addAttribute("storeDayIsToday", day.equals(LocalDate.now()));
+        model.addAttribute("storeSales", byStore);
+        model.addAttribute("storeDayTotal", dayTotal);
 
         // people and traffic
         LocalDate today = LocalDate.now();
@@ -437,7 +452,22 @@ public class AdminController {
 
     @GetMapping("/prescriptions")
     public String prescriptions(Model model) {
-        model.addAttribute("pending", prescriptionService.pending());
+        List<Prescription> pending = prescriptionService.pending();
+        model.addAttribute("pending", pending);
+        // The AI's reading and score of each, for the pharmacist and admin only
+        Map<Long, PrescriptionScore> scores = new HashMap<>();
+        Map<Long, PrescriptionReading> readings = new HashMap<>();
+        Map<Long, List<PrescriptionScanService.CoverRow>> covers = new HashMap<>();
+        pending.forEach(p -> {
+            scanService.score(p).ifPresent(sc -> scores.put(p.getId(), sc));
+            scanService.reading(p).ifPresent(r -> readings.put(p.getId(), r));
+            covers.put(p.getId(), scanService.suggestedCover(p));     // pre-filled from the AI reading
+        });
+        model.addAttribute("scores", scores);
+        model.addAttribute("readings", readings);
+        model.addAttribute("covers", covers);
+        model.addAttribute("catalogue", medicineRepository.findByActiveTrueOrderByNameAsc());
+        model.addAttribute("maxPacks", PrescriptionService.MAX_PACKS);
         model.addAttribute("reviewed", prescriptionService.recentlyReviewed());
         model.addAttribute("defaultValidUntil", LocalDate.now().plusMonths(6));
         model.addAttribute("active", "prescriptions");
@@ -448,9 +478,34 @@ public class AdminController {
     public String review(@PathVariable Long id, @RequestParam boolean approve,
                          @RequestParam(required = false) String note,
                          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate validUntil,
+                         @RequestParam(name = "itemMedicine", required = false) List<String> itemMedicine,
+                         @RequestParam(name = "itemPacks", required = false) List<String> itemPacks,
+                         @RequestParam(required = false) String doctorName,
+                         @RequestParam(required = false) String patientName,
+                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate prescribedOn,
                          RedirectAttributes ra) {
-        prescriptionService.review(id, approve, note, validUntil);
+        prescriptionService.review(id, approve, note, validUntil, coverFromForm(itemMedicine, itemPacks),
+                new PrescriptionService.Details(doctorName, patientName, prescribedOn));
         ra.addFlashAttribute("success", approve ? "Prescription approved." : "Prescription rejected.");
         return "redirect:/admin/prescriptions";
+    }
+
+    /** The approval form's medicine rows (a medicine and its packs per row) as packs by medicine; blank rows skipped. */
+    static Map<Long, Integer> coverFromForm(List<String> medicineIds, List<String> packs) {
+        Map<Long, Integer> out = new LinkedHashMap<>();
+        if (medicineIds == null) return out;
+        for (int k = 0; k < medicineIds.size(); k++) {
+            String id = medicineIds.get(k);
+            if (id == null || id.isBlank()) continue;
+            String n = packs != null && k < packs.size() ? packs.get(k) : null;
+            int qty;
+            try {
+                qty = n == null || n.isBlank() ? 0 : Integer.parseInt(n.trim());
+            } catch (NumberFormatException e) {
+                throw new BusinessException("Enter the packs as a whole number.");
+            }
+            out.merge(Long.parseLong(id.trim()), qty, Integer::sum);
+        }
+        return out;
     }
 }

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Your prescription')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" th:with="pending=${p.status.name() == 'PENDING'}">
+    <a th:href="@{/prescriptions}" class="small text-decoration-none"><i class="bi bi-arrow-left me-1"></i>All prescriptions</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mt-2 mb-4">
+        <div>
+            <h1 class="mz-page-title mb-1" th:text="${p.doctorName != null and p.doctorName != ''} ? ('Dr. ' + ${p.doctorName}) : 'Your prescription'">Prescription</h1>
+            <p class="text-muted mb-0">
+                <span th:text="'Uploaded ' + ${#temporals.format(p.uploadedAt, 'd MMM yyyy')}"></span>
+                <span class="badge ms-1" th:classappend="${p.status.badge}" th:text="${p.status.label}"></span>
+                <span th:if="${p.status.name() == 'APPROVED' and !p.legacy and !p.valid}" class="badge text-bg-secondary">Expired</span>
+                <span th:if="${p.validUntil != null and p.valid}" class="small" th:text="'· valid until ' + ${#temporals.format(p.validUntil, 'd MMM yyyy')}"></span>
+            </p>
+            <p class="small text-muted mb-0" th:if="${p.patientName != null or p.prescribedOn != null}">
+                <span th:if="${p.patientName != null}" th:text="'Patient: ' + ${p.patientName}"></span>
+                <span th:if="${p.prescribedOn != null}" th:text="' · dated ' + ${#temporals.format(p.prescribedOn, 'd MMM yyyy')}"></span>
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-file-earmark-medical me-1"></i>View file</a>
+            <form th:action="@{/prescriptions/{id}/remove(id=${p.id})}" method="post"
+                  th:attr="data-mz-confirm=${p.status.name() == 'APPROVED'} ? 'Remove this prescription? Its medicines can no longer be ordered with it; you would need to upload it again.' : 'Remove this prescription?'"
+                                  data-mz-confirm-title="Remove prescription" data-mz-confirm-ok="Remove">
+                <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Remove</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Approved: what it covers and how much is left -->
+    <th:block th:if="${p.limited}">
+        <div class="mz-panel mb-4">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <h2 class="h5 mb-0">What this prescription covers</h2>
+                <form th:if="${p.valid}" th:action="@{/prescriptions/{id}/cart(id=${p.id})}" method="post" class="ms-auto">
+                    <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-bag-plus me-1"></i>Add what's left to cart</button>
+                </form>
+            </div>
+            <ul class="mz-rx-covers">
+                <li th:each="i : ${p.items}">
+                    <span>
+                        <a th:href="@{/medicines/{id}(id=${i.medicine.id})}" class="fw-semibold" th:text="${i.medicine.name}">Medicine</a>
+                        <span th:if="${i.medicine.prescriptionRequired}" class="mz-rx position-static ms-1">Rx</span>
+                    </span>
+                    <span class="small text-end">
+                        <span th:text="${i.packsOrdered} + ' of ' + ${i.packs} + ' pack(s) ordered'"></span>
+                        <span th:if="${i.remaining > 0}" class="text-success d-block" th:text="${i.remaining} + ' left'"></span>
+                        <span th:unless="${i.remaining > 0}" class="text-muted d-block">All ordered</span>
+                    </span>
+                </li>
+            </ul>
+            <p class="small text-muted mt-3 mb-0">You can order prescription medicines only from this list, up to the packs
+                prescribed, in one go or over several orders (automatic refills count too).</p>
+        </div>
+        <div th:if="${p.status.name() == 'USED_UP'}" class="alert alert-secondary d-flex flex-wrap align-items-center gap-2">
+            <i class="bi bi-check2-all"></i>
+            <span class="flex-grow-1">Everything on this prescription has been ordered. Upload a new prescription to order prescription medicines again.</span>
+            <a th:href="@{/prescriptions}" class="btn btn-sm btn-primary">Upload a new prescription</a>
+        </div>
+    </th:block>
+
+    <div th:if="${p.legacy}" class="alert alert-secondary d-flex flex-wrap align-items-center gap-2">
+        <i class="bi bi-archive"></i>
+        <span class="flex-grow-1">This prescription was approved before we recorded the medicines on each prescription, so it's
+            kept for your records but can't be used for orders. Upload a new prescription to order prescription medicines.</span>
+        <a th:href="@{/prescriptions}" class="btn btn-sm btn-primary">Upload a new prescription</a>
+    </div>
+
+    <div th:if="${p.status.name() == 'REJECTED'}" class="alert alert-danger">
+        <strong>The pharmacist couldn't approve this prescription.</strong>
+        <span th:if="${p.reviewerNote}" th:text="${p.reviewerNote}"></span>
+        <a th:href="@{/prescriptions}" class="alert-link">Upload a clearer copy</a>
+    </div>
+
+    <!-- Waiting for the pharmacist: what the AI found, which goes into the cart once approved -->
+    <th:block th:if="${pending}">
+        <div th:if="${reading == null or !reading.legible or #lists.isEmpty(reading.medicines)}" class="mz-panel mz-empty">
+            <i class="bi bi-hourglass-split"></i>
+            <p class="mb-2"><strong>A pharmacist is reviewing your prescription.</strong></p>
+            <p class="small text-muted mb-3">Once it's approved, its medicines go into your cart automatically and we'll let you know.</p>
+            <form th:if="${aiEnabled and p.aiReadAt != null and reading == null}" th:action="@{/prescriptions/{id}/scan(id=${p.id})}" method="post" data-mz-ai-busy>
+                <button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-stars me-1"></i>Read the medicines on it</button>
+            </form>
+        </div>
+
+        <th:block th:if="${reading != null and reading.legible and !#lists.isEmpty(reading.medicines)}">
+            <div class="mz-ai-banner mb-4">
+                <i class="bi bi-stars" aria-hidden="true"></i>
+                <div>
+                    <strong th:text="'We found ' + ${#lists.size(reading.medicines)} + ' medicine(s) on your prescription'">We found medicines</strong>
+                    <div class="small">A pharmacist is checking it now. Once it's approved, these go into your cart automatically
+                        and we'll let you know.</div>
+                </div>
+            </div>
+            <div class="mz-panel-flush">
+                <div class="mz-rx-line" th:each="s : ${suggestions}">
+                    <div class="mz-rx-written">
+                        <div class="fw-semibold">
+                            <span th:text="${s.line.writtenAs}">Dolo 650</span>
+                            <span th:if="${s.line.unsure}" class="badge text-bg-warning ms-1" title="Part of this line was hard to read; the pharmacist will check it">Being checked</span>
+                        </div>
+                        <div class="small text-muted" th:if="${s.line.dosage != null and s.line.dosage != ''}"
+                             th:text="${s.line.dosage} + (${s.line.duration != null and s.line.duration != ''} ? (', ' + ${s.line.duration}) : '')"></div>
+                    </div>
+                    <i class="bi bi-arrow-right mz-rx-arrow d-none d-md-block" aria-hidden="true"></i>
+                    <div class="mz-rx-match" th:if="${s.product != null}" th:with="m=${s.product}">
+                        <a th:href="@{/medicines/{id}(id=${m.id})}" class="mz-rx-product">
+                            <i class="bi" th:classappend="${m.icon}" aria-hidden="true"></i>
+                            <span>
+                                <span class="d-block fw-semibold" th:text="${m.name}">Product</span>
+                                <span class="small text-muted" th:text="'₹' + ${#numbers.formatDecimal(m.price, 1, 'COMMA', 2, 'POINT')} + ' · pack of ' + ${m.unitsPerPack}"></span>
+                            </span>
+                        </a>
+                        <span th:if="${s.canAdd}" class="small text-success text-nowrap" th:text="${s.packs} + ' pack(s)'"></span>
+                        <span th:unless="${s.canAdd}" class="small text-danger text-nowrap">Out of stock</span>
+                    </div>
+                    <div class="mz-rx-match text-muted small" th:if="${s.product == null}">
+                        <i class="bi bi-question-circle me-1"></i>Not in our catalogue.
+                        <a th:href="@{/medicines(q=${s.line.genericName != null and s.line.genericName != '' ? s.line.genericName : s.line.writtenAs})}">Search for it</a>
+                    </div>
+                </div>
+            </div>
+            <p class="small text-muted mt-3 mb-0">Read automatically by AI; the pharmacist confirms the medicines and quantities before anything is added.</p>
+        </th:block>
+    </th:block>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

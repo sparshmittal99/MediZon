@@ -142,7 +142,8 @@ public class SecurityConfig {
                 // Shopping and dose reminders are for customers; admin accounts only run the store.
                 // The assistant API is open to both roles; each role gets its own actions in AssistantTools.
                 .requestMatchers("/cart/**", "/api/cart/**", "/api/orders/**", "/checkout", "/orders/**", "/plans/**",
-                        "/prescriptions/**", "/support", "/support/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**").hasRole("CUSTOMER")
+                        "/prescriptions/**", "/support", "/support/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**",
+                        "/stock-alerts/**", "/api/stock-alerts/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
             // sendBeacon can't send the CSRF header; these endpoints only record telemetry
             .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**"))

@@ -114,32 +114,38 @@ public class CatalogService {
         return scope == null ? medicines.sold() : medicines.soldIn(storeIds(scope));
     }
 
-    /** Newest products on sale here. */
-    public List<Product> featured(String pincode) {
-        List<Medicine> list = new ArrayList<>(sold(pincode));
-        list.sort(Comparator.comparing(Medicine::getId).reversed());
-        return products(list.subList(0, Math.min(8, list.size())), pincode);
+    /**
+     * What can be ordered here right now, A to Z. The home page shows only these; out-of-stock products stay in the
+     * shop, where shoppers can ask to be told when they're back.
+     */
+    public List<Product> inStock(String pincode) {
+        return products(sold(pincode), pincode).stream().filter(Product::isInStock).toList();
     }
 
-    /** In-stock products with the biggest discounts first, for the home page's deals card. */
-    public List<Product> deals(int limit, String pincode) {
-        return products(sold(pincode), pincode).stream()
-                .filter(p -> p.getDiscountPercent() > 0 && p.isInStock())
+    /** The newest of {@code inStock}. */
+    public static List<Product> featured(List<Product> inStock) {
+        return inStock.stream().sorted(Comparator.comparing(Product::getId).reversed()).limit(8).toList();
+    }
+
+    /** {@code inStock} with the biggest discounts first, for the home page's deals card. */
+    public static List<Product> deals(List<Product> inStock, int limit) {
+        return inStock.stream()
+                .filter(p -> p.getDiscountPercent() > 0)
                 .sorted(Comparator.comparingInt(Product::getDiscountPercent).reversed())
                 .limit(limit).toList();
     }
 
-    /** A few products from each category, fullest categories first, for the home page's shelves. */
-    public Map<String, List<Product>> shelves(int maxShelves, int perShelf, String pincode) {
-        Map<String, List<Medicine>> byCategory = new LinkedHashMap<>();
-        for (Medicine m : sold(pincode)) {
-            if (m.getCategory() != null) byCategory.computeIfAbsent(m.getCategory(), c -> new ArrayList<>()).add(m);
+    /** A few of {@code inStock} from each category, fullest categories first, for the home page's shelves. */
+    public static Map<String, List<Product>> shelves(List<Product> inStock, int maxShelves, int perShelf) {
+        Map<String, List<Product>> byCategory = new LinkedHashMap<>();
+        for (Product p : inStock) {
+            if (p.getCategory() != null) byCategory.computeIfAbsent(p.getCategory(), c -> new ArrayList<>()).add(p);
         }
         Map<String, List<Product>> shelves = new LinkedHashMap<>();
         byCategory.entrySet().stream()
-                .sorted(Comparator.comparingInt((Map.Entry<String, List<Medicine>> e) -> e.getValue().size()).reversed())
+                .sorted(Comparator.comparingInt((Map.Entry<String, List<Product>> e) -> e.getValue().size()).reversed())
                 .limit(maxShelves)
-                .forEach(e -> shelves.put(e.getKey(), products(e.getValue().subList(0, Math.min(perShelf, e.getValue().size())), pincode)));
+                .forEach(e -> shelves.put(e.getKey(), e.getValue().subList(0, Math.min(perShelf, e.getValue().size()))));
         return shelves;
     }
 }

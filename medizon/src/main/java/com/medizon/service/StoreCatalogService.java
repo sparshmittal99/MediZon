@@ -6,6 +6,7 @@ import com.medizon.domain.StoreItem;
 import com.medizon.repository.MedicineRepository;
 import com.medizon.repository.StoreItemRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,7 @@ public class StoreCatalogService {
 
     private final StoreItemRepository items;
     private final MedicineRepository medicines;
+    private final ApplicationEventPublisher events;
 
     public List<StoreItem> items(Store s) { return items.findByStoreOrderByName(s); }
 
@@ -54,13 +56,16 @@ public class StoreCatalogService {
         });
         apply(i, price, stock, expiry);
         i.setActive(true);
-        return items.save(i);
+        items.save(i);
+        events.publishEvent(new StockChanged(m.getId()));
+        return i;
     }
 
     @Transactional
     public StoreItem update(Long itemId, BigDecimal price, int stock, LocalDate expiry) {
         StoreItem i = item(itemId);
         apply(i, price, stock, expiry);
+        events.publishEvent(new StockChanged(i.getMedicine().getId()));
         return i;
     }
 
@@ -68,6 +73,7 @@ public class StoreCatalogService {
     public StoreItem setActive(Long itemId, boolean active) {
         StoreItem i = item(itemId);
         i.setActive(active);
+        if (active) events.publishEvent(new StockChanged(i.getMedicine().getId()));
         return i;
     }
 

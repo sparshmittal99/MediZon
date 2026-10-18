@@ -327,6 +327,78 @@
         setQty(box, Number(box.dataset.qty || 0) + Number(btn.dataset.step));
     });
 
+    // ---- AI prescription reading takes a few seconds: say so on the button ----
+    document.addEventListener('submit', (e) => {
+        if (!e.target.matches('[data-mz-ai-busy]') || e.defaultPrevented) return;
+        const btn = e.target.querySelector('button[type="submit"]');
+        if (!btn) return;
+        setTimeout(() => {      // after the form has submitted, so the button's value still goes with it
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>';
+            btn.append(btn.dataset.busyText || 'Reading your prescription…');
+        }, 0);
+    });
+
+    // ---- pharmacist's approval form: add or remove medicine rows ----
+    document.addEventListener('click', (e) => {
+        const add = e.target.closest('[data-mz-cover-add]');
+        if (add) {
+            const box = add.closest('[data-mz-cover]');
+            const row = box.querySelector('[data-mz-cover-blank]').cloneNode(true);
+            row.removeAttribute('data-mz-cover-blank');
+            row.querySelector('select').value = '';
+            row.querySelector('input').value = '1';
+            add.before(row);
+            row.querySelector('select').focus();
+            return;
+        }
+        const remove = e.target.closest('[data-mz-cover-remove]');
+        if (remove) {
+            const row = remove.closest('.mz-cover-row');
+            if (row.hasAttribute('data-mz-cover-blank')) { row.querySelector('select').value = ''; return; }
+            row.remove();
+        }
+    });
+
+    // ---- "Upload prescription" in the category bar: pick a file and it uploads straight away ----
+    document.addEventListener('change', (e) => {
+        if (!e.target.matches('[data-mz-rx-quick] input[type="file"]') || !e.target.files.length) return;
+        const form = e.target.form;
+        const label = form.querySelector('[data-mz-rx-quick-label]');
+        if (label) label.textContent = 'Reading your prescription…';
+        form.submit();
+    });
+
+    // ---- "Notify me" on out-of-stock products: a back-in-stock alert, on or off through /api/stock-alerts ----
+    document.addEventListener('submit', async (e) => {
+        const box = e.target.closest('[data-mz-notify]');
+        if (!box) return;
+        e.preventDefault();
+        if (box.classList.contains('is-busy')) return;
+        const on = box.dataset.on !== 'true';
+        box.classList.add('is-busy');
+        try {
+            const res = await mzFetch('/api/stock-alerts/' + box.dataset.mzNotify, { method: 'POST', body: JSON.stringify({ on }) });
+            if (res.redirected) { location.href = res.url; return; }
+            const data = await res.json();
+            const cart = box.closest('[data-mz-cart]');
+            if (!res.ok) { if (cart) qtyError(cart, data.error || 'Could not set the alert.'); return; }
+            document.querySelectorAll(`[data-mz-notify="${box.dataset.mzNotify}"]`).forEach(b => {
+                b.dataset.on = String(data.on);
+                const btn = b.querySelector('button');
+                btn.setAttribute('aria-pressed', String(data.on));
+                btn.title = data.on ? 'Tap to stop the back-in-stock alert' : "Get notified when it's back in stock";
+                const input = b.querySelector('input[name="on"]');
+                if (input) input.value = String(!data.on);
+            });
+        } catch (err) {
+            const cart = box.closest('[data-mz-cart]');
+            if (cart) qtyError(cart, 'Could not reach MediZon. Check your connection.');
+        } finally {
+            box.classList.remove('is-busy');
+        }
+    });
+
     // The assistant can change the cart too; resync every stepper on the page when it does.
     document.addEventListener('mz:cart-changed', async () => {
         if (!document.querySelector('[data-mz-cart]')) return;
@@ -389,6 +461,13 @@
             o.querySelector('[data-d="1"]').disabled = quantity >= max;
             o.querySelector('[data-d="-1"]').disabled = on === 1 && n <= 1;   // the last pack goes with the main stepper
         });
+        const patients = box.querySelector('[data-mz-patients]');
+        if (patients) {
+            const names = [...new Set(opts.filter(o => (allocation[o.dataset.member] || 0) > 0)
+                .map(o => o.dataset.patient).filter(Boolean))];
+            patients.querySelector('span').textContent = names.join(', ');
+            patients.hidden = names.length === 0;
+        }
     }
     document.querySelectorAll('[data-mz-alloc]').forEach(box => {
         const now = {};
@@ -426,14 +505,11 @@
             next[id] = 0;                                        // their packs come off the line
             return next;
         }
-        if (total <= 1 || opt.dataset.exclusive) {               // one pack, or "Others": it all goes to them
+        if (total <= 1) {                                        // one pack: it goes to them
             Object.keys(next).forEach(k => { next[k] = 0; });
-            next[id] = Math.max(1, total);
+            next[id] = 1;
             return next;
         }
-        let freed = 0;                                           // a family member takes over from "Others"
-        opts.filter(o => o.dataset.exclusive).forEach(o => { freed += next[o.dataset.member]; next[o.dataset.member] = 0; });
-        if (freed > 0) { next[id] = freed; return next; }
         const biggest = on.reduce((a, b) => (next[b.dataset.member] > next[a.dataset.member] ? b : a));
         if (next[biggest.dataset.member] >= 2) {                 // share an existing pack with them
             next[biggest.dataset.member] -= 1;

@@ -50,6 +50,18 @@ public class OrderItem {
     /** Expiry of the batch sold, snapshotted at order time; carried to the supply at home on delivery. */
     private LocalDate expiryDate;
 
+    /** The patient(s) it was for when ordered, printed on the invoice; kept as text so later renames don't change it. */
+    @Column(length = 200)
+    private String patientName;
+
+    /** Who prescribed it and when, from the prescription(s) it used, for the invoice: "Dr. Ambrose, 4 Oct 2026". */
+    @Column(length = 300)
+    private String prescribedBy;
+
+    /** The prescription medicines this line used; empty for OTC medicines and orders from before this was recorded. */
+    @OneToMany(mappedBy = "orderItem", cascade = CascadeType.ALL)
+    private List<PrescriptionUse> prescriptionUses = new ArrayList<>();
+
     /** Who it's for. Customer-side only: admins see the medicines, not the family. */
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "order_item_members",

@@ -14,7 +14,7 @@ import java.util.UUID;
 
 /**
  * Deleting an account. Everything personal goes: addresses, family members, medicines and reminders, prescriptions
- * (with their files), notifications, devices, the cart, reviews and feedback. What the accounts must keep stays,
+ * (with their files), notifications, devices, back-in-stock alerts, the cart, reviews and feedback. What the accounts must keep stays,
  * stripped of personal details: orders and their tax invoices (amounts, GST, place of supply, invoice numbers; a
  * business buyer's GSTIN and billing name, which a B2B invoice must show) and the refunds on returns. The account row
  * is renamed "Deleted customer" so those records still point at something, and can never sign in again.
@@ -63,9 +63,10 @@ public class AccountDeletionService {
         // Who each ordered medicine was for (family members) is personal; amounts and tax stay
         jdbc.update("delete from order_item_members where order_item_id in (select i.id from order_item i join orders o on o.id = i.order_id where o.user_id = ?)", id);
         jdbc.update("delete from order_item_packs where order_item_id in (select i.id from order_item i join orders o on o.id = i.order_id where o.user_id = ?)", id);
+        jdbc.update("update order_item set patient_name = null, prescribed_by = null where order_id in (select id from orders where user_id = ?)", id);
         jdbc.update("""
                 update orders set shipping_address = null, contact_phone = null, receiver_name = null, address_label = null,
-                       prescription_id = null,
+                       prescription_id = null, doctor_name = null, prescription_date = null,
                        billing_name = case when billing_gstin is null or billing_gstin = '' then 'Deleted customer' else billing_name end,
                        billing_address = case when billing_gstin is null or billing_gstin = '' then null else billing_address end
                 where user_id = ?""", id);
@@ -82,7 +83,12 @@ public class AccountDeletionService {
         jdbc.update("delete from support_tickets where user_id = ?", id);
 
         jdbc.update("delete from reviews where user_id = ?", id);
+        jdbc.update("delete from stock_alerts where user_id = ?", id);
         jdbc.update("delete from feedback where user_id = ?", id);
+        jdbc.update("delete from prescription_uses where prescription_item_id in (select i.id from prescription_items i "
+                + "join prescription p on p.id = i.prescription_id where p.user_id = ?)", id);
+        jdbc.update("delete from prescription_items where prescription_id in (select id from prescription where user_id = ?)", id);
+        jdbc.update("delete from prescription_requested where prescription_id in (select id from prescription where user_id = ?)", id);
         jdbc.update("delete from prescription where user_id = ?", id);
         jdbc.update("delete from notification where user_id = ?", id);
         jdbc.update("delete from notification_device_members where device_id in (select id from notification_devices where user_id = ?)", id);

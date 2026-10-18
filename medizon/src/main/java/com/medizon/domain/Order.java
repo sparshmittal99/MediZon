@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -94,6 +95,21 @@ public class Order {
 
     @ManyToOne(fetch = FetchType.LAZY)
     private Prescription prescription;
+
+    /** Every prescription its lines used (the order's own one for orders from before lines recorded theirs). */
+    public List<Prescription> getPrescriptionsUsed() {
+        List<Prescription> out = new ArrayList<>();
+        items.forEach(i -> i.getPrescriptionUses().forEach(u -> {
+            if (!out.contains(u.getPrescription())) out.add(u.getPrescription());
+        }));
+        if (out.isEmpty() && prescription != null) out.add(prescription);
+        return out;
+    }
+
+    /** The prescribing doctor and the prescription's date when ordered, printed on the invoice. */
+    @Column(length = 255)
+    private String doctorName;
+    private LocalDate prescriptionDate;
 
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();

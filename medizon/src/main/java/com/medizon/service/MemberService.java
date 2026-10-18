@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * The people an account manages medicines for. Every customer has an entry for themselves and a "common medicines"
@@ -81,12 +82,19 @@ public class MemberService {
                 .orElseThrow(() -> new BusinessException("That family member doesn't exist."));
     }
 
+    /**
+     * @param name what the family calls them ("Mom"), shown in tabs and pickers
+     * @param patientName their full name as on prescriptions ("Asha Sharma"), for invoices and prescription matching
+     */
     @Transactional
-    public Member save(User user, Long id, String name, String relation) {
+    public Member save(User user, Long id, String name, String patientName, String relation) {
         String n = name == null ? "" : name.trim();
+        String pn = patientName == null ? "" : patientName.trim().replaceAll("\\s+", " ");
         String r = relation == null ? "" : relation.trim();
         if (n.isEmpty()) throw new BusinessException("Enter a name.");
         if (n.length() > 60) throw new BusinessException("Keep the name under 60 characters.");
+        if (pn.isEmpty()) throw new BusinessException("Enter the patient's full name, as doctors write it on prescriptions.");
+        if (pn.length() > 100) throw new BusinessException("Keep the patient name under 100 characters.");
         if (r.length() > 40) throw new BusinessException("Keep the relation under 40 characters.");
 
         Member m;
@@ -103,8 +111,18 @@ public class MemberService {
             if (m.isCommon() || m.isOthers()) throw new BusinessException("This entry can't be renamed.");
         }
         m.setName(n);
+        m.setPatientName(pn);
         m.setRelation(m.isSelf() || r.isEmpty() ? null : r);
         return members.save(m);
+    }
+
+    /**
+     * The household member a prescription is for, from the patient's name written on it: the account holder or a
+     * family member whose patient name matches. Empty when nobody matches clearly, so the caller can use "Others".
+     */
+    @Transactional
+    public Optional<Member> byPatientName(User user, String patientName) {
+        return PatientNames.match(patientName, people(user), Member::getPatient);
     }
 
     /**

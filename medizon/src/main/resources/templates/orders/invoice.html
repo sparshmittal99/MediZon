@@ -60,7 +60,18 @@
                 <div><strong>Place of supply:</strong> <span th:text="${inv.placeOfSupply}"></span></div>
                 <div th:text="${inv.interState} ? 'Inter-state supply (IGST)' : 'Intra-state supply (CGST + SGST)'"></div>
                 <div><strong>Payment:</strong> <span th:text="${o.paymentMethod.label} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></span></div>
-                <div th:if="${o.prescription != null}"><strong>Prescription:</strong> <span th:text="${o.prescription.label}"></span></div>
+            </div>
+            <!-- Who the medicines are for and, for prescription medicines, who prescribed them and when -->
+            <div th:if="${!#strings.isEmpty(inv.patients) or !#lists.isEmpty(inv.prescriptions) or o.doctorName != null}">
+                <h2>Patient &amp; prescription</h2>
+                <div th:if="${!#strings.isEmpty(inv.patients)}"><strong>Patient:</strong> <span class="fw-semibold" th:text="${inv.patients}"></span></div>
+                <!-- Each prescription the order used: doctor and date -->
+                <div th:each="rx : ${inv.prescriptions}"><strong>Prescribed by:</strong> <span th:text="${rx}"></span></div>
+                <th:block th:if="${#lists.isEmpty(inv.prescriptions)}">
+                    <div th:if="${o.doctorName != null}"><strong>Prescribed by:</strong> <span th:text="'Dr. ' + ${o.doctorName}"></span></div>
+                    <div th:if="${o.prescriptionDate != null}"><strong>Prescription date:</strong>
+                        <span th:text="${#temporals.format(o.prescriptionDate, 'd MMM yyyy')}"></span></div>
+                </th:block>
             </div>
         </section>
 
@@ -79,7 +90,9 @@
                 <tr th:each="l : ${inv.lines}">
                     <td th:text="${l.number}"></td>
                     <td><span th:text="${l.description}"></span>
-                        <span th:if="${l.expiryDate != null}" class="d-block small text-muted" th:text="'Exp. ' + ${#temporals.format(l.expiryDate, 'MM/yyyy')}"></span></td>
+                        <span th:if="${l.expiryDate != null}" class="d-block small text-muted" th:text="'Exp. ' + ${#temporals.format(l.expiryDate, 'MM/yyyy')}"></span>
+                        <span th:if="${l.patientName != null}" class="d-block small" th:text="'Patient: ' + ${l.patientName}"></span>
+                        <span th:if="${l.prescribedBy != null}" class="d-block small text-muted" th:text="'Rx: ' + ${l.prescribedBy}"></span></td>
                     <td th:text="${#strings.isEmpty(l.hsnCode)} ? '-' : ${l.hsnCode}"></td>
                     <td class="text-end" th:text="${l.quantity}"></td>
                     <td class="text-end" th:text="${#numbers.formatDecimal(l.unitPrice, 1, 'COMMA', 2, 'POINT')}"></td>

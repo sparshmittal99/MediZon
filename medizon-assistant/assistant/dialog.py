@@ -47,10 +47,13 @@ class Reply:
     suggestions: list[dict] = field(default_factory=list)
     navigate: str | None = None
     intent: str | None = None
+    # We couldn't really answer: MediZon may ask its LLM (Gemini) instead and keep our chips.
+    unresolved: bool = False
 
     def as_dict(self) -> dict:
         return {"reply": self.reply, "tool_calls": self.tool_calls, "state": self.state, "cards": self.cards,
-                "suggestions": self.suggestions, "navigate": self.navigate, "intent": self.intent}
+                "suggestions": self.suggestions, "navigate": self.navigate, "intent": self.intent,
+                "unresolved": self.unresolved}
 
 
 def chip(label: str, message: str | None = None, payload: dict | None = None, href: str | None = None) -> dict:
@@ -288,9 +291,9 @@ def search(ctx: Ctx, slots, step, answer) -> Reply:
         items = ctx.results.get("search_medicines") or []
         label = slots.get("query") or slots.get("category") or "that"
         if not items:
-            return say(ctx, f"I couldn't find anything for **{label}**. Try the brand or salt name "
-                            "(for example 'paracetamol' instead of 'fever tablet').",
-                       [chip("Browse the shop", href="/medicines")])
+            return _not_found(ctx, say(ctx, f"I couldn't find anything for **{label}**. Try the brand or salt name "
+                                            "(for example 'paracetamol' instead of 'fever tablet').",
+                                       [chip("Browse the shop", href="/medicines")]))
         note = ""
         if slots.get("category") and slots.get("symptom"):
             note = ("\n\nThese are common over-the-counter options. If symptoms are severe or last more than "
@@ -313,8 +316,8 @@ def medicine_info(ctx: Ctx, slots, step, answer) -> Reply:
     if step == "info":
         m = ctx.results.get("medicine_details")
         if not m or m.get("error"):
-            return say(ctx, f"I couldn't find **{slots.get('query', 'that')}** in our catalog.",
-                       [chip("Search the shop", href="/medicines")])
+            return _not_found(ctx, say(ctx, f"I couldn't find **{slots.get('query', 'that')}** in our catalog.",
+                                       [chip("Search the shop", href="/medicines")]))
         parts = [f"**{m['name']}**" + (f" ({m['salt']})" if m.get("salt") and m["salt"] != m["name"] else "")
                  + (f" by {m['manufacturer']}" if m.get("manufacturer") else "") + "."]
         parts.append(f"{money(m.get('price'))} for a pack of {m.get('pack', '')}."
@@ -941,8 +944,16 @@ def _fallback(ctx: Ctx) -> Reply:
         r = HANDLERS[intent](ctx, slots, None, None)
         r.intent = intent
         return r
-    return say(ctx, "Sorry, I didn't quite get that. Here are some things I can do:",
-               ADMIN_CHIPS if ctx.admin else CUSTOMER_CHIPS)
+    r = say(ctx, "Sorry, I didn't quite get that. Here are some things I can do:",
+            ADMIN_CHIPS if ctx.admin else CUSTOMER_CHIPS)
+    r.unresolved = True
+    return r
+
+
+def _not_found(ctx: Ctx, r: Reply) -> Reply:
+    """A sentence that found nothing was probably a question, not a product name: let the LLM have a go."""
+    r.unresolved = len(ctx.message.split()) >= 4
+    return r
 
 
 def respond(req: dict) -> dict:

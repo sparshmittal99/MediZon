@@ -10,22 +10,18 @@
 
     <div class="row g-4">
         <div class="col-lg-4">
-            <form th:action="@{/prescriptions}" method="post" enctype="multipart/form-data" class="mz-panel">
-                <h2 class="h5 mb-3">Upload a prescription</h2>
+            <form th:action="@{/prescriptions}" method="post" enctype="multipart/form-data" class="mz-panel" data-mz-ai-busy>
+                <h2 class="h5 mb-3">Upload prescriptions</h2>
+                <p class="small mz-ai-hint"><i class="bi bi-bag-check me-1"></i>You'll check them before they're sent. Once a
+                    pharmacist approves one, its medicines go into your cart automatically.</p>
                 <div class="mb-3">
-                    <label class="form-label" for="file">Photo or PDF</label>
-                    <input class="form-control" id="file" type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" required>
-                    <div class="form-text">JPG, PNG or PDF, up to 5 MB. Doctor's name, date and signature must be visible.</div>
+                    <label class="form-label" for="file">Photos or PDFs</label>
+                    <input class="form-control" id="file" type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" multiple required>
+                    <div class="form-text" th:text="'One file per prescription, up to ' + ${maxFiles} + ' at once (e.g. for several family members). JPG, PNG or PDF, up to 5 MB each. The doctor, patient, date and signature must be visible.'">
+                        One file per prescription.</div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label" for="doctorName">Doctor's name</label>
-                    <input class="form-control" id="doctorName" name="doctorName">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="notes">Notes for the pharmacist</label>
-                    <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
-                </div>
-                <button class="btn btn-primary w-100" type="submit">Upload</button>
+                <button class="btn btn-primary w-100" type="submit"
+                        th:attr="data-busy-text=${aiEnabled} ? 'Reading your prescription…' : 'Uploading…'">Upload</button>
             </form>
         </div>
         <div class="col-lg-8">
@@ -44,9 +40,22 @@
                             <div th:if="${p.reviewerNote}" class="small" th:text="'Pharmacist: ' + ${p.reviewerNote}"></div>
                         </td>
                         <td data-label="Status"><span class="badge" th:classappend="${p.status.badge}" th:text="${p.status.label}"></span>
-                            <span th:if="${p.status.name() == 'APPROVED' and !p.valid}" class="badge text-bg-secondary">Expired</span></td>
+                            <span th:if="${p.legacy}" class="badge text-bg-secondary"
+                                  title="Approved before medicines were recorded on prescriptions. Upload a new one to order.">Can't be used for orders</span>
+                            <span th:if="${p.status.name() == 'APPROVED' and !p.legacy and !p.valid}" class="badge text-bg-secondary">Expired</span></td>
                         <td data-label="Valid until" th:text="${p.validUntil != null} ? ${#temporals.format(p.validUntil, 'd MMM yyyy')} : '-'"></td>
-                        <td class="text-end mz-td-actions"><a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">View</a></td>
+                        <td class="text-end mz-td-actions">
+                            <a th:if="${p.status.name() == 'DRAFT'}" th:href="@{/prescriptions/review}" class="btn btn-sm btn-primary me-1">
+                                <i class="bi bi-send me-1"></i>Check and send</a>
+                            <a th:if="${p.status.name() != 'DRAFT' and (aiEnabled or p.aiReading != null or p.limited)}" th:href="@{/prescriptions/{id}(id=${p.id})}" class="btn btn-sm btn-primary me-1">
+                                <i class="bi bi-capsule me-1"></i>Medicines</a>
+                            <a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">View</a>
+                            <form th:action="@{/prescriptions/{id}/remove(id=${p.id})}" method="post" class="d-inline"
+                                  th:attr="data-mz-confirm=${p.status.name() == 'APPROVED'} ? 'Remove this prescription? Its medicines can no longer be ordered with it; you would need to upload it again.' : 'Remove this prescription?'"
+                                  data-mz-confirm-title="Remove prescription" data-mz-confirm-ok="Remove">
+                                <button type="submit" class="btn btn-sm btn-link text-danger" th:attr="aria-label='Remove prescription ' + ${p.label}">
+                                    <i class="bi bi-trash"></i></button>
+                            </form></td>
                     </tr>
                     </tbody>
                 </table>

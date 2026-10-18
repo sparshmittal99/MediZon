@@ -57,6 +57,20 @@ public class Invoice {
         }
     }
 
+    /** Each prescription the order used, for the invoice header: "Dr. Ambrose, 4 Oct 2026". */
+    public List<String> getPrescriptions() {
+        return lines.stream().map(Line::getPrescribedBy).filter(n -> n != null && !n.isBlank())
+                .flatMap(n -> java.util.Arrays.stream(n.split(";"))).map(String::trim).filter(n -> !n.isEmpty())
+                .distinct().toList();
+    }
+
+    /** Everyone the medicines are for, for the invoice header: "Asha Sharma, Ravi Kumar"; empty when none is recorded. */
+    public String getPatients() {
+        return lines.stream().map(Line::getPatientName).filter(n -> n != null && !n.isBlank())
+                .flatMap(n -> java.util.Arrays.stream(n.split(",\\s*"))).distinct()
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+
     @Value
     public static class Line {
         int number;
@@ -64,6 +78,10 @@ public class Invoice {
         String hsnCode;
         /** Expiry of the batch sold; null for delivery and for orders placed before expiry was recorded. */
         LocalDate expiryDate;
+        /** Who the medicine was for; null for delivery and for orders placed before patients were recorded. */
+        String patientName;
+        /** Who prescribed it and when ("Dr. Ambrose, 4 Oct 2026"); null for OTC medicines and older orders. */
+        String prescribedBy;
         int quantity;
         /** Price per pack, GST included. */
         BigDecimal unitPrice;

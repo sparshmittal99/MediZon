@@ -7,15 +7,17 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <h1 class="mz-page-title mb-4">Prescriptions to review</h1>
+    <h1 class="mz-page-title mb-1">Prescriptions to review</h1>
+    <p class="text-muted small mb-4">Fast-track prescriptions come first: the AI found everything a valid prescription needs.
+        Open the file and confirm before approving; the AI score is a guide, not a decision.</p>
 
     <div th:if="${#lists.isEmpty(pending)}" class="mz-panel mz-empty mb-5">
         <i class="bi bi-check2-circle"></i><p class="mb-0">All caught up. No prescriptions are waiting.</p>
     </div>
 
     <div class="row g-3 mb-5">
-        <div class="col-lg-6" th:each="p : ${pending}">
-            <div class="mz-panel h-100">
+        <div class="col-lg-6" th:each="p : ${pending}" th:with="sc=${scores[p.id]},rd=${readings[p.id]}">
+            <div class="mz-panel h-100" th:classappend="${sc != null and sc.fastTrack} ? 'mz-rx-fast'">
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <div>
                         <div class="fw-semibold" th:text="${p.user.fullName}"></div>
@@ -25,7 +27,82 @@
                 </div>
                 <p class="small mb-1" th:if="${p.doctorName}" th:text="'Doctor: ' + ${p.doctorName}"></p>
                 <p class="small mb-3" th:if="${p.notes}" th:text="'Customer note: ' + ${p.notes}"></p>
+
+                <!-- The AI's reading and score: a head start for the pharmacist, who still decides -->
+                <div th:if="${sc != null}" class="mz-rx-score mb-3">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="mz-rx-score-num" th:text="${sc.total}">90</span><span class="small text-muted">/ 100</span>
+                        <span class="badge" th:classappend="${sc.badge}" th:text="${sc.band}">Fast-track</span>
+                        <span class="small text-muted ms-auto"><i class="bi bi-stars me-1"></i>AI score</span>
+                    </div>
+                    <ul class="mz-rx-checks">
+                        <li th:each="c : ${sc.checks}" th:classappend="${c.passed} ? 'is-ok' : 'is-no'">
+                            <i class="bi" th:classappend="${c.passed} ? 'bi-check-circle-fill' : 'bi-x-circle'" aria-hidden="true"></i>
+                            <span th:text="${c.label}">Check</span>
+                            <span class="visually-hidden" th:text="${c.passed} ? 'passed' : 'not passed'"></span></li>
+                    </ul>
+                    <div th:unless="${#lists.isEmpty(sc.concerns)}" class="alert alert-warning small py-2 mb-2">
+                        <i class="bi bi-exclamation-triangle me-1"></i><strong>AI concerns:</strong>
+                        <span th:text="${#strings.listJoin(sc.concerns, '; ')}"></span></div>
+                    <p class="small mb-1" th:if="${rd != null and rd.registrationNumber != null and rd.registrationNumber != ''}"
+                       th:text="'Registration no.: ' + ${rd.registrationNumber}"></p>
+                    <p class="small mb-1" th:if="${rd != null and rd.prescribedOn != null and rd.prescribedOn != ''}"
+                       th:text="'Dated: ' + ${rd.prescribedOn} + (${rd.patientName != null and rd.patientName != ''} ? (', patient: ' + ${rd.patientName}) : '')"></p>
+                    <p class="small mb-0" th:if="${p.aiSummary}"><strong>Medicines read:</strong> <span th:text="${p.aiSummary}"></span></p>
+                </div>
+                <p th:if="${sc == null and p.aiReadAt != null}" class="small text-muted mb-3">
+                    <i class="bi bi-cloud-slash me-1"></i>AI couldn't read this one (unavailable or unreadable). Review it manually.</p>
+                <p th:if="${sc == null and p.aiReadAt == null}" class="small text-muted mb-3">
+                    <i class="bi bi-person-check me-1"></i>Not read by AI. Review it manually.</p>
                 <form th:action="@{/admin/prescriptions/{id}/review(id=${p.id})}" method="post" class="row g-2 align-items-end">
+                    <!-- What it covers: checkout only allows these medicines, up to these packs. Pre-filled from the AI reading. -->
+                    <fieldset class="col-12 mz-cover" data-mz-cover>
+                        <legend class="form-label small mb-1">Medicines it covers, and packs prescribed
+                            <span class="text-muted">(pre-filled from the customer's cart and the AI reading: match them against the file)</span></legend>
+                        <div class="mz-cover-row" th:each="row : ${covers[p.id]}">
+                            <div class="mz-cover-src">
+                                <span th:if="${row.fromCart}" class="badge text-bg-primary" title="The customer has it in their cart for this patient">In cart</span>
+                                <span th:if="${row.fromAi}" class="badge mz-ai-badge" title="Read on the prescription by AI">AI read</span>
+                                <span th:if="${row.fromCart and !row.fromAi}" class="badge text-bg-warning" title="Not read on the prescription: check the file">Check on file</span>
+                            </div>
+                            <select class="form-select form-select-sm" name="itemMedicine" aria-label="Medicine">
+                                <option value="">Choose a medicine…</option>
+                                <option th:each="m : ${catalogue}" th:value="${m.id}" th:selected="${m.id == row.medicineId}"
+                                        th:text="${m.name} + (${m.prescriptionRequired} ? ' (Rx)' : '')">Medicine</option>
+                            </select>
+                            <input class="form-control form-control-sm" type="number" name="itemPacks" min="1" th:max="${maxPacks}"
+                                   th:value="${row.packs}" aria-label="Packs">
+                            <button type="button" class="btn btn-sm btn-link text-danger" data-mz-cover-remove aria-label="Remove this medicine">
+                                <i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <!-- An empty row to fill in; blank rows are ignored -->
+                        <div class="mz-cover-row" data-mz-cover-blank>
+                            <select class="form-select form-select-sm" name="itemMedicine" aria-label="Medicine">
+                                <option value="">Choose a medicine…</option>
+                                <option th:each="m : ${catalogue}" th:value="${m.id}"
+                                        th:text="${m.name} + (${m.prescriptionRequired} ? ' (Rx)' : '')">Medicine</option>
+                            </select>
+                            <input class="form-control form-control-sm" type="number" name="itemPacks" min="1" th:max="${maxPacks}"
+                                   value="1" aria-label="Packs">
+                            <button type="button" class="btn btn-sm btn-link text-danger" data-mz-cover-remove aria-label="Remove this medicine">
+                                <i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-link px-0" data-mz-cover-add><i class="bi bi-plus-lg me-1"></i>Add another medicine</button>
+                    </fieldset>
+                    <!-- Confirmed from the file and printed on the invoice; pre-filled by the AI or the customer -->
+                    <div class="col-sm-4">
+                        <label class="form-label small" th:for="'d' + ${p.id}">Doctor's name</label>
+                        <input class="form-control form-control-sm" name="doctorName" th:id="'d' + ${p.id}" th:value="${p.doctorName}" maxlength="255">
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small" th:for="'pt' + ${p.id}">Patient's name</label>
+                        <input class="form-control form-control-sm" name="patientName" th:id="'pt' + ${p.id}" th:value="${p.patientName}" maxlength="100">
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small" th:for="'pd' + ${p.id}">Prescription date</label>
+                        <input class="form-control form-control-sm" type="date" name="prescribedOn" th:id="'pd' + ${p.id}"
+                               th:value="${p.prescribedOn}" th:max="${#temporals.format(#temporals.createToday(), 'yyyy-MM-dd')}">
+                    </div>
                     <div class="col-sm-5">
                         <label class="form-label small" th:for="'v' + ${p.id}">Valid until</label>
                         <input class="form-control form-control-sm" type="date" name="validUntil" th:id="'v' + ${p.id}" th:value="${defaultValidUntil}">
@@ -35,7 +112,8 @@
                         <input class="form-control form-control-sm" name="note" th:id="'n' + ${p.id}" placeholder="Required if rejecting">
                     </div>
                     <div class="col-12 d-flex gap-2 mt-2">
-                        <button class="btn btn-sm btn-primary" name="approve" value="true" type="submit">Approve</button>
+                        <button class="btn btn-sm btn-primary" name="approve" value="true" type="submit"
+                                th:text="${sc != null and sc.fastTrack} ? 'Approve (checks passed)' : 'Approve'">Approve</button>
                         <button class="btn btn-sm btn-outline-danger" name="approve" value="false" type="submit">Reject</button>
                     </div>
                 </form>

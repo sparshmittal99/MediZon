@@ -77,12 +77,8 @@ public class CartService {
                 ? List.of(alloc.isEmpty() ? memberService.self(user) : alloc.keySet().iterator().next())
                 : forMembers.stream().distinct().toList();
         int[] share = Shares.split(qty, new int[to.size()]);
+        // "Others" can share a line with family members (two prescriptions, one medicine): each keeps their own packs
         for (int k = 0; k < to.size(); k++) alloc.merge(to.get(k), share[k], Integer::sum);
-        if (alloc.keySet().stream().anyMatch(Member::isOthers) && alloc.size() > 1) {
-            alloc.keySet().removeIf(Member::isOthers);   // "Others" doesn't mix with the family
-            int left = qty + item.getQuantity() - alloc.values().stream().mapToInt(Integer::intValue).sum();
-            if (left > 0) alloc.merge(alloc.keySet().iterator().next(), left, Integer::sum);
-        }
         item.allocate(alloc);
         cart.save(item);
     }
@@ -141,9 +137,6 @@ public class CartService {
             });
         }
         if (alloc.isEmpty()) throw new BusinessException("Choose who " + m.getName() + " is for.");
-        if (alloc.size() > 1 && alloc.keySet().stream().anyMatch(Member::isOthers)) {
-            throw new BusinessException("\"Others\" is for someone outside your family, so it can't be combined with family members.");
-        }
         if (m.isPrescriptionRequired() && alloc.keySet().stream().anyMatch(Member::isCommon)) {
             throw new BusinessException(m.getName() + " needs a prescription, so it has to be for a named person, not the common shelf.");
         }

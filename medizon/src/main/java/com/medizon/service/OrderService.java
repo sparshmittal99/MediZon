@@ -8,6 +8,7 @@ import com.medizon.repository.OrderRepository;
 import com.medizon.repository.PrescriptionRepository;
 import com.medizon.repository.StoreItemRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,15 +40,20 @@ public class OrderService {
     private final InvoiceService invoiceService;
     private final DeliveryAreaService deliveryAreas;
     private final AddressService addressService;
+    private final ApplicationEventPublisher events;
+    private final PrescriptionService prescriptionService;
 
     /** One order line: packs of a medicine and how many packs each person gets. */
-    private record Line(Long medicineId, int quantity, Map<Member, Integer> packs) {}
+    /** @param othersPatient who the "Others" share is for, when known (from a prescription) */
+    private record Line(Long medicineId, int quantity, Map<Member, Integer> packs, String othersPatient) {
+        Line(Long medicineId, int quantity, Map<Member, Integer> packs) { this(medicineId, quantity, packs, null); }
+    }
 
     // ------------------------------------------------------------------ customer checkout
 
     /** Places the cart as one order per store; returns them, the biggest first. */
     @Transactional
-    public List<Order> checkout(User user, PaymentMethod paymentMethod, Long prescriptionId, Long addressId) {
+    public List<Order> checkout(User user, PaymentMethod paymentMethod, Long addressId) {
         if (user.isStaff()) throw new BusinessException("Staff accounts can't place orders.");
         if (addressId == null) throw new BusinessException("Choose a delivery address.");
         Address ship = addressService.get(addressId, user);
@@ -59,23 +65,19 @@ public class OrderService {
                     + " from the cart or choose another address.");
         }
 
-        Prescription rx = null;
-        if (cart.isPrescriptionRequired()) {
-            if (prescriptionId == null) {
-                throw new BusinessException("Your cart has prescription medicines. Choose an approved prescription.");
-            }
-            rx = prescriptions.findByIdAndUser(prescriptionId, user)
-                    .filter(Prescription::isValid)
-                    .orElseThrow(() -> new BusinessException("Choose an approved prescription that hasn't expired."));
-        }
+        // Each prescription medicine comes from the customer's approved prescriptions: the one written for its
+        // patient first, several if one hasn't enough. Anything none of them covers stops the checkout.
+        PrescriptionService.Coverage coverage = prescriptionService.cover(user, rxLines(cart));
+        coverage.require();
 
         List<Line> lines = new ArrayList<>();
         for (CartItem i : cart.getItems()) {
             if (i.getMembers().isEmpty()) throw new BusinessException("Choose who " + i.getMedicine().getName() + " is for.");
-            lines.add(new Line(i.getMedicine().getId(), i.getQuantity(), i.getAllocation()));
+            lines.add(new Line(i.getMedicine().getId(), i.getQuantity(), i.getAllocation(), i.getOthersPatientName()));
         }
 
-        List<Order> placed = createOrders(user, lines, paymentMethod, rx, OrderSource.CUSTOMER, ship);
+        List<Order> placed = createOrders(user, lines, paymentMethod, coverage, OrderSource.CUSTOMER, ship);
+        prescriptionService.finishUse(coverage.prescriptions());
         Cart from = cartService.checkOut(user);
         placed.forEach(o -> o.setCart(from));
         if (placed.size() == 1) {
@@ -91,6 +93,41 @@ public class OrderService {
         }
         placed.forEach(this::alertStore);
         return placed;
+    }
+
+    /**
+     * Who a line is for, for the invoice: each member's patient name. The "Others" share is the name it came with from
+     * a prescription, else (for a prescription medicine) the patient on the prescription it used.
+     */
+    private static String patients(Line line, List<PrescriptionService.Take> takes) {
+        String rxPatient = takes.isEmpty() ? null : takes.get(0).item().getPrescription().getPatientName();
+        String names = line.packs().keySet().stream()
+                .map(who -> !who.isOthers() ? who.getPatient()
+                        : line.othersPatient() != null ? line.othersPatient() : rxPatient)
+                .filter(n -> n != null && !n.isBlank()).distinct().collect(Collectors.joining(", "));
+        return names.isEmpty() ? null : names.length() > 200 ? names.substring(0, 199) + "…" : names;
+    }
+
+    /** The cart's prescription medicines, with the packs and the patients each is for, to cover from prescriptions. */
+    public static List<PrescriptionService.RxLine> rxLines(CartSummary cart) {
+        List<PrescriptionService.RxLine> out = new ArrayList<>();
+        for (CartItem i : cart.getItems()) {
+            if (!i.getMedicine().isPrescriptionRequired()) continue;
+            Set<String> patients = new LinkedHashSet<>();
+            i.getAllocation().keySet().forEach(m -> {
+                if (!m.isOthers()) {
+                    if (m.getPatient() != null && !m.getPatient().isBlank()) patients.add(m.getPatient());
+                } else if (i.getOthersPatientName() != null) {          // may name several people: "Priya Verma, Ravi Kumar"
+                    for (String n : i.getOthersPatientName().split(",")) if (!n.isBlank()) patients.add(n.trim());
+                }
+            });
+            out.add(new PrescriptionService.RxLine(i.getMedicine(), i.getQuantity(), patients));
+        }
+        return out;
+    }
+
+    private static Set<String> patientOf(Member m) {
+        return m == null || m.getPatient() == null ? Set.of() : Set.of(m.getPatient());
     }
 
     private void alertStore(Order o) {
@@ -112,8 +149,10 @@ public class OrderService {
         Offer offer = catalog.offer(m, ship.getPincode(), Math.max(1, plan.getReorderPacks()));
         if (!offer.isListed()) return Optional.of(m.getName() + " isn't sold by the stores that deliver to " + ship.getPincode());
         if (!offer.canSell(Math.max(1, plan.getReorderPacks()))) return Optional.of(m.getName() + " is out of stock for delivery to " + ship.getPincode());
-        if (m.isPrescriptionRequired() && findValidPrescription(user).isEmpty()) {
-            return Optional.of("there's no approved prescription on file");
+        if (m.isPrescriptionRequired() && !prescriptionService.cover(user, List.of(new PrescriptionService.RxLine(m,
+                Math.max(1, plan.getReorderPacks()), patientOf(plan.getMember())))).isComplete()) {
+            return Optional.of("there's no approved prescription with " + Math.max(1, plan.getReorderPacks()) + " pack(s) of "
+                    + m.getName() + " left on it. Upload a new prescription");
         }
         return Optional.empty();
     }
@@ -122,11 +161,15 @@ public class OrderService {
     public Order placeAutoReorder(MedicationPlan plan) {
         User user = plan.getUser();
         Medicine m = plan.getMedicine();
-        Prescription rx = m.isPrescriptionRequired() ? findValidPrescription(user).orElse(null) : null;
         int packs = Math.max(1, plan.getReorderPacks());
+        PrescriptionService.Coverage coverage = m.isPrescriptionRequired()
+                ? prescriptionService.cover(user, List.of(new PrescriptionService.RxLine(m, packs, patientOf(plan.getMember()))))
+                : PrescriptionService.Coverage.NONE;
+        coverage.require();
         Map<Member, Integer> forWhom = plan.getMember() == null ? Map.of() : Map.of(plan.getMember(), packs);
         Order o = createOrders(user, List.of(new Line(m.getId(), packs, forWhom)),
-                PaymentMethod.COD, rx, OrderSource.AUTO_REORDER, refillAddress(plan)).get(0);
+                PaymentMethod.COD, coverage, OrderSource.AUTO_REORDER, refillAddress(plan)).get(0);
+        prescriptionService.finishUse(coverage.prescriptions());
         alertStore(o);
         return o;
     }
@@ -137,11 +180,6 @@ public class OrderService {
                 : addressService.defaultFor(plan.getUser()).orElse(null);
     }
 
-    private Optional<Prescription> findValidPrescription(User user) {
-        return prescriptions.findByUserAndStatusOrderByReviewedAtDesc(user, PrescriptionStatus.APPROVED)
-                .stream().filter(Prescription::isValid).findFirst();
-    }
-
     // ------------------------------------------------------------------ shared core
 
     /**
@@ -149,7 +187,7 @@ public class OrderService {
      * has enough in stock. {@code ship} is the saved address to deliver to; without one, the account's address.
      */
     private List<Order> createOrders(User user, List<Line> lines, PaymentMethod paymentMethod,
-                                     Prescription rx, OrderSource source, Address ship) {
+                                     PrescriptionService.Coverage coverage, OrderSource source, Address ship) {
         if (ship == null && !user.hasAddress()) throw new BusinessException("Add a delivery address first.");
         String pincode = ship != null ? ship.getPincode() : user.getPincode();
         deliveryAreas.requireServiceable(pincode);
@@ -191,7 +229,6 @@ public class OrderService {
             order.setStore(stores.get(group.getKey()));
             order.setCheckoutRef(ref);
             BigDecimal subtotal = BigDecimal.ZERO;
-            boolean needsRx = false;
             for (Line line : group.getValue()) {
                 Offer offer = offers.get(line.medicineId());
                 StoreItem si = storeItems.lockById(offer.item().getId())
@@ -217,11 +254,18 @@ public class OrderService {
                     item.getMembers().add(who);
                     item.getPacks().put(who.getId(), n);
                 });
+                List<PrescriptionService.Take> takes = m.isPrescriptionRequired() ? coverage.forMedicine(m.getId()) : List.of();
+                PrescriptionService.use(item, takes);       // which prescription(s) it came from
+                item.setPatientName(patients(line, takes));
                 order.addItem(item);
                 subtotal = subtotal.add(item.getLineTotal());
-                needsRx |= m.isPrescriptionRequired();
             }
-            order.setPrescription(needsRx ? rx : null);
+            // The order's first prescription, for the Rx badge and older screens; each line names its own
+            order.getPrescriptionsUsed().stream().findFirst().ifPresent(rx -> {
+                order.setPrescription(rx);
+                order.setDoctorName(rx.getDoctorName());
+                order.setPrescriptionDate(rx.getPrescribedOn());
+            });
             order.setSubtotal(subtotal);
             placed.add(order);
         }
@@ -302,6 +346,7 @@ public class OrderService {
         }
         if (next == OrderStatus.CANCELLED) {
             o.getItems().forEach(i -> restock(o, i.getMedicine(), i.getQuantity()));
+            prescriptionService.releaseUse(o);      // the packs can be ordered again on its prescription
             if (o.getPaymentStatus() == PaymentStatus.PAID) o.setPaymentStatus(PaymentStatus.REFUNDED);
         }
 
@@ -317,7 +362,10 @@ public class OrderService {
     /** Puts packs back on the shelf of the store that sold them. */
     public void restock(Order o, Medicine m, int packs) {
         if (o.getStore() == null) return;
-        storeItems.findByStoreAndMedicine(o.getStore(), m).ifPresent(si -> si.setStock(si.getStock() + packs));
+        storeItems.findByStoreAndMedicine(o.getStore(), m).ifPresent(si -> {
+            si.setStock(si.getStock() + packs);
+            events.publishEvent(new StockChanged(m.getId()));
+        });
     }
 
     @Transactional

@@ -123,8 +123,19 @@
                         </details>
                         <details class="mz-faq-item">
                             <summary>How do I upload a prescription?</summary>
-                            <div>Go to <strong>Prescriptions</strong> in your account menu, or upload one at checkout. JPG, PNG or PDF up
-                                to 5 MB; the doctor's name, date and signature must be visible.</div>
+                            <div>Tap <strong>Upload prescription</strong> in the category bar on the home page and choose the file. You can
+                                also upload from <strong>Prescriptions</strong> in your account menu, or at checkout. JPG, PNG or PDF up
+                                to 5 MB; the doctor's name, the patient's name, the date and the signature must be visible.
+                                You can choose up to 5 files at once, one per prescription, for example for different family members.
+                                Before anything is sent, you see each one with the medicines we read: remove a wrong file, add the
+                                doctor's name if needed, then tap <strong>Send for review</strong>.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Do you read my prescription automatically?</summary>
+                            <div>Yes. As soon as you upload it, we read the medicines, doses, patient's name, doctor and date, and
+                                match the medicines to our shop. You can see what we found on the prescription's page. A pharmacist
+                                still checks every prescription before anything is ordered; if it can't be read automatically, the
+                                pharmacist simply reads it instead.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>How long does approval take?</summary>
@@ -132,9 +143,53 @@
                                 or if anything needs fixing, with the pharmacist's note.</div>
                         </details>
                         <details class="mz-faq-item">
+                            <summary>What happens when my prescription is approved?</summary>
+                            <div>The medicines on it go into your cart by themselves, in the quantities prescribed, and we notify you.
+                                They're put under the family member whose patient name matches the name on the prescription; if it's
+                                nobody in your family, they go under <em>Others</em>. Review the cart and check out when you're ready.
+                                Anything out of stock is listed in the notification so you can add it later.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Can I order prescription medicines that aren't on my prescription?</summary>
+                            <div>No. Every <span class="mz-rx position-static">Rx</span> medicine in your cart must be on one of your
+                                approved prescriptions. If one isn't, checkout tells you which, e.g. "Alprazolam is not on any of your
+                                approved prescriptions." Remove it, or upload a prescription that includes it. Medicines that don't
+                                need a prescription are never affected.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>My cart has medicines from different prescriptions. Which one do I choose?</summary>
+                            <div>You don't choose. At checkout, each prescription medicine is taken from whichever of your approved
+                                prescriptions has it: the one written for that family member first, and if one prescription hasn't
+                                enough packs left, the rest come from another. Checkout shows which prescription each medicine comes
+                                from, and the invoice names the doctor for each.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Can I order part of a prescription now and the rest later?</summary>
+                            <div>Yes. Each prescription allows the number of packs the doctor prescribed, across as many orders as
+                                you like, including automatic refills. Its page shows how many packs are ordered and left, with
+                                <strong>Add what's left to cart</strong>. If you cancel an order, its packs become available again.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Can I remove a prescription?</summary>
+                            <div>Yes, any of them, approved or not, with the bin button on <strong>Prescriptions</strong>. A removed
+                                prescription can't be used for orders any more. If it was never used for an order it's deleted
+                                completely; if it was, the pharmacy keeps a copy for its records, as the law requires, but you
+                                won't see it again.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>I added more medicines to the cart. Does my new prescription need to cover everything?</summary>
+                            <div>No. Medicines your approved prescriptions already cover are fine as they are. When you send a new
+                                prescription, the pharmacist is only asked to check the medicines in your cart that aren't covered yet.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>What does "Used up" mean?</summary>
+                            <div>Everything prescribed on it has been ordered. We notify you when that happens. To order prescription
+                                medicines again, upload a new prescription from your doctor.</div>
+                        </details>
+                        <details class="mz-faq-item">
                             <summary>Do automatic refills of Rx medicines need a prescription?</summary>
-                            <div>Yes. Automatic refills of prescription medicines use your approved prescription while it's valid.
-                                Upload a new one before it expires to keep refills going.</div>
+                            <div>Yes. A refill of a prescription medicine needs an approved, unexpired prescription with enough packs
+                                of it left. Upload a new one before it expires or is used up to keep refills going.</div>
                         </details>
                     </div>
                 </section>
@@ -195,6 +250,12 @@
                             <div th:text="'Yes. Add up to ' + ${maxFamily} + ' family members under Family members. Each person gets their own reminders and supply count, and you choose who a medicine is for when you order it.'"></div>
                         </details>
                         <details class="mz-faq-item">
+                            <summary>What is a family member's patient name?</summary>
+                            <div>Their full name as doctors write it on prescriptions, e.g. "Asha Sharma" for Mom. It's printed as
+                                the patient on invoices, and medicines from an uploaded prescription go to whoever's name is on it.
+                                Your own patient name is the name on your account.</div>
+                        </details>
+                        <details class="mz-faq-item">
                             <summary>Can each phone show only some people's reminders?</summary>
                             <div>Yes. Open <strong>Alerts on this device</strong> on that phone or computer and choose everyone or only
                                 some members. Order, prescription and return updates always show. To change another device, open the
@@ -235,7 +296,8 @@
                         <details class="mz-faq-item">
                             <summary>Where do I find my tax invoice?</summary>
                             <div>Open the order from <strong>Orders</strong> and choose <strong>Invoice</strong>. Prices include GST and the
-                                invoice shows the tax inside each price. Print it or save it as a PDF.</div>
+                                invoice shows the tax inside each price. Each medicine shows the patient it's for, and orders with
+                                prescription medicines show the prescribing doctor and the prescription date. Print it or save it as a PDF.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>What is the billing address for?</summary>

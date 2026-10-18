@@ -57,6 +57,8 @@ public class OrderController {
         model.addAttribute("cart", cart);
         model.addAttribute("paymentMethods", PaymentMethod.values());
         model.addAttribute("prescriptions", prescriptionService.validForUser(user));
+        // Which prescription(s) each prescription medicine comes from, and anything none of them covers
+        model.addAttribute("rxCoverage", prescriptionService.cover(user, OrderService.rxLines(cart)));
         model.addAttribute("addresses", addresses);
         model.addAttribute("serviceable", serviceable);
         model.addAttribute("selectedAddress", selected);
@@ -65,10 +67,9 @@ public class OrderController {
 
     @PostMapping("/checkout")
     public String placeOrder(@RequestParam PaymentMethod paymentMethod,
-                             @RequestParam(required = false) Long prescriptionId,
                              @RequestParam(required = false) Long addressId,
                              RedirectAttributes ra) {
-        List<Order> placed = orderService.checkout(currentUser.get(), paymentMethod, prescriptionId, addressId);
+        List<Order> placed = orderService.checkout(currentUser.get(), paymentMethod, addressId);
         if (placed.size() == 1) {
             ra.addFlashAttribute("success", "Order " + placed.get(0).getOrderNumber() + " placed. We'll notify you as it moves.");
             return "redirect:/orders/" + placed.get(0).getId();

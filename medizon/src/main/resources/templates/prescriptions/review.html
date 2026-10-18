@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Check your prescriptions')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <h1 class="mz-page-title mb-1" th:text="${#lists.size(drafts) > 1} ? 'Check your prescriptions' : 'Check your prescription'">Check your prescription</h1>
+    <p class="text-muted mb-4">Nothing has been sent yet. Make sure each file is the right prescription, then send it to the
+        pharmacist. Uploaded the wrong file? Remove it.</p>
+
+    <!-- One form sends them all; each card's Remove button posts to its own address instead (formaction) -->
+    <form th:action="@{/prescriptions/review}" method="post">
+        <input th:if="${returnTo}" type="hidden" name="returnTo" th:value="${returnTo}">
+        <div class="row g-3 mb-4">
+            <div class="col-lg-6" th:each="p, s : ${drafts}" th:with="r=${readings[p.id]}">
+                <article class="mz-panel h-100">
+                    <input type="hidden" name="id" th:value="${p.id}">
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="mz-rx-thumb"
+                           th:attr="aria-label='Open ' + ${p.originalFileName}">
+                            <img th:if="${p.image}" th:src="@{/prescriptions/{id}/file(id=${p.id})}" alt="">
+                            <i th:unless="${p.image}" class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
+                        </a>
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="fw-semibold text-truncate" th:text="${p.originalFileName != null} ? ${p.originalFileName} : 'Prescription ' + ${s.count}">file.jpg</div>
+                            <a class="small" th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener">Open the file</a>
+                            <div class="small mt-1" th:if="${p.patientName != null}">
+                                <span th:text="'Patient: ' + ${p.patientName}"></span>
+                                <span class="text-muted" th:if="${goesTo[p.id] != null}" th:text="' · goes to ' + ${goesTo[p.id]}"></span>
+                            </div>
+                            <div class="small text-muted" th:if="${p.prescribedOn != null}" th:text="'Dated ' + ${#temporals.format(p.prescribedOn, 'd MMM yyyy')}"></div>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-outline-danger" formnovalidate
+                                th:formaction="@{/prescriptions/{id}/discard(id=${p.id}, returnTo=${returnTo})}"
+                                th:attr="aria-label='Remove ' + ${p.originalFileName}"><i class="bi bi-trash me-1"></i>Remove</button>
+                    </div>
+
+                    <!-- What we read, so the customer can tell it's the right file -->
+                    <div th:if="${r != null and r.legible and !#lists.isEmpty(r.medicines)}" class="mb-3">
+                        <div class="small fw-semibold mb-1"><i class="bi bi-stars me-1 mz-ai-hint"></i>Medicines we read</div>
+                        <ul class="small mb-0 ps-3">
+                            <li th:each="l : ${r.medicines}" th:text="${l.summary}">Dolo 650, 1-0-1 for 5 days</li>
+                        </ul>
+                    </div>
+                    <p th:if="${r != null and (!r.legible or #lists.isEmpty(r.medicines))}" class="small text-warning-emphasis mb-3">
+                        <i class="bi bi-exclamation-triangle me-1"></i>We couldn't find medicines on this file. Is it the right one,
+                        and is the photo clear?</p>
+                    <p th:if="${r == null and aiEnabled}" class="small text-muted mb-3">We couldn't read it automatically just now;
+                        the pharmacist will read it.</p>
+
+                    <div class="row g-2">
+                        <div class="col-sm-6">
+                            <label class="form-label small" th:for="'doc' + ${p.id}">Doctor's name</label>
+                            <input class="form-control form-control-sm" th:id="'doc' + ${p.id}" th:name="'doctorName_' + ${p.id}"
+                                   th:value="${p.doctorName}" maxlength="255" placeholder="As on the prescription">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small" th:for="'note' + ${p.id}">Note for the pharmacist <span class="text-muted">(optional)</span></label>
+                            <input class="form-control form-control-sm" th:id="'note' + ${p.id}" th:name="'notes_' + ${p.id}"
+                                   th:value="${p.notes}" maxlength="1000">
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </div>
+
+        <div class="mz-panel d-flex flex-wrap align-items-center gap-3">
+            <p class="small text-muted mb-0 flex-grow-1">A pharmacist checks each prescription, usually within a few hours. Once
+                it's approved, its medicines go into your cart under the right family member, and we'll let you know.</p>
+            <a th:href="@{/prescriptions}" class="btn btn-outline-primary">Upload another</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i><span
+                    th:text="${#lists.size(drafts) > 1} ? ('Send ' + ${#lists.size(drafts)} + ' for review') : 'Send for review'">Send for review</span></button>
+        </div>
+    </form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

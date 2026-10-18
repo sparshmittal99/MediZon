@@ -15,12 +15,16 @@ import org.springframework.web.client.RestClientException;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.Set;
 
 /**
  * Talks to the Python assistant. It sends the message with the conversation state; when the assistant asks
  * for actions (search, add to cart, create a reminder ...) they run here through {@link AssistantTools} as the
  * signed-in user, and the results go back until the assistant has its reply.
+ *
+ * <p>Hybrid: Python answers first. When it couldn't really answer ("unresolved"), or is down, {@link GeminiChat}
+ * answers instead; when Gemini is down or out of quota too, the Python reply (or "offline") stands.
  */
 @Slf4j
 @Service
@@ -34,6 +38,7 @@ public class AssistantService {
     private final AssistantTools tools;
     private final MedicineService medicineService;
     private final CartService cartService;
+    private final GeminiChat gemini;
     private final ObjectMapper mapper;
 
     public record Result(AssistantReply reply, JsonNode state) {}
@@ -58,7 +63,17 @@ public class AssistantService {
                 JsonNode calls = res.path("tool_calls");
                 if (!calls.isArray() || calls.isEmpty()) {
                     Long cartCount = cartChanged ? cartService.count(user) : null;
-                    AssistantReply reply = new AssistantReply(res.path("reply").asText(""), res.path("cards"),
+                    String text = res.path("reply").asText("");
+                    JsonNode cards = res.path("cards");
+                    if (res.path("unresolved").asBoolean(false)) {
+                        // Python couldn't answer: let Gemini, keeping Python's suggestion chips
+                        Optional<String> llm = gemini.answer(user, message);
+                        if (llm.isPresent()) {
+                            text = llm.get();
+                            cards = mapper.createArrayNode();
+                        }
+                    }
+                    AssistantReply reply = new AssistantReply(text, cards,
                             res.path("suggestions"), res.path("navigate").isTextual() ? res.path("navigate").asText() : null,
                             cartCount, false);
                     return new Result(reply, res.path("state"));
@@ -75,9 +90,11 @@ public class AssistantService {
             }
             log.warn("Assistant needed more than {} rounds for: {}", MAX_ROUNDS, message);
             return new Result(AssistantReply.text("That took too many steps. Could you ask in a simpler way?"), null);
-        } catch (RestClientException e) {
-            log.warn("Assistant service unreachable: {}", e.getMessage());
-            return new Result(AssistantReply.unavailable(), state);
+        } catch (RuntimeException e) {     // unreachable, a bad answer, anything: chat must never break the page
+            if (e instanceof RestClientException) log.warn("Assistant service unreachable: {}", e.getMessage());
+            else log.error("Assistant chat failed", e);
+            // Python is down: Gemini answers what it can (it can't act); offline only when both are down
+            return new Result(gemini.answer(user, message).map(AssistantReply::text).orElseGet(AssistantReply::unavailable), state);
         }
     }
 

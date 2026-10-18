@@ -17,7 +17,7 @@ import java.io.IOException;
 import java.util.Optional;
 
 /**
- * Adds the signed-in user, cart count, per-medicine cart quantities, this device's notification settings and its
+ * Adds the signed-in user, cart count, per-medicine cart quantities and back-in-stock alerts, this device's notification settings and its
  * unread count to every page, plus the seller's contact details and the "Delivers to" location; turns rule
  * violations into flash messages and missing records into 404s.
  */
@@ -34,6 +34,7 @@ public class GlobalModelAdvice {
     private final DeliveryLocations deliveryLocations;
     private final AddressService addressService;
     private final CatalogService catalog;
+    private final StockAlertService stockAlerts;
 
     @ModelAttribute
     public void common(Model model, HttpServletRequest request, HttpServletResponse response) {
@@ -65,6 +66,7 @@ public class GlobalModelAdvice {
             NotificationDevice device = null;
             if (!u.isStaff()) {
                 model.addAttribute("cartQuantities", cartService.quantities(u));
+                model.addAttribute("stockAlertIds", stockAlerts.subscribed(u));
                 device = deviceService.current(u, request, response);
                 model.addAttribute("device", device);
                 // A family account on a new device chooses whose reminders pop up here.

@@ -39,7 +39,7 @@
                 <span class="mz-mark" aria-hidden="true"><i class="bi bi-capsule"></i></span>MediZon
             </a>
             <a class="mz-brand" translate="no" th:href="@{/admin}" sec:authorize="hasRole('STAFF')">
-                <span class="mz-mark" aria-hidden="true"><i class="bi bi-capsule"></i></span>MediZon <span class="mz-admin-badge">Admin</span>
+                <span class="mz-mark" aria-hidden="true"><i class="bi bi-capsule"></i></span>MediZon <span class="mz-admin-badge" th:text="${me != null} ? ${me.role.label} : 'Staff'">Admin</span>
             </a>
 
             <!-- Where orders go: "Select location" until one is chosen, then "Delivers to ..." (or "We don't deliver here") -->
@@ -154,6 +154,15 @@
                 <button type="button" class="mz-catbar-all" data-bs-toggle="offcanvas" data-bs-target="#mzMenu" aria-controls="mzMenu">
                     <i class="bi bi-list" aria-hidden="true"></i>All</button>
                 <a th:href="@{/medicines}">All medicines</a>
+                <!-- Upload a prescription: the medicines on it go into the cart once a pharmacist approves it -->
+                <form sec:authorize="hasRole('CUSTOMER')" th:action="@{/prescriptions}" method="post" enctype="multipart/form-data"
+                      class="mz-catbar-form" data-mz-rx-quick>
+                    <label class="mz-catbar-link" title="Upload a prescription: its medicines go into your cart once a pharmacist approves it">
+                        <span data-mz-rx-quick-label>Upload prescription</span>
+                        <input type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" multiple class="visually-hidden">
+                    </label>
+                </form>
+                <a sec:authorize="!isAuthenticated()" th:href="@{/prescriptions}">Upload prescription</a>
                 <th:block sec:authorize="hasRole('CUSTOMER')">
                     <a th:href="@{/plans}">My medicines</a>
                 </th:block>
@@ -202,11 +211,12 @@
 </a>
 
 <!-- Medicine card used on home and shop pages -->
-<div th:fragment="medCard(m)" class="mz-med h-100">
+<div th:fragment="medCard(m)" class="mz-med h-100" th:classappend="${!m.inStock and !m.unavailable} ? 'is-oos'">
     <a th:href="@{/medicines/{id}(id=${m.id})}" class="mz-med-thumb" th:aria-label="${m.name}">
         <img th:if="${m.imageUrl}" th:src="@{${m.imageUrl}}" th:alt="${m.name}" data-mz-hide-broken>
         <i class="bi" th:classappend="${m.icon}" aria-hidden="true"></i>
         <span th:if="${m.prescriptionRequired}" class="mz-rx" title="Prescription required">Rx</span>
+        <span th:if="${!m.inStock and !m.unavailable}" class="mz-oos-tag">Out of stock</span>
     </a>
     <div class="mz-med-body">
         <h3 class="mz-med-name"><a th:href="@{/medicines/{id}(id=${m.id})}" th:text="${m.name}">Name</a></h3>
@@ -245,7 +255,8 @@
             <button type="button" class="mz-qty-btn" data-step="1" aria-label="Add one pack"
                     th:disabled="${inCart >= m.stock}"><i class="bi bi-plus-lg"></i></button>
         </div>
-        <span th:unless="${large}" class="small text-muted mz-qty-oos" th:hidden="${inCart > 0 or m.inStock}">Out of stock</span>
+        <span th:unless="${large or !m.unavailable}" class="small text-muted mz-qty-oos" th:hidden="${inCart > 0 or m.inStock}">Out of stock</span>
+        <th:block th:unless="${m.unavailable}"><div th:replace="~{fragments/layout :: notifyMe(${m}, ${large}, ${inCart > 0 or m.inStock})}"></div></th:block>
     </div>
     <div th:if="${large}" class="mz-qty-note" role="status" th:hidden="${inCart == 0}">
         <i class="bi bi-check-circle-fill"></i>
@@ -255,10 +266,36 @@
     <div class="mz-qty-error small" role="alert" hidden></div>
 </div>
 
+<!--
+  "Notify me" on an out-of-stock product: turns a back-in-stock alert on and off through /api/stock-alerts (medizon.js),
+  or through the form without JavaScript. Visitors sign in first and come back with the alert on.
+-->
+<div th:fragment="notifyMe(m, large, hide)" class="mz-notify mz-qty-oos" th:hidden="${hide}"
+     th:with="on=${stockAlertIds != null and stockAlertIds.contains(m.id)}"
+     th:attr="data-mz-notify=${m.id},data-on=${on}">
+    <form sec:authorize="isAuthenticated()" th:action="@{/stock-alerts/{id}(id=${m.id})}" method="post">
+        <input type="hidden" name="on" th:value="${!on}">
+        <button type="submit" class="btn mz-notify-btn" th:classappend="${large} ? 'btn-outline-primary' : 'btn-sm btn-outline-primary'"
+                th:attr="aria-pressed=${on}" th:title="${on} ? 'Tap to stop the back-in-stock alert' : 'Get notified when it is back in stock'">
+            <span class="mz-notify-off"><i class="bi bi-bell me-1" aria-hidden="true"></i><span th:text="${large} ? 'Notify me when available' : 'Notify me'">Notify me</span></span>
+            <span class="mz-notify-on"><i class="bi bi-bell-fill me-1" aria-hidden="true"></i><span th:text="${large} ? 'You will be notified' : 'Notified'">Notified</span></span>
+        </button>
+    </form>
+    <a sec:authorize="!isAuthenticated()" th:href="@{/stock-alerts/{id}/sign-in(id=${m.id})}" class="btn mz-notify-btn"
+       th:classappend="${large} ? 'btn-outline-primary' : 'btn-sm btn-outline-primary'" title="Sign in to get notified when it's back in stock">
+        <i class="bi bi-bell me-1" aria-hidden="true"></i><span th:text="${large} ? 'Notify me when available' : 'Notify me'">Notify me</span></a>
+    <p th:if="${large}" class="mz-notify-note small mb-0">
+        <strong class="text-danger">Out of stock right now.</strong>
+        <span class="text-muted mz-notify-off">Tap Notify me and we'll tell you when it's back.</span>
+        <span class="text-muted mz-notify-on">We'll alert you here and by email when it's back.</span>
+    </p>
+</div>
+
 <!-- One "For" choice in a cart row: tap to choose, then - n + for that person's packs when the line has several -->
 <th:block th:fragment="allocOption(i, m, icon, cls, exclusive)" th:with="n=${i.packsFor(m.id)}">
     <div class="mz-alloc-opt" th:classappend="${cls} + (${n > 0} ? ' is-on' : '')"
-         th:attr="data-member=${m.id},data-packs=${n},data-exclusive=${exclusive} ? 'true' : null">
+         th:attr="data-member=${m.id},data-packs=${n},data-exclusive=${exclusive} ? 'true' : null,
+                  data-patient=${m.others} ? ${i.othersPatientName} : ${m.patient}">
         <button type="button" class="mz-alloc-pick" th:attr="aria-pressed=${n > 0}"
                 th:title="${exclusive} ? 'For someone outside your family. Not added to My medicines.' : null">
             <i th:if="${icon != ''}" class="bi me-1" th:classappend="${icon}" aria-hidden="true"></i><span th:text="${m.label}">Me</span>

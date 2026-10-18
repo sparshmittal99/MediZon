@@ -79,10 +79,10 @@ public class InvoiceService {
             BigDecimal rate = i.getGstRate() != null ? i.getGstRate() : DEFAULT_RATE;
             topRate = topRate.max(rate);
             String hsn = i.getHsnCode() != null ? i.getHsnCode() : i.getMedicine().getHsnCode();
-            lines.add(line(n++, i.getMedicineName(), hsn, i.getExpiryDate(), i.getQuantity(), i.getUnitPrice(), rate, i.getLineTotal(), interState));
+            lines.add(line(n++, i.getMedicineName(), hsn, i.getExpiryDate(), i.getPatientName(), i.getPrescribedBy(), i.getQuantity(), i.getUnitPrice(), rate, i.getLineTotal(), interState));
         }
         if (o.getDeliveryFee() != null && o.getDeliveryFee().signum() > 0) {
-            lines.add(line(n, "Delivery charges", "", null, 1, o.getDeliveryFee(), topRate, o.getDeliveryFee(), interState));
+            lines.add(line(n, "Delivery charges", "", null, null, null, 1, o.getDeliveryFee(), topRate, o.getDeliveryFee(), interState));
         }
 
         Map<BigDecimal, BigDecimal[]> byRate = new TreeMap<>();
@@ -114,7 +114,7 @@ public class InvoiceService {
     }
 
     /** Splits a GST-inclusive amount into taxable value and tax; the parts always add back up to the amount paid. */
-    private static Invoice.Line line(int n, String description, String hsn, LocalDate expiry, int qty, BigDecimal unitPrice, BigDecimal rate,
+    private static Invoice.Line line(int n, String description, String hsn, LocalDate expiry, String patient, String prescribedBy, int qty, BigDecimal unitPrice, BigDecimal rate,
                                      BigDecimal gross, boolean interState) {
         BigDecimal taxable = gross.multiply(HUNDRED).divide(HUNDRED.add(rate), 2, RoundingMode.HALF_UP);
         BigDecimal tax = gross.subtract(taxable);
@@ -126,7 +126,7 @@ public class InvoiceService {
             cgst = tax.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
             sgst = tax.subtract(cgst);
         }
-        return new Invoice.Line(n, description, hsn, expiry, qty, unitPrice, rate.stripTrailingZeros(), taxable, cgst, sgst, igst,
+        return new Invoice.Line(n, description, hsn, expiry, patient, prescribedBy, qty, unitPrice, rate.stripTrailingZeros(), taxable, cgst, sgst, igst,
                 gross.setScale(2, RoundingMode.HALF_UP));
     }
 

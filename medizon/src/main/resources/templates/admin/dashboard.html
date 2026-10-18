@@ -35,6 +35,57 @@
                 <div class="mz-stat-value" th:text="${returnsToReview}">0</div><div class="mz-stat-label">Returns to review</div></div></a></div>
     </div>
 
+    <!-- Each store's sales on one day; pick any day, or step a day at a time -->
+    <section class="mb-5" id="store-sales">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <h2 class="mz-section-title mb-0 me-auto">Sales by store</h2>
+            <a class="btn btn-sm btn-outline-secondary" th:href="@{/admin(storeDay=${storeDay.minusDays(1)})} + '#store-sales'"
+               aria-label="Previous day"><i class="bi bi-chevron-left"></i></a>
+            <form th:action="@{/admin}" method="get" class="d-flex align-items-center gap-2">
+                <label class="visually-hidden" for="storeDay">Day</label>
+                <input class="form-control form-control-sm" type="date" id="storeDay" name="storeDay" th:value="${storeDay}"
+                       th:max="${#temporals.format(#temporals.createToday(), 'yyyy-MM-dd')}" onchange="this.form.submit()">
+                <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Show</button></noscript>
+            </form>
+            <a th:unless="${storeDayIsToday}" class="btn btn-sm btn-outline-secondary"
+               th:href="@{/admin(storeDay=${storeDay.plusDays(1)})} + '#store-sales'" aria-label="Next day"><i class="bi bi-chevron-right"></i></a>
+            <a th:unless="${storeDayIsToday}" class="btn btn-sm btn-link" th:href="@{/admin} + '#store-sales'">Today</a>
+        </div>
+        <div class="mz-panel-flush table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr>
+                    <th>Store</th><th class="text-end">Orders</th><th class="text-end">Sales</th>
+                    <th class="text-end">Refunds</th><th class="text-end">Net</th><th class="text-end">Share</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="s : ${storeSales}">
+                    <td>
+                        <a th:if="${s.id != null}" th:href="@{/admin/sales(store=${s.id}, from=${storeDay}, to=${storeDay})}" th:text="${s.name}">Store</a>
+                        <span th:if="${s.id == null}" class="text-muted" th:text="${s.name}"></span>
+                        <span th:if="${s.id != null and !s.active}" class="badge text-bg-secondary ms-1">Closed</span>
+                    </td>
+                    <td class="text-end"><span th:text="${s.totals.completedOrders}">0</span>
+                        <span th:if="${s.totals.cancelled > 0}" class="small text-muted d-block" th:text="${s.totals.cancelled} + ' cancelled'"></span></td>
+                    <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(s.totals.sales, 1, 'COMMA', 2, 'POINT')}">₹0</td>
+                    <td class="text-end" th:text="${s.totals.refunds.signum() > 0} ? '₹' + ${#numbers.formatDecimal(s.totals.refunds, 1, 'COMMA', 2, 'POINT')} : '-'">-</td>
+                    <td class="text-end fw-semibold" th:text="'₹' + ${#numbers.formatDecimal(s.totals.net, 1, 'COMMA', 2, 'POINT')}">₹0</td>
+                    <td class="text-end text-muted" th:text="${s.shareOf(storeDayTotal.sales)} + '%'">0%</td>
+                </tr>
+                </tbody>
+                <tfoot><tr class="fw-semibold">
+                    <td th:text="${storeDayIsToday} ? 'All stores today' : 'All stores, ' + ${#temporals.format(storeDay, 'd MMM yyyy')}">All stores</td>
+                    <td class="text-end" th:text="${storeDayTotal.completedOrders}">0</td>
+                    <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(storeDayTotal.sales, 1, 'COMMA', 2, 'POINT')}">₹0</td>
+                    <td class="text-end" th:text="${storeDayTotal.refunds.signum() > 0} ? '₹' + ${#numbers.formatDecimal(storeDayTotal.refunds, 1, 'COMMA', 2, 'POINT')} : '-'">-</td>
+                    <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(storeDayTotal.net, 1, 'COMMA', 2, 'POINT')}">₹0</td>
+                    <td></td>
+                </tr></tfoot>
+            </table>
+        </div>
+        <p class="small text-muted mt-2 mb-0">Sales are what customers paid on orders placed that day (not cancelled); refunds count on
+            the day they were paid. Open a store for its full sales report.</p>
+    </section>
+
     <h2 class="mz-section-title">Store</h2>
     <div class="row row-cols-2 row-cols-lg-5 g-3 mb-5">
         <div class="col"><a th:href="@{/admin/orders(status='PLACED')}" class="text-decoration-none text-reset">

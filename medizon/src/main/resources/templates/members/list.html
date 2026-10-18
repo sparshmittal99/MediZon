@@ -32,6 +32,11 @@
                             <input class="form-control form-control-sm" th:id="'name' + ${m.id}" name="name" th:value="${m.name}" maxlength="60" required>
                         </div>
                         <div class="col-sm-6">
+                            <label class="form-label small" th:for="'pat' + ${m.id}">Patient name</label>
+                            <input class="form-control form-control-sm" th:id="'pat' + ${m.id}" name="patientName" th:value="${m.patientName}"
+                                   maxlength="100" required placeholder="As on prescriptions">
+                        </div>
+                        <div class="col-sm-6">
                             <label class="form-label small" th:for="'rel' + ${m.id}">Relation</label>
                             <input class="form-control form-control-sm" th:id="'rel' + ${m.id}" name="relation" th:value="${m.relation}"
                                    maxlength="40" list="relations">
@@ -65,15 +70,22 @@
     <section class="mz-panel" th:if="${#lists.size(people) <= maxFamily}">
         <h2 class="h5 mb-3">Add a family member</h2>
         <form th:action="@{/members}" method="post" class="row g-3 align-items-end">
-            <div class="col-sm-5">
+            <div class="col-sm-6 col-lg-3">
                 <label class="form-label" for="newName">Name</label>
-                <input class="form-control" id="newName" name="name" maxlength="60" required placeholder="Asha">
+                <input class="form-control" id="newName" name="name" maxlength="60" required placeholder="Mom">
             </div>
-            <div class="col-sm-4">
+            <div class="col-sm-6 col-lg-4">
+                <label class="form-label" for="newPatient">Patient name</label>
+                <input class="form-control" id="newPatient" name="patientName" maxlength="100" required placeholder="Asha Sharma"
+                       aria-describedby="newPatientHelp">
+            </div>
+            <div class="col-sm-6 col-lg-3">
                 <label class="form-label" for="newRelation">Relation <span class="text-muted fw-normal">(optional)</span></label>
                 <input class="form-control" id="newRelation" name="relation" maxlength="40" list="relations" placeholder="Mother">
             </div>
-            <div class="col-sm-3"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-person-plus me-1"></i>Add</button></div>
+            <div class="col-sm-6 col-lg-2"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-person-plus me-1"></i>Add</button></div>
+            <div class="col-12 form-text mt-1" id="newPatientHelp">Full name as doctors write it on prescriptions. It's printed on invoices,
+                and medicines from an uploaded prescription go to whoever's name is on it.</div>
         </form>
         <datalist id="relations">
             <option value="Mother"><option value="Father"><option value="Spouse"><option value="Son"><option value="Daughter">

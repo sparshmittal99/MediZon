@@ -53,6 +53,7 @@ public class DataSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         dropStaleEnumChecks();
+        backfillInvoicePatients();
         relaxLegacyColumns();
         if (stores.count() == 0) {
             Store main = createMainStore();
@@ -67,11 +68,35 @@ public class DataSeeder implements CommandLineRunner {
      * never refreshes it, so inserting a newly added value (e.g. Role.PHARMACIST) fails on databases created by an
      * older version. The enum mapping already guards the values, so the constraints are dropped.
      */
+    /**
+     * Orders placed before invoices printed the patient: fill each line's patient in from who it was for (the account
+     * holder's name, or the family member's patient name). Only empty lines are touched, so it runs safely every start.
+     */
+    private void backfillInvoicePatients() {
+        jdbc.update("""
+                update order_item i set patient_name = sub.names
+                from (select x.order_item_id,
+                             string_agg(distinct case m.kind when 'SELF' then u.full_name
+                                                             when 'FAMILY' then coalesce(nullif(m.patient_name, ''), m.name) end, ', ') names
+                      from order_item_members x
+                      join family_members m on m.id = x.member_id
+                      join users u on u.id = m.user_id
+                      group by x.order_item_id) sub
+                where i.id = sub.order_item_id and i.patient_name is null and sub.names is not null""");
+        // Older still, from before family members: everything was for the account holder (deleted accounts stay blank)
+        jdbc.update("""
+                update order_item i set patient_name = u.full_name
+                from orders o join users u on u.id = o.user_id
+                where o.id = i.order_id and i.patient_name is null and u.deleted = false
+                  and not exists (select 1 from order_item_members x where x.order_item_id = i.id)""");
+    }
+
     private void dropStaleEnumChecks() {
         jdbc.execute("alter table if exists notification drop constraint if exists notification_type_check");
         jdbc.execute("alter table if exists family_members drop constraint if exists family_members_kind_check");
         jdbc.execute("alter table if exists users drop constraint if exists users_role_check");
         jdbc.execute("alter table if exists app_errors drop constraint if exists app_errors_severity_check");
+        jdbc.execute("alter table if exists prescription drop constraint if exists prescription_status_check");
     }
 
     /**

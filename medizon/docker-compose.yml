@@ -12,7 +12,14 @@ services:
 
   app:
     build: .
-    depends_on: [db, assistant]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_started
+      # Optional: the shop starts and runs without it (chat falls back to Gemini, or says it's offline)
+      assistant:
+        condition: service_started
+        required: false
     ports:
       - "8080:8080"
     environment:
@@ -22,6 +29,7 @@ services:
       MEDIZON_TZ: Asia/Kolkata
       ASSISTANT_URL: http://assistant:8001
       ASSISTANT_TOKEN: ${ASSISTANT_TOKEN:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       MEDIZON_ADMIN_EMAIL: ${MEDIZON_ADMIN_EMAIL:-}
       MEDIZON_ADMIN_PASSWORD: ${MEDIZON_ADMIN_PASSWORD:-}
       UPLOAD_DIR: /data/uploads
@@ -31,6 +39,7 @@ services:
 
   assistant:
     build: ../medizon-assistant
+    restart: unless-stopped
     environment:
       ASSISTANT_TOKEN: ${ASSISTANT_TOKEN:-}
     ports:
