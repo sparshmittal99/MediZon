@@ -11,13 +11,14 @@ import java.util.Optional;
 
 /**
  * The LLM half of the hybrid assistant. The Python assistant answers first (free, instant, and it can act: search,
- * cart, reminders); Gemini only answers what Python couldn't, or everything while Python is down. It can't act, so it
- * points people to the right page instead. Never throws: empty means "keep the Python reply" or "offline".
+ * cart, reminders); an LLM only answers what Python couldn't, or everything while Python is down or asleep. Groq goes
+ * first (fast, large free quota), then Gemini when Groq is down or out of quota. Neither can act, so they point people
+ * to the right page instead. Never throws: empty means "keep the Python reply" or "offline".
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class GeminiChat {
+public class ChatFallback {
 
     private static final int MAX_MESSAGE = 1000;
     private static final int MAX_REPLY = 1500;
@@ -46,22 +47,39 @@ public class GeminiChat {
             Never make up figures. Plain text, no markdown, at most 120 words.
             """;
 
+    private final GroqClient groq;
     private final GeminiClient gemini;
     private final ObjectMapper json;
 
-    public boolean isAvailable() { return gemini.isAvailable(); }
+    public boolean isAvailable() { return groq.isAvailable() || gemini.isAvailable(); }
 
     public Optional<String> answer(User user, String message) {
-        if (message == null || message.isBlank() || !gemini.isAvailable()) return Optional.empty();
+        if (message == null || message.isBlank() || !isAvailable()) return Optional.empty();
+        String system = (user.isAdmin() ? ADMIN : CUSTOMER).formatted(user.getFirstName());
+        String text = message.length() > MAX_MESSAGE ? message.substring(0, MAX_MESSAGE) : message;
+        return askGroq(system, text).or(() -> askGemini(system, text))
+                .map(String::strip)
+                .map(a -> a.length() > MAX_REPLY ? a.substring(0, MAX_REPLY) + "…" : a);
+    }
+
+    private Optional<String> askGroq(String system, String message) {
+        if (!groq.isAvailable()) return Optional.empty();
+        try {
+            return Optional.of(groq.chat(system, message, 0.3));
+        } catch (RuntimeException e) {
+            log.warn("Groq chat fallback failed: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private Optional<String> askGemini(String system, String message) {
+        if (!gemini.isAvailable()) return Optional.empty();
         ObjectNode body = json.createObjectNode();
-        body.putObject("systemInstruction").putArray("parts").addObject()
-                .put("text", (user.isAdmin() ? ADMIN : CUSTOMER).formatted(user.getFirstName()));
-        body.putArray("contents").addObject().put("role", "user").putArray("parts").addObject()
-                .put("text", message.length() > MAX_MESSAGE ? message.substring(0, MAX_MESSAGE) : message);
+        body.putObject("systemInstruction").putArray("parts").addObject().put("text", system);
+        body.putArray("contents").addObject().put("role", "user").putArray("parts").addObject().put("text", message);
         body.putObject("generationConfig").put("temperature", 0.3);
         try {
-            String text = gemini.generate(body).strip();
-            return Optional.of(text.length() > MAX_REPLY ? text.substring(0, MAX_REPLY) + "…" : text);
+            return Optional.of(gemini.generate(body));
         } catch (RuntimeException e) {
             log.warn("Gemini chat fallback failed: {}", e.getMessage());
             return Optional.empty();

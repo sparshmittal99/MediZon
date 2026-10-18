@@ -6,7 +6,8 @@ AI-read prescriptions that a pharmacist approves and that fill the cart by thems
 **Stack:** Java 17, Spring Boot 3.3, Spring Security, Spring Data JPA, PostgreSQL, Thymeleaf + Bootstrap 5,
 Apache POI (Excel export). Tests use JUnit 5 and Mockito.
 The assistant is a separate Python service (FastAPI + scikit-learn) in [`../medizon-assistant`](../medizon-assistant); it needs no external AI service or API key.
-Google Gemini (optional, `GEMINI_API_KEY`) reads uploaded prescriptions and answers chat questions the assistant can't.
+Google Gemini (optional, `GEMINI_API_KEY`) reads uploaded prescriptions. Groq (optional, `GROQ_API_KEY`) answers chat
+questions the assistant can't, with Gemini as backup.
 
 ## Run it
 
@@ -36,7 +37,7 @@ The admin creates every other account under **Admin > Users** with a role (see R
 
 Everything runs in `Asia/Kolkata` by default; change it with `MEDIZON_TZ`.
 To run the app and the assistant in Docker as well: `docker compose --profile app up --build`.
-MediZon works without the assistant running (the chat uses Gemini, or says it's offline) and without Gemini
+MediZon works without the assistant running (the chat uses Groq or Gemini, or says it's offline) and without Gemini
 (prescriptions go to the pharmacist unread). See [When an AI service is down](#when-an-ai-service-is-down).
 
 ## Configuration
@@ -48,7 +49,8 @@ All settings are in `application.properties` and can be overridden with environm
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | PostgreSQL connection |
 | `ASSISTANT_URL` | Where the assistant service runs (default `http://localhost:8001`) |
 | `ASSISTANT_TOKEN` | Optional shared secret; set the same value on both services |
-| `GEMINI_API_KEY` | Google Gemini key (web app only): prescription reading and the chat fallback. Empty turns both off |
+| `GEMINI_API_KEY` | Google Gemini key (web app only): prescription reading and the backup chat fallback. Empty turns both off |
+| `GROQ_API_KEY`, `GROQ_MODEL` | Groq key (web app only) for the chat fallback; model (default `llama-3.3-70b-versatile`) |
 | `GEMINI_MODEL` | Gemini model (default `gemini-flash-latest`; `gemini-flash-lite-latest` allows more free requests) |
 | `AI_PROVIDER`, `AI_FAST_TRACK_SCORE` | Which AI reads prescriptions (default `gemini`); AI score from which a prescription is fast-tracked (default 80) |
 | `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_USER`, `MAIL_PASSWORD` | Email copies of reminders and alerts (logged only when disabled) |
@@ -184,10 +186,11 @@ restock, refund), a sales and returns report (a date range, a month or a financi
 
 ## When an AI service is down
 
-`GeminiClient` and `AssistantClient` skip a failing service for a while (Gemini 2 minutes, 15 when the quota ran out;
-the assistant 30 seconds) and Gemini runs at most 4 calls at once, so a slow or dead service never ties up the web
-server. Prescriptions then go to the pharmacist unread; chat is answered by whichever of the two is up, and says it's
-offline only when both are down. Both show in `/actuator/health` as DEGRADED, never DOWN. `AiOutageTest` covers it.
+`GeminiClient`, `GroqClient` and `AssistantClient` skip a failing service for a while (Gemini 2 minutes, 15 when the
+quota ran out; Groq 2 minutes, 5 when the quota ran out; the assistant 30 seconds, after waiting at most 8 seconds, so an
+asleep assistant doesn't stall chat) and Groq and Gemini run at most 4 calls each at once, so a slow or dead service
+never ties up the web server. Prescriptions then go to the pharmacist unread; chat is answered by whichever is up
+(Python, then Groq, then Gemini), and says it's offline only when all are down. All show in `/actuator/health` as DEGRADED, never DOWN. `AiOutageTest` covers it.
 
 ## Monitoring
 
@@ -271,8 +274,9 @@ pages, offers quick-reply chips and product cards, and can open pages for you (f
 - set one-off reminders ("remind me to book a blood test on friday at 9").
 
 **Hybrid**: Python answers first. When it couldn't answer (`"unresolved": true` in its reply), or is down,
-`ai/GeminiChat` answers instead, with health guardrails (no diagnosis or dose changes, emergencies to 112, never
-inventing orders, stock or prices) in the customer's language. Gemini can't act; it points to the right page.
+`ai/ChatFallback` answers instead (Groq, then Gemini when Groq is down or out of quota), with health guardrails (no
+diagnosis or dose changes, emergencies to 112, never inventing orders, stock or prices) in the customer's language.
+The LLM can't act; it points to the right page.
 
 **Admins** can ask it for:
 - what needs attention: orders to confirm and ship, prescriptions to review, low stock, recent bad reviews;
@@ -311,7 +315,7 @@ src/main/java/com/medizon
 ├── repository/  Spring Data repositories
 ├── service/     Business logic, scheduler, notifications, email, file storage, addresses, delivery areas,
 │                visitor cart, GST invoices, returns, sales report (SQL aggregation) and Excel export
-├── ai/          Assistant client, actions it may run, request loop; Gemini client, prescription reader, chat fallback
+├── ai/          Assistant client, actions it may run, request loop; Gemini and Groq clients, prescription reader, chat fallback
 ├── web/         MVC controllers (Thymeleaf pages), customer and admin; DeliveryLocations ("Delivers to" cookies)
 ├── api/         JSON endpoints: notification polling, cart quantities and packs per person, location check,
 │                current-password check, assistant chat
@@ -324,7 +328,7 @@ src/test/java/com/medizon
 ├── service/     InvoiceMathTest, ReportPeriodTest, ExpirySweepTest, PrescriptionCoverageTest, PrescriptionDraftTest,
 │                PatientNamesTest, SharedMedicineTest, CartOthersTest (Mockito)
 ├── dto/         PrescriptionScoreTest
-└── ai/          AiOutageTest (assistant and Gemini down, slow or both)
+└── ai/          AiOutageTest (assistant, Groq and Gemini down, slow or all)
 ```
 
 Run the tests with `mvn test` (they are plain unit tests and need no database).

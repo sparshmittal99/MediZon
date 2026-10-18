@@ -16,19 +16,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-/** The shop must keep working whatever happens to the Python assistant and Gemini. */
+/** The shop must keep working whatever happens to the Python assistant, Groq and Gemini. */
 class AiOutageTest {
 
     private final ObjectMapper json = new ObjectMapper();
     private AssistantClient python;
-    private GeminiChat gemini;
+    private ChatFallback gemini;
     private AssistantService service;
     private User user;
 
     @BeforeEach
     void setUp() {
         python = mock(AssistantClient.class);
-        gemini = mock(GeminiChat.class);
+        gemini = mock(ChatFallback.class);
         MedicineService medicines = mock(MedicineService.class);
         when(medicines.categories()).thenReturn(List.of());
         service = new AssistantService(python, mock(AssistantTools.class), medicines, mock(CartService.class), gemini, json);
@@ -116,5 +116,51 @@ class AiOutageTest {
         GeminiClient client = new GeminiClient("gemini", "", "gemini-flash-latest", "http://127.0.0.1:9");
         assertFalse(client.isConfigured());
         assertThrows(GeminiClient.GeminiUnavailableException.class, () -> client.generate(json.createObjectNode()));
+    }
+
+    @Test
+    void unreachableGroqIsSkippedAndNeverThrowsAnythingElse() {
+        GroqClient client = new GroqClient("test-key", "llama-3.3-70b-versatile", "http://127.0.0.1:9");
+        assertTrue(client.isAvailable());
+        assertThrows(GroqClient.GroqUnavailableException.class, () -> client.chat("system", "hi", 0.3));
+        assertFalse(client.isAvailable());
+        assertNotNull(client.unavailableReason());
+        assertThrows(GroqClient.GroqUnavailableException.class, () -> client.chat("system", "hi", 0.3));
+    }
+
+    @Test
+    void groqWithoutKeyIsOff() {
+        GroqClient client = new GroqClient("", "llama-3.3-70b-versatile", "http://127.0.0.1:9");
+        assertFalse(client.isConfigured());
+        assertThrows(GroqClient.GroqUnavailableException.class, () -> client.chat("system", "hi", 0.3));
+    }
+
+    @Test
+    void groqAnswersFirst() {
+        GroqClient groq = mock(GroqClient.class);
+        GeminiClient gem = mock(GeminiClient.class);
+        when(groq.isAvailable()).thenReturn(true);
+        when(gem.isAvailable()).thenReturn(true);
+        when(groq.chat(any(), any(), anyDouble())).thenReturn(" From Groq ");
+        assertEquals(Optional.of("From Groq"), new ChatFallback(groq, gem, json).answer(user, "can I take dolo with alcohol"));
+        verify(gem, never()).generate(any());
+    }
+
+    @Test
+    void geminiAnswersWhenGroqFails() {
+        GroqClient groq = mock(GroqClient.class);
+        GeminiClient gem = mock(GeminiClient.class);
+        when(groq.isAvailable()).thenReturn(true);
+        when(gem.isAvailable()).thenReturn(true);
+        when(groq.chat(any(), any(), anyDouble())).thenThrow(new GroqClient.GroqUnavailableException("quota used up"));
+        when(gem.generate(any())).thenReturn("From Gemini");
+        assertEquals(Optional.of("From Gemini"), new ChatFallback(groq, gem, json).answer(user, "can I take dolo with alcohol"));
+    }
+
+    @Test
+    void bothLlmsDownIsEmpty() {
+        GroqClient groq = mock(GroqClient.class);
+        GeminiClient gem = mock(GeminiClient.class);
+        assertEquals(Optional.empty(), new ChatFallback(groq, gem, json).answer(user, "can I take dolo with alcohol"));
     }
 }

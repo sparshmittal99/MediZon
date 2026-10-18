@@ -23,8 +23,9 @@ import java.util.Set;
  * for actions (search, add to cart, create a reminder ...) they run here through {@link AssistantTools} as the
  * signed-in user, and the results go back until the assistant has its reply.
  *
- * <p>Hybrid: Python answers first. When it couldn't really answer ("unresolved"), or is down, {@link GeminiChat}
- * answers instead; when Gemini is down or out of quota too, the Python reply (or "offline") stands.
+ * <p>Hybrid: Python answers first. When it couldn't really answer ("unresolved"), or is down or asleep,
+ * {@link ChatFallback} (Groq, then Gemini) answers instead; when both are down or out of quota too, the Python reply
+ * (or "offline") stands.
  */
 @Slf4j
 @Service
@@ -38,7 +39,7 @@ public class AssistantService {
     private final AssistantTools tools;
     private final MedicineService medicineService;
     private final CartService cartService;
-    private final GeminiChat gemini;
+    private final ChatFallback llm;
     private final ObjectMapper mapper;
 
     public record Result(AssistantReply reply, JsonNode state) {}
@@ -66,10 +67,10 @@ public class AssistantService {
                     String text = res.path("reply").asText("");
                     JsonNode cards = res.path("cards");
                     if (res.path("unresolved").asBoolean(false)) {
-                        // Python couldn't answer: let Gemini, keeping Python's suggestion chips
-                        Optional<String> llm = gemini.answer(user, message);
-                        if (llm.isPresent()) {
-                            text = llm.get();
+                        // Python couldn't answer: let the LLM, keeping Python's suggestion chips
+                        Optional<String> answer = llm.answer(user, message);
+                        if (answer.isPresent()) {
+                            text = answer.get();
                             cards = mapper.createArrayNode();
                         }
                     }
@@ -93,8 +94,8 @@ public class AssistantService {
         } catch (RuntimeException e) {     // unreachable, a bad answer, anything: chat must never break the page
             if (e instanceof RestClientException) log.warn("Assistant service unreachable: {}", e.getMessage());
             else log.error("Assistant chat failed", e);
-            // Python is down: Gemini answers what it can (it can't act); offline only when both are down
-            return new Result(gemini.answer(user, message).map(AssistantReply::text).orElseGet(AssistantReply::unavailable), state);
+            // Python is down or asleep: the LLM answers what it can (it can't act); offline only when all are down
+            return new Result(llm.answer(user, message).map(AssistantReply::text).orElseGet(AssistantReply::unavailable), state);
         }
     }
 

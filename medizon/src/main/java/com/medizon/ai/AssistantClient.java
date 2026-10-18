@@ -30,7 +30,8 @@ public class AssistantClient {
                            @Value("${medizon.assistant.token:}") String token) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(3_000);
-        factory.setReadTimeout(15_000);
+        // Short: an asleep assistant (free hosting) can take a minute to wake; chat answers with the LLM meanwhile
+        factory.setReadTimeout(8_000);
         RestClient.Builder builder = RestClient.builder().baseUrl(baseUrl).requestFactory(factory);
         if (!token.isBlank()) builder.defaultHeader("X-Assistant-Token", token);
         this.http = builder.build();

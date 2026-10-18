@@ -23,6 +23,6 @@ public class GeminiHealthIndicator implements HealthIndicator {
         String why = gemini.unavailableReason();
         if (why == null) return Health.up().build();
         return Health.status(AssistantHealthIndicator.DEGRADED).withDetail("reason", why)
-                .withDetail("effect", "prescriptions go straight to the pharmacist; chat uses the Python assistant only").build();
+                .withDetail("effect", "prescriptions go straight to the pharmacist; chat uses Groq, or the Python assistant only").build();
     }
 }

@@ -11,7 +11,7 @@ The repository has two services:
 | [`medizon/`](medizon) | The main web app: Spring Boot, server-rendered with Thymeleaf, PostgreSQL |
 | [`medizon-assistant/`](medizon-assistant) | The chat assistant: a small Python FastAPI service with its own intent model. It needs no external AI service or API key. |
 
-The web app can also use **Google Gemini** for reading prescriptions and for chat questions the assistant can't answer. It's optional: without a `GEMINI_API_KEY` (or while Gemini is down) everything works, prescriptions just go to the pharmacist unread and the chat stays with the Python assistant.
+The web app can also use **Google Gemini** for reading prescriptions, and **Groq** (with Gemini as backup) for chat questions the assistant can't answer. Both are optional: without `GROQ_API_KEY` and `GEMINI_API_KEY` (or while they're down) everything works, prescriptions just go to the pharmacist unread and the chat stays with the Python assistant.
 
 ---
 
@@ -79,7 +79,7 @@ Staff accounts run the shop only; they can't shop, order or set reminders.
 - **Delivery areas:** the PIN codes MediZon delivers to (add one or paste a list, with area, city and state; pause or remove), which stores deliver to each and in how many days. Orders to any other PIN code are refused, including automatic refills. The dashboard warns while none are set up, because nobody can order until then.
 - **Users (admin):** create customer and staff accounts with a role, enable or disable them, force sign-out, and delete accounts. Customers sign up themselves; nobody can sign up as staff, and there's only ever one admin.
 - **Support tickets:** a ticket starts with support, who reply or pass it to the pharmacy, payments, the store that handled the order or the admin; the customer is told who has it and notified of every reply.
-- **Monitoring (admin):** health of each part (database, disk, assistant, Gemini), errors grouped like an issue tracker (server, scheduled jobs and shoppers' browsers) and performance (slow requests, page load times, background jobs). `/actuator/prometheus` feeds Grafana.
+- **Monitoring (admin):** health of each part (database, disk, assistant, Groq, Gemini), errors grouped like an issue tracker (server, scheduled jobs and shoppers' browsers) and performance (slow requests, page load times, background jobs). `/actuator/prometheus` feeds Grafana.
 - **Reviews and feedback**, with a **"Get improvement ideas"** button. It groups complaints by topic and sentiment and ranks suggestions.
 
 ### Chat assistant
@@ -87,8 +87,8 @@ It's available on every page after sign-in.
 - **Customers** can find medicines by name, salt or symptom, add to cart, set reminders in plain language ("remind me to take metformin at 8 am and 8 pm"), see today's doses, refill, track orders and send feedback.
 - **Admins** can ask what needs attention, check stock and the low-stock list, get review insights, and set their own reminders.
 - **Emergencies** (chest pain, overdose, self-harm and so on) always get a "call 112" reply first.
-- **Hybrid:** the Python assistant answers first (it's free, instant and can act). Questions it can't answer, such as "can I take Dolo with alcohol?", go to Gemini, which gives general information with health guardrails (no diagnosis or dose changes, emergencies to 112) and replies in the customer's language, Hindi and Hinglish included.
-- **Limits:** the assistant can only do what the signed-in user is allowed to do. If the Python service is down, Gemini answers instead; if both are down, the chat says it's offline. The rest of the app keeps working either way.
+- **Hybrid:** the Python assistant answers first (it's free, instant and can act). Questions it can't answer, such as "can I take Dolo with alcohol?", go to Groq (or Gemini when Groq is down or out of quota), which gives general information with health guardrails (no diagnosis or dose changes, emergencies to 112) and replies in the customer's language, Hindi and Hinglish included.
+- **Limits:** the assistant can only do what the signed-in user is allowed to do. If the Python service is down or asleep, Groq or Gemini answers instead; if all of them are down, the chat says it's offline. The rest of the app keeps working either way.
 
 ---
 
@@ -107,7 +107,8 @@ It's available on every page after sign-in.
 | Thymeleaf (+ Spring Security extras) | 3.1.2 |
 | Spring Validation, Spring Mail, Spring Scheduling | from Spring Boot 3.3.5 |
 | Apache POI (`poi-ooxml`, Excel export) | 5.3.0 |
-| Google Gemini API (optional: prescription reading, chat fallback) | `gemini-flash-latest` by default, called over REST |
+| Google Gemini API (optional: prescription reading, backup chat fallback) | `gemini-flash-latest` by default, called over REST |
+| Groq API (optional: chat fallback) | `llama-3.3-70b-versatile` by default, called over REST |
 | PostgreSQL JDBC driver | 42.7.4 |
 | Lombok | 1.18.46 |
 | JUnit 5 + Mockito (tests) | from `spring-boot-starter-test` |
@@ -201,14 +202,16 @@ export MEDIZON_ADMIN_NAME=Admin
 
 Optionally, set your own seller details for GST invoices and the site footer (see [Configuration](#configuration)), for example `SELLER_STATE="Maharashtra"` and `SELLER_GSTIN=...`. Until you do, placeholder values are used.
 
-Optionally, turn on AI prescription reading and the chat fallback with a Gemini API key (free from [Google AI Studio](https://aistudio.google.com)). Keep the key out of the code and out of git:
+Optionally, turn on AI prescription reading with a Gemini API key (free from [Google AI Studio](https://aistudio.google.com)), and the chat fallback with a Groq API key (free from [console.groq.com](https://console.groq.com)). Keep the keys out of the code and out of git:
 ```powershell
 # Windows: saved for new terminals, so open a new one afterwards
 setx GEMINI_API_KEY "your-key"
+setx GROQ_API_KEY "your-groq-key"
 ```
 ```bash
 # macOS / Linux
 export GEMINI_API_KEY=your-key
+export GROQ_API_KEY=your-groq-key
 ```
 The free tier has a small daily limit and may use what's sent to improve Google's models: test it with dummy prescriptions, and use a paid key before real customers' prescriptions go through it.
 
@@ -228,7 +231,7 @@ Open **http://localhost:8080**:
 cd medizon
 docker compose --profile app up --build
 ```
-This starts PostgreSQL, the assistant and the web app together. Put the `MEDIZON_ADMIN_*` values in a `medizon/.env` file first. That file is gitignored. `GEMINI_API_KEY` is passed through from the terminal you run it in (or the same `.env` file). After changing code, rebuild with `docker compose --profile app up -d --build`.
+This starts PostgreSQL, the assistant and the web app together. Put the `MEDIZON_ADMIN_*` values in a `medizon/.env` file first. That file is gitignored. `GEMINI_API_KEY` and `GROQ_API_KEY` are passed through from the terminal you run it in (or the same `.env` file). After changing code, rebuild with `docker compose --profile app up -d --build`.
 
 `docker-compose.yml` doesn't pass the `MAIL_*` or `SELLER_*` settings to the app yet. To use them in Docker, add them to the `app` service's `environment` list.
 
@@ -257,7 +260,9 @@ Every setting has a default for local development, and each can be overridden wi
 | `MEDIZON_ADMIN_EMAIL` / `MEDIZON_ADMIN_PASSWORD` / `MEDIZON_ADMIN_NAME` | — | The one admin account, applied on every start: created if missing, password and name updated, any other admin disabled. Unset: the existing admin is left alone. |
 | `ASSISTANT_URL` | `http://localhost:8001` | Where the assistant service runs |
 | `ASSISTANT_TOKEN` | empty | Shared secret. Set the same value on both services. |
-| `GEMINI_API_KEY` | empty | Google Gemini key for reading prescriptions and the chat fallback. Set it on the **web app**, not the assistant. Empty turns both off. |
+| `GEMINI_API_KEY` | empty | Google Gemini key for reading prescriptions and the backup chat fallback. Set it on the **web app**, not the assistant. Empty turns both off. |
+| `GROQ_API_KEY` | empty | Groq key for the chat fallback (answers what the Python assistant can't, or everything while it's down or asleep). Set it on the **web app**. |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model for the chat fallback. |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Gemini model. `gemini-flash-lite-latest` allows more free requests a day. |
 | `AI_PROVIDER` | `gemini` | Which AI reads prescriptions |
 | `AI_FAST_TRACK_SCORE` | `80` | AI score (out of 100, with no concerns) from which a prescription is fast-tracked for the pharmacist |
@@ -333,17 +338,18 @@ Uploads are limited to 5 MB per file and 26 MB per request (a return can carry 3
 - **Removing:** a prescription never used for an order is deleted with its file; one that was is hidden from the customer but kept, because the pharmacy must keep what it dispensed against.
 - **AI score:** worked out in Java from concrete checks, not the AI's own confidence, so the pharmacist sees why. It only reorders the queue.
 
-## When Gemini or the assistant is down
+## When Groq, Gemini or the assistant is down
 
-The shop never depends on either:
+The shop never depends on any of them:
 
 | What's down | Shop, cart, checkout | Prescriptions | Chat |
 |---|---|---|---|
-| Gemini (or out of quota) | works | saved and sent to the pharmacist unread | Python assistant only |
-| Python assistant | works | works | Gemini answers |
-| Both | works | sent to the pharmacist unread | says it's offline |
+| Groq (or out of quota) | works | works | Gemini answers instead |
+| Gemini (or out of quota) | works | saved and sent to the pharmacist unread | Groq answers |
+| Python assistant (down or asleep) | works | works | Groq answers (Gemini if Groq is down too) |
+| All three | works | sent to the pharmacist unread | says it's offline |
 
-After a failure each is skipped for a while (Gemini 2 minutes, 15 if the quota ran out; the assistant 30 seconds), so nobody waits on a timeout twice. At most 4 Gemini calls run at once. `/actuator/health` shows both as DEGRADED, never DOWN, so a load balancer won't restart a healthy shop.
+After a failure each is skipped for a while (Gemini 2 minutes, 15 if the quota ran out; Groq 2 minutes, 5 if the quota ran out; the assistant 30 seconds, after waiting at most 8 seconds for it), so nobody waits on a timeout twice. At most 4 calls each to Groq and Gemini run at once. `/actuator/health` shows them as DEGRADED, never DOWN, so a load balancer won't restart a healthy shop.
 
 ## How delivery and checkout work
 
@@ -367,8 +373,8 @@ After a failure each is skipped for a while (Gemini 2 minutes, 15 if the quota r
 The live demo runs on [Render](https://render.com) and redeploys from GitHub:
 
 1. **Push** your changes to `main`. With auto-deploy on, Render rebuilds from `medizon/Dockerfile`.
-2. **Environment** of the **web app** service: the database (`DB_URL`, `DB_USER`, `DB_PASSWORD`), `MEDIZON_ADMIN_*`, `BASE_URL`, `SELLER_*`, and `GEMINI_API_KEY` for AI. Paste secrets in Render only, never in the repository.
-3. **Assistant (optional):** deploy `medizon-assistant` as a second web service from its Dockerfile, then set `ASSISTANT_URL` on the web app to its address (and the same `ASSISTANT_TOKEN` on both). Without it, the chat uses Gemini.
+2. **Environment** of the **web app** service: the database (`DB_URL`, `DB_USER`, `DB_PASSWORD`), `MEDIZON_ADMIN_*`, `BASE_URL`, `SELLER_*`, and `GEMINI_API_KEY` and `GROQ_API_KEY` for AI. Paste secrets in Render only, never in the repository.
+3. **Assistant (optional):** deploy `medizon-assistant` as a second web service from its Dockerfile, then set `ASSISTANT_URL` on the web app to its address (and the same `ASSISTANT_TOKEN` on both). Without it, the chat uses Groq or Gemini.
 4. **Database changes apply themselves** on start: new tables and columns are created and older data is upgraded (no manual SQL).
 5. **Check** `/actuator/health` says UP.
 
@@ -398,7 +404,7 @@ MediZon/
 │       │   │   ├── web/              MVC controllers (customer and admin pages), "Delivers to" location cookies
 │       │   │   ├── api/              JSON endpoints (notifications, cart, location, account, orders, stock alerts,
 │       │   │   │                     assistant chat, monitoring)
-│       │   │   ├── monitoring/       Error grouping, performance timings, health of the assistant and Gemini
+│       │   │   ├── monitoring/       Error grouping, performance timings, health of the assistant, Groq and Gemini
 │       │   │   └── dto/              Forms and view models (address, billing, invoice, report period, sales rows ...)
 │       │   └── resources/
 │       │       ├── application.properties
