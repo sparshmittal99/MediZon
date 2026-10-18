@@ -1,11 +1,12 @@
 # MediZon
 
 Online medicine ordering with dose reminders, supply tracking, manual or automatic refills,
-prescription verification and a built-in chat assistant.
+AI-read prescriptions that a pharmacist approves and that fill the cart by themselves, and a built-in chat assistant.
 
 **Stack:** Java 17, Spring Boot 3.3, Spring Security, Spring Data JPA, PostgreSQL, Thymeleaf + Bootstrap 5,
 Apache POI (Excel export). Tests use JUnit 5 and Mockito.
 The assistant is a separate Python service (FastAPI + scikit-learn) in [`../medizon-assistant`](../medizon-assistant); it needs no external AI service or API key.
+Google Gemini (optional, `GEMINI_API_KEY`) reads uploaded prescriptions and answers chat questions the assistant can't.
 
 ## Run it
 
@@ -35,7 +36,8 @@ The admin creates every other account under **Admin > Users** with a role (see R
 
 Everything runs in `Asia/Kolkata` by default; change it with `MEDIZON_TZ`.
 To run the app and the assistant in Docker as well: `docker compose --profile app up --build`.
-MediZon works without the assistant running; the chat just says it's offline.
+MediZon works without the assistant running (the chat uses Gemini, or says it's offline) and without Gemini
+(prescriptions go to the pharmacist unread). See [When an AI service is down](#when-an-ai-service-is-down).
 
 ## Configuration
 
@@ -46,6 +48,9 @@ All settings are in `application.properties` and can be overridden with environm
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | PostgreSQL connection |
 | `ASSISTANT_URL` | Where the assistant service runs (default `http://localhost:8001`) |
 | `ASSISTANT_TOKEN` | Optional shared secret; set the same value on both services |
+| `GEMINI_API_KEY` | Google Gemini key (web app only): prescription reading and the chat fallback. Empty turns both off |
+| `GEMINI_MODEL` | Gemini model (default `gemini-flash-latest`; `gemini-flash-lite-latest` allows more free requests) |
+| `AI_PROVIDER`, `AI_FAST_TRACK_SCORE` | Which AI reads prescriptions (default `gemini`); AI score from which a prescription is fast-tracked (default 80) |
 | `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_USER`, `MAIL_PASSWORD` | Email copies of reminders and alerts (logged only when disabled) |
 | `UPLOAD_DIR` | Where prescription files and return photos are stored |
 | `SELLER_NAME`, `SELLER_GSTIN`, `SELLER_DRUG_LICENSE`, `SELLER_ADDRESS`, `SELLER_STATE`, `SELLER_PHONE`, `SELLER_EMAIL` | Seller details on GST invoices and in the site footer. `SELLER_STATE` decides CGST + SGST (same state as the customer) or IGST. Placeholder values are set in `application.properties` until real ones are given |
@@ -53,11 +58,16 @@ All settings are in `application.properties` and can be overridden with environm
 | `MEDIZON_ADMIN_EMAIL`, `MEDIZON_ADMIN_PASSWORD`, `MEDIZON_ADMIN_NAME` | The one admin account: created if missing, its password reset to this one on every start |
 | `MONITORING_TOKEN` | Lets a Prometheus scraper read `/actuator/prometheus` with `Authorization: Bearer <token>` (admins can always) |
 | `SLOW_REQUEST_MS`, `SLOW_QUERY_MS` | Requests (default 1000 ms) and database queries (default 500 ms) slower than this are logged |
+| `ERROR_ALERT_SEVERITY` | Errors at or above this severity (default `HIGH`) notify the admin |
+| `REMEMBER_ME_KEY` | Secret for "Keep me signed in"; without it those sign-ins end when the app restarts |
+| `MEDIZON_TZ` | Time zone for reminders and reports (default `Asia/Kolkata`) |
 
 ## Features
 
 **Customers**: search and browse by category, cart, checkout (COD, simulated UPI/card), order tracking,
-cancel before shipping, buy again, prescription upload, profile and address, notification centre,
+cancel before shipping, buy again, prescriptions (upload up to 5 at once, AI-read, checked by the customer before
+sending, medicines into the cart on approval; see Prescriptions below), "Notify me" back-in-stock alerts on
+out-of-stock products (the home page shows only what's in stock), profile and address, notification centre,
 desktop notifications, chat assistant, family members (each with their own medicines, reminders and supply),
 per-device alert settings (everyone, or only some members), choosing who each cart item is for (or the household's
 common OTC shelf), GST tax invoices, and returns with a reason and photos. A "Delivers to" location in the header
@@ -68,11 +78,13 @@ for the customer or for someone else with the receiver's name and phone); checko
 between them. Automatic refills go to the address chosen on each reminder, or the default one. One billing address
 (optional, with GSTIN) is set from the account menu; checkout shows it next to the shipping address and the tax
 invoice prints both. Without it, orders are billed to the account holder at the delivery address. In the cart a medicine can also be for "Others"
-(someone outside the family): it's delivered but not added to My medicines. Account settings: change password (current
-password first, then the new one twice) and sign out other devices.
+(someone outside the family): it's delivered but not added to My medicines, and can share a line with family members.
+Each family member has a patient name (as on prescriptions), shown in the cart, at checkout and on the invoice.
+Account settings: change password (current password first, then the new one twice) and sign out other devices.
 
-**Back office**: dashboard, customer order pipeline (Placed → Confirmed → Shipped → Delivered / Cancelled),
-prescription review with validity date, GST tax invoices, return review (approve or reject, pickup with optional
+**Back office**: dashboard (with sales by store for any day), customer order pipeline (Placed → Confirmed → Shipped → Delivered / Cancelled),
+prescription review (AI score and fast-track, medicines and packs pre-filled from the AI reading and the customer's
+cart, doctor, patient and date confirmed, validity date), GST tax invoices, return review (approve or reject, pickup with optional
 restock, refund), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, store-wise, medicines sold, HSN summary and returns sheets; CSV), the master catalogue and each store's catalogue, low-stock list, stores and delivery areas, user accounts by role, customer feedback, monitoring, and a chat assistant for the admin. Staff accounts are for running the shop only; they can't shop, order or set reminders.
 
 ## Roles and stores
@@ -143,6 +155,40 @@ restock, refund), a sales and returns report (a date range, a month or a financi
 - Each reminder becomes an in-app notification (bell), a desktop notification (the browser polls `/api/notifications/poll` every 30 s), and an email if mail is enabled.
   Each browser has an `mz_device` cookie; a device that follows only some members doesn't pop up or count the others' alerts.
 
+## Prescriptions
+
+```
+ upload 1-5 files ──► DRAFT (only the customer sees it) ──► Gemini reads each (PrescriptionScanService.scanAll)
+        │                                                    score = PrescriptionScore (Java checks, not AI confidence)
+        ▼
+ /prescriptions/review: customer removes wrong files, adds the doctor's name, sends ──► PENDING
+        │   requestedPacks = cart Rx lines for that patient, minus what approved prescriptions already cover
+        ▼
+ /admin/prescriptions: fast-track first; rows pre-filled (AI read / In cart / Check on file); pharmacist
+        confirms doctor, patient, date, medicines and packs ──► APPROVED with PrescriptionItems
+        │
+        ▼ PrescriptionCartFiller (after commit): each medicine into the cart for the member whose patient name
+          matches (PatientNames), else "Others" with the name; only what that patient doesn't already have
+        │
+ checkout ──► PrescriptionService.cover(): each Rx line from the valid prescriptions with packs left, the
+          patient's own first, split if needed; uncovered medicines named ──► PrescriptionUse per order line
+        │
+ all Rx packs ordered ──► USED_UP (customer told); cancelling an order gives its packs back
+```
+
+- `Prescription.isValid()`: approved, medicines recorded, not expired, not used up, not removed. Older approvals
+  without medicines stay on record but can't be used.
+- Removing: never used for an order, deleted with its file; used, hidden from the customer (`removed`) but kept.
+- Staff never see drafts (queue, "Recently reviewed", or the file).
+- Invoices print each line's patient and prescriber (`OrderItem.patientName`, `prescribedBy`), copied at checkout.
+
+## When an AI service is down
+
+`GeminiClient` and `AssistantClient` skip a failing service for a while (Gemini 2 minutes, 15 when the quota ran out;
+the assistant 30 seconds) and Gemini runs at most 4 calls at once, so a slow or dead service never ties up the web
+server. Prescriptions then go to the pharmacist unread; chat is answered by whichever of the two is up, and says it's
+offline only when both are down. Both show in `/actuator/health` as DEGRADED, never DOWN. `AiOutageTest` covers it.
+
 ## Monitoring
 
 **Admin > Monitoring** shows the health of each part (database, disk, assistant service, database pool), errors and
@@ -202,6 +248,7 @@ The site's pages are HTML (Thymeleaf). Everything under `/api` is JSON, errors i
 | `GET /api/orders` | The signed-in customer's orders, newest first |
 | `GET /api/orders/{id}` | One order with its lines and totals |
 | `GET /api/orders/{id}/invoice` | The GST invoice for an order that has shipped |
+| `POST /api/stock-alerts/{medicineId}` `{"on": true}` | Turns a back-in-stock alert on or off for the signed-in customer |
 
 Amounts are numbers in rupees (`1234.5`), never formatted text; the page adds the `₹` and the commas.
 
@@ -222,6 +269,10 @@ pages, offers quick-reply chips and product cards, and can open pages for you (f
 - show today's doses, mark a dose taken or skipped, list medicines and supply left, refill what's running low;
 - track orders, open the prescription upload page, send feedback or a question for the pharmacist;
 - set one-off reminders ("remind me to book a blood test on friday at 9").
+
+**Hybrid**: Python answers first. When it couldn't answer (`"unresolved": true` in its reply), or is down,
+`ai/GeminiChat` answers instead, with health guardrails (no diagnosis or dose changes, emergencies to 112, never
+inventing orders, stock or prices) in the customer's language. Gemini can't act; it points to the right page.
 
 **Admins** can ask it for:
 - what needs attention: orders to confirm and ship, prescriptions to review, low stock, recent bad reviews;
@@ -260,7 +311,7 @@ src/main/java/com/medizon
 ├── repository/  Spring Data repositories
 ├── service/     Business logic, scheduler, notifications, email, file storage, addresses, delivery areas,
 │                visitor cart, GST invoices, returns, sales report (SQL aggregation) and Excel export
-├── ai/          Assistant client, actions it may run, request loop
+├── ai/          Assistant client, actions it may run, request loop; Gemini client, prescription reader, chat fallback
 ├── web/         MVC controllers (Thymeleaf pages), customer and admin; DeliveryLocations ("Delivers to" cookies)
 ├── api/         JSON endpoints: notification polling, cart quantities and packs per person, location check,
 │                current-password check, assistant chat
@@ -270,7 +321,10 @@ src/main/resources
 └── static/      medizon.css theme, medizon.js (polling, desktop alerts, location picker, forms), assistant.js (chat widget)
 src/test/java/com/medizon
 ├── domain/      MedicationPlanScheduleTest (days left for daily, weekly and custom-date schedules), SharesTest
-└── service/     InvoiceMathTest, ReportPeriodTest, ExpirySweepTest (Mockito)
+├── service/     InvoiceMathTest, ReportPeriodTest, ExpirySweepTest, PrescriptionCoverageTest, PrescriptionDraftTest,
+│                PatientNamesTest, SharedMedicineTest, CartOthersTest (Mockito)
+├── dto/         PrescriptionScoreTest
+└── ai/          AiOutageTest (assistant and Gemini down, slow or both)
 ```
 
 Run the tests with `mvn test` (they are plain unit tests and need no database).
@@ -279,7 +333,9 @@ Run the tests with `mvn test` (they are plain unit tests and need no database).
 
 - Replace `ddl-auto=update` with Flyway migrations.
 - Connect a real payment gateway (Razorpay or similar) in `OrderService.createOrder`.
-- Move prescription files to object storage (S3) and keep them encrypted.
+- Move prescription files to object storage (S3) and keep them encrypted. On hosts with a wiped disk (e.g. Render
+  without a persistent disk) uploads are lost on every deploy.
+- Use a paid Gemini key: the free tier may use what's sent to improve Google's models.
 - Add SMS / WhatsApp / mobile push in `NotificationService.notify` for reminders, since browsers only show notifications while a tab is open.
 - Run one scheduler instance (or add ShedLock) if you scale horizontally.
 - Rate-limit `/api/assistant/chat`, log assistant actions for audit, and set `ASSISTANT_TOKEN`.
