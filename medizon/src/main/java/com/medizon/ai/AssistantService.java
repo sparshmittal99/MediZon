@@ -95,8 +95,23 @@ public class AssistantService {
             if (e instanceof RestClientException) log.warn("Assistant service unreachable: {}", e.getMessage());
             else log.error("Assistant chat failed", e);
             // Python is down or asleep: the LLM answers what it can (it can't act); offline only when all are down
-            return new Result(llm.answer(user, message).map(AssistantReply::text).orElseGet(AssistantReply::unavailable), state);
+            return new Result(withoutPython(user, message, payload), state);
         }
+    }
+
+    /**
+     * Opening the chat sends a silent greeting and buttons send a payload, both without text, so the LLM has nothing
+     * to answer: say hello (or that buttons need a minute) ourselves while it can still take typed questions.
+     */
+    private AssistantReply withoutPython(User user, String message, JsonNode payload) {
+        if (message != null && !message.isBlank()) return llm.answer(user, message).map(AssistantReply::text).orElseGet(AssistantReply::unavailable);
+        if (!llm.isAvailable()) return AssistantReply.unavailable();
+        if ("greet".equals(payload == null ? null : payload.path("intent").asText(null))) {
+            return AssistantReply.text(user.isAdmin()
+                    ? "Hi %s! Ask me anything about running MediZon.".formatted(user.getFirstName())
+                    : "Hi %s! Ask me about medicines, how to take them, or how to use MediZon.".formatted(user.getFirstName()));
+        }
+        return AssistantReply.text("Buttons need a minute while the assistant starts up. Please try again shortly, or type your question.");
     }
 
     private JsonNode run(String name, JsonNode args, User user) {

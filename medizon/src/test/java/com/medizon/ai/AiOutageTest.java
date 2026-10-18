@@ -119,6 +119,23 @@ class AiOutageTest {
     }
 
     @Test
+    void openingTheChatWhilePythonSleepsGreetsInsteadOfOffline() {
+        when(python.chat(any())).thenThrow(new ResourceAccessException("Read timed out"));
+        when(gemini.isAvailable()).thenReturn(true);
+        var greet = json.createObjectNode().put("intent", "greet");
+        var r = service.chat(user, "", greet, null).reply();
+        assertFalse(r.offline());
+        assertTrue(r.reply().startsWith("Hi Asha"));
+    }
+
+    @Test
+    void openingTheChatWithEverythingDownSaysOffline() {
+        when(python.chat(any())).thenThrow(new ResourceAccessException("Read timed out"));
+        var greet = json.createObjectNode().put("intent", "greet");
+        assertTrue(service.chat(user, "", greet, null).reply().offline());
+    }
+
+    @Test
     void unreachableGroqIsSkippedAndNeverThrowsAnythingElse() {
         GroqClient client = new GroqClient("test-key", "openai/gpt-oss-120b", "http://127.0.0.1:9");
         assertTrue(client.isAvailable());
