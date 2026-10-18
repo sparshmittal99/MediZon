@@ -15,8 +15,10 @@ import org.springframework.web.client.RestClientException;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Talks to the Python assistant. It sends the message with the conversation state; when the assistant asks
@@ -42,11 +44,34 @@ public class AssistantService {
     private final ChatFallback llm;
     private final ObjectMapper mapper;
 
-    public record Result(AssistantReply reply, JsonNode state) {}
+    /** {@code byLlm}: the LLM wrote this reply, so a short answer to it ("yes") should go back to the LLM. */
+    public record Result(AssistantReply reply, JsonNode state, boolean byLlm) {
+        public Result(AssistantReply reply, JsonNode state) { this(reply, state, false); }
+    }
+
+    /** "yes", "no", "ok", "haan", "add it", "the second one": an answer to the last question, not a new request. */
+    private static final Pattern FOLLOW_UP = Pattern.compile(
+            "^(yes|yeah|yep|yup|ya|yah|ok|okay|okk?|sure|please|pls|haan?|haa|ha|ji|hmm+|no|nope|nah|nahi|nahin|na|"
+            + "theek|thik|go|do|add|that|this|the|first|second|third|fourth|last|both|all|it|confirm|done)\\b.*",
+            Pattern.CASE_INSENSITIVE);
+    private static final int FOLLOW_UP_WORDS = 5;
 
     public Result chat(User user, String message, JsonNode payload, JsonNode state) {
+        return chat(user, message, payload, state, List.of(), false);
+    }
+
+    /**
+     * {@code history} is the chat so far, for the LLM; Python keeps its own {@code state}. {@code llmAskedLast}: the
+     * previous reply came from the LLM, so a short follow-up goes straight back to it; Python never saw that question.
+     */
+    public Result chat(User user, String message, JsonNode payload, JsonNode state, List<ChatFallback.Turn> history,
+                       boolean llmAskedLast) {
         if (user.isStaff() && !user.isAdmin()) {
             return new Result(AssistantReply.text("The assistant helps customers and the admin. Your account's pages are in the menu above."), state);
+        }
+        if (llmAskedLast && isFollowUp(message)) {
+            Optional<ChatFallback.Answer> answer = llm.answer(user, message, history);
+            if (answer.isPresent()) return new Result(reply(user, answer.get()), state, true);
         }
         ObjectNode req = mapper.createObjectNode();
         req.put("role", user.isAdmin() ? "admin" : "customer");
@@ -66,19 +91,21 @@ public class AssistantService {
                     Long cartCount = cartChanged ? cartService.count(user) : null;
                     String text = res.path("reply").asText("");
                     JsonNode cards = res.path("cards");
+                    boolean byLlm = false;
                     if (res.path("unresolved").asBoolean(false)) {
                         // Python couldn't answer: let the LLM, keeping Python's suggestion chips
-                        Optional<ChatFallback.Answer> answer = llm.answer(user, message);
+                        Optional<ChatFallback.Answer> answer = llm.answer(user, message, history);
                         if (answer.isPresent()) {
                             text = answer.get().text();
                             cards = mapper.createArrayNode();
                             if (answer.get().cartChanged()) cartCount = cartService.count(user);
+                            byLlm = true;
                         }
                     }
                     AssistantReply reply = new AssistantReply(text, cards,
                             res.path("suggestions"), res.path("navigate").isTextual() ? res.path("navigate").asText() : null,
                             cartCount, false);
-                    return new Result(reply, res.path("state"));
+                    return new Result(reply, res.path("state"), byLlm);
                 }
                 ObjectNode results = mapper.createObjectNode();
                 for (JsonNode call : calls) {
@@ -96,20 +123,31 @@ public class AssistantService {
             if (e instanceof RestClientException) log.warn("Assistant service unreachable: {}", e.getMessage());
             else log.error("Assistant chat failed", e);
             // Python is down or asleep: the LLM answers, and Groq can act too; offline only when all are down
-            return new Result(withoutPython(user, message, payload), state);
+            if (message != null && !message.isBlank()) {
+                return llm.answer(user, message, history).map(a -> new Result(reply(user, a), state, true))
+                        .orElseGet(() -> new Result(AssistantReply.unavailable(), state));
+            }
+            return new Result(withoutText(user, payload), state);
         }
+    }
+
+    private AssistantReply reply(User user, ChatFallback.Answer a) {
+        return a.cartChanged()
+                ? new AssistantReply(a.text(), mapper.createArrayNode(), mapper.createArrayNode(), null, cartService.count(user), false)
+                : AssistantReply.text(a.text());
+    }
+
+    static boolean isFollowUp(String message) {
+        if (message == null || message.isBlank()) return false;
+        String m = message.strip();
+        return m.split("\\s+").length <= FOLLOW_UP_WORDS && FOLLOW_UP.matcher(m).matches();
     }
 
     /**
      * Opening the chat sends a silent greeting and buttons send a payload, both without text, so the LLM has nothing
      * to answer: say hello (or that buttons need a minute) ourselves while it can still take typed questions.
      */
-    private AssistantReply withoutPython(User user, String message, JsonNode payload) {
-        if (message != null && !message.isBlank()) {
-            return llm.answer(user, message).map(a -> a.cartChanged()
-                    ? new AssistantReply(a.text(), mapper.createArrayNode(), mapper.createArrayNode(), null, cartService.count(user), false)
-                    : AssistantReply.text(a.text())).orElseGet(AssistantReply::unavailable);
-        }
+    private AssistantReply withoutText(User user, JsonNode payload) {
         if (!llm.isAvailable()) return AssistantReply.unavailable();
         if ("greet".equals(payload == null ? null : payload.path("intent").asText(null))) {
             return AssistantReply.text(user.isAdmin()

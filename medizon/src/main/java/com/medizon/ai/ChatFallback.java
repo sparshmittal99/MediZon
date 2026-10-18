@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -30,8 +32,14 @@ public class ChatFallback {
     /** What the LLM said, and whether it changed the cart (so the page updates its badge). */
     public record Answer(String text, boolean cartChanged) {}
 
+    /** One earlier message of this chat, so a follow-up ("add the second one", "and my returns?") makes sense. */
+    public record Turn(boolean fromUser, String text) {}
+
     private static final int MAX_MESSAGE = 1000;
     private static final int MAX_REPLY = 1500;
+    /** Earlier messages sent along, and how much of each: enough for follow-ups, cheap on quota. */
+    private static final int MAX_HISTORY = 10;
+    private static final int MAX_TURN = 600;
     /** Tool rounds before giving up; each round resends the whole conversation, which costs quota. */
     private static final int MAX_ROUNDS = 4;
     /** Tool results are cut to this many characters, to keep each request well inside Groq's tokens per minute. */
@@ -98,23 +106,26 @@ public class ChatFallback {
 
     public boolean isAvailable() { return groq.isAvailable() || gemini.isAvailable(); }
 
-    public Optional<Answer> answer(User user, String message) {
+    /** {@code history} is the chat so far, oldest first, without {@code message}. */
+    public Optional<Answer> answer(User user, String message, List<Turn> history) {
         if (message == null || message.isBlank() || !isAvailable()) return Optional.empty();
         String text = message.length() > MAX_MESSAGE ? message.substring(0, MAX_MESSAGE) : message;
+        List<Turn> recent = recent(history);
         boolean[] cartChanged = {false};
-        return askGroq(user, text, cartChanged)
-                .or(() -> askGemini((user.isAdmin() ? ADMIN : CUSTOMER).formatted(user.getFirstName()), text))
+        return askGroq(user, recent, text, cartChanged)
+                .or(() -> askGemini((user.isAdmin() ? ADMIN : CUSTOMER).formatted(user.getFirstName()), recent, text))
                 .map(String::strip)
                 .map(a -> new Answer(a.length() > MAX_REPLY ? a.substring(0, MAX_REPLY) + "…" : a, cartChanged[0]));
     }
 
     /** Groq with tools: runs what it asks for, sends back the results, until it answers in words. */
-    private Optional<String> askGroq(User user, String message, boolean[] cartChanged) {
+    private Optional<String> askGroq(User user, List<Turn> history, String message, boolean[] cartChanged) {
         if (!groq.isAvailable()) return Optional.empty();
         String now = LocalDateTime.now().format(NOW);
         ArrayNode messages = json.createArrayNode();
         messages.addObject().put("role", "system")
                 .put("content", (user.isAdmin() ? ADMIN_TOOLS : CUSTOMER_TOOLS).formatted(user.getFirstName(), now));
+        for (Turn t : history) messages.addObject().put("role", t.fromUser() ? "user" : "assistant").put("content", t.text());
         messages.addObject().put("role", "user").put("content", message);
         ArrayNode toolList = toolsFor(user);
         try {
@@ -159,11 +170,13 @@ public class ChatFallback {
         }
     }
 
-    private Optional<String> askGemini(String system, String message) {
+    private Optional<String> askGemini(String system, List<Turn> history, String message) {
         if (!gemini.isAvailable()) return Optional.empty();
         ObjectNode body = json.createObjectNode();
         body.putObject("systemInstruction").putArray("parts").addObject().put("text", system);
-        body.putArray("contents").addObject().put("role", "user").putArray("parts").addObject().put("text", message);
+        ArrayNode contents = body.putArray("contents");
+        for (Turn t : history) contents.addObject().put("role", t.fromUser() ? "user" : "model").putArray("parts").addObject().put("text", t.text());
+        contents.addObject().put("role", "user").putArray("parts").addObject().put("text", message);
         body.putObject("generationConfig").put("temperature", 0.3);
         try {
             return Optional.of(gemini.generate(body));
@@ -171,6 +184,24 @@ public class ChatFallback {
             log.warn("Gemini chat fallback failed: {}", e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * The last few turns, each cut short. Starts with the customer (models expect that) and merges back-to-back
+     * messages from the same side, like a reply split over two bubbles.
+     */
+    static List<Turn> recent(List<Turn> history) {
+        if (history == null || history.isEmpty()) return List.of();
+        List<Turn> merged = new ArrayList<>();
+        for (Turn t : history.subList(Math.max(0, history.size() - MAX_HISTORY), history.size())) {
+            if (t.text() == null || t.text().isBlank()) continue;
+            String text = t.text().length() > MAX_TURN ? t.text().substring(0, MAX_TURN) + "…" : t.text();
+            Turn last = merged.isEmpty() ? null : merged.get(merged.size() - 1);
+            if (last != null && last.fromUser() == t.fromUser()) merged.set(merged.size() - 1, new Turn(t.fromUser(), last.text() + "\n" + text));
+            else merged.add(new Turn(t.fromUser(), text));
+        }
+        while (!merged.isEmpty() && !merged.get(0).fromUser()) merged.remove(0);
+        return merged;
     }
 
     // ------------------------------------------------------------------ the actions, as the model sees them

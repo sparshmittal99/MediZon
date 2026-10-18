@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medizon.ai.AssistantService;
+import com.medizon.ai.ChatFallback;
 import com.medizon.dto.AssistantReply;
 import com.medizon.service.CurrentUser;
 import jakarta.servlet.http.HttpSession;
@@ -27,6 +28,8 @@ import java.util.Map;
 public class AssistantApi {
 
     private static final String STATE = "assistantState";
+    /** The last reply came from the LLM fallback (Groq or Gemini), not the Python assistant. */
+    private static final String LLM_LAST = "assistantLlmLast";
     private static final String TRANSCRIPT = "assistantTranscript";
     private static final int MAX_MESSAGES = 40;
     private static final int MAX_LENGTH = 1000;
@@ -45,9 +48,12 @@ public class AssistantApi {
         if (msg.isEmpty() && !hasPayload) return ResponseEntity.badRequest().body(AssistantReply.text("Type a message first."));
         if (msg.length() > MAX_LENGTH) msg = msg.substring(0, MAX_LENGTH);
 
-        AssistantService.Result result = assistant.chat(currentUser.get(), msg, req.payload(), state(session));
+        AssistantService.Result result = assistant.chat(currentUser.get(), msg, req.payload(), state(session), llmHistory(session),
+                Boolean.TRUE.equals(session.getAttribute(LLM_LAST)));
         if (result.state() != null && result.state().isObject()) session.setAttribute(STATE, result.state().toString());
         else session.removeAttribute(STATE);
+        if (result.byLlm()) session.setAttribute(LLM_LAST, true);
+        else session.removeAttribute(LLM_LAST);
 
         String shown = !msg.isEmpty() ? msg : req.label();
         List<String> transcript = transcript(session);
@@ -79,6 +85,7 @@ public class AssistantApi {
     public Map<String, Boolean> reset(HttpSession session) {
         session.removeAttribute(STATE);
         session.removeAttribute(TRANSCRIPT);
+        session.removeAttribute(LLM_LAST);
         return Map.of("ok", true);
     }
 
@@ -90,6 +97,26 @@ public class AssistantApi {
         } catch (JsonProcessingException e) {
             return null;
         }
+    }
+
+    /** The transcript as the LLM fallback reads it; a reply's medicine cards are listed so "the second one" resolves. */
+    private List<ChatFallback.Turn> llmHistory(HttpSession session) {
+        List<ChatFallback.Turn> turns = new ArrayList<>();
+        for (String json : transcript(session)) {
+            try {
+                JsonNode m = mapper.readTree(json);
+                StringBuilder text = new StringBuilder(m.path("text").asText(""));
+                List<String> shown = new ArrayList<>();
+                for (JsonNode c : m.path("cards")) {
+                    if (!c.path("title").asText("").isBlank()) {
+                        shown.add(c.path("title").asText() + (c.hasNonNull("id") ? " (id " + c.get("id").asText() + ")" : ""));
+                    }
+                }
+                if (!shown.isEmpty()) text.append("\n[Showed: ").append(String.join("; ", shown)).append("]");
+                turns.add(new ChatFallback.Turn("user".equals(m.path("from").asText()), text.toString()));
+            } catch (JsonProcessingException ignored) { }
+        }
+        return turns;
     }
 
     @SuppressWarnings("unchecked")
