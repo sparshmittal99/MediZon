@@ -29,7 +29,7 @@ import java.util.*;
 public class AssistantTools {
 
     private static final Set<String> CUSTOMER = Set.of("search_medicines", "medicine_details", "add_to_cart",
-            "cart_summary", "my_orders", "my_plans", "todays_doses", "create_plan", "mark_dose", "refill_plan",
+            "cart_summary", "my_orders", "my_returns", "my_plans", "todays_doses", "create_plan", "mark_dose", "refill_plan",
             "submit_feedback", "create_reminder", "list_reminders", "complete_reminder");
     private static final Set<String> ADMIN = Set.of("search_medicines", "store_tasks", "review_data",
             "create_reminder", "list_reminders", "complete_reminder");
@@ -49,6 +49,7 @@ public class AssistantTools {
     private final ReminderService reminderService;
     private final FeedbackService feedbackService;
     private final ReviewService reviewService;
+    private final ReturnService returnService;
     private final OrderRepository orderRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final FeedbackRepository feedbackRepository;
@@ -65,6 +66,7 @@ public class AssistantTools {
             case "add_to_cart" -> addToCart(user, args.path("medicine_id").asLong(), args.path("quantity").asInt(1), pin);
             case "cart_summary" -> cart(user, pin);
             case "my_orders" -> orderService.recentForUser(user).stream().map(this::order).toList();
+            case "my_returns" -> returnService.forUser(user).stream().limit(MAX_RESULTS).map(this::returnRequest).toList();
             case "my_plans" -> planService.forUser(user).stream().map(this::plan).toList();
             case "todays_doses" -> planService.todaysDoses(user).stream().map(s -> Map.of(
                     "plan_id", s.getPlan().getId(),
@@ -205,6 +207,12 @@ public class AssistantTools {
                 "total", o.getTotal(), "placed", o.getCreatedAt().format(DAY),
                 "items", o.getItems().stream().map(i -> i.getQuantity() + " × " + i.getMedicineName()).toList(),
                 "url", "/orders/" + o.getId());
+    }
+
+    private Map<String, Object> returnRequest(ReturnRequest r) {
+        return Map.of("return_number", r.getReturnNumber(), "order_number", r.getOrder().getOrderNumber(),
+                "status", r.getStatus().getLabel(), "packs", r.getPackCount(), "refund", Objects.requireNonNullElse(r.getRefundAmount(), java.math.BigDecimal.ZERO),
+                "requested", r.getCreatedAt().format(DAY), "url", "/orders/" + r.getOrder().getId());
     }
 
     // ------------------------------------------------------------------ medication plans

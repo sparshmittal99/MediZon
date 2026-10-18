@@ -87,7 +87,7 @@ It's available on every page after sign-in.
 - **Customers** can find medicines by name, salt or symptom, add to cart, set reminders in plain language ("remind me to take metformin at 8 am and 8 pm"), see today's doses, refill, track orders and send feedback.
 - **Admins** can ask what needs attention, check stock and the low-stock list, get review insights, and set their own reminders.
 - **Emergencies** (chest pain, overdose, self-harm and so on) always get a "call 112" reply first.
-- **Hybrid:** the Python assistant answers first (it's free, instant and can act). Questions it can't answer, such as "can I take Dolo with alcohol?", go to Groq (or Gemini when Groq is down or out of quota), which gives general information with health guardrails (no diagnosis or dose changes, emergencies to 112) and replies in the customer's language, Hindi and Hinglish included.
+- **Hybrid:** the Python assistant answers first (it's free, instant and can act). Questions it can't answer, such as "can I take Dolo with alcohol?", go to Groq (or Gemini when Groq is down or out of quota), which gives general information with health guardrails (no diagnosis or dose changes, emergencies to 112) and replies in the customer's language, Hindi and Hinglish included. Groq can also act through the same actions as the Python assistant (orders, returns, cart, dose reminders and reminders), as the signed-in user, so chat keeps working while the Python service is asleep. Gemini can't act; it points to the right page.
 - **Limits:** the assistant can only do what the signed-in user is allowed to do. If the Python service is down or asleep, Groq or Gemini answers instead; if all of them are down, the chat says it's offline. The rest of the app keeps working either way.
 
 ---

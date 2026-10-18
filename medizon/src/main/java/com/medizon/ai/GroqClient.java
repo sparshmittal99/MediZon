@@ -72,6 +72,21 @@ public class GroqClient {
      * @throws GroqUnavailableException when it's down, out of quota, resting after a failure, or answers nothing
      */
     public String chat(String system, String message, double temperature) {
+        ArrayNode messages = json.createArrayNode();
+        messages.addObject().put("role", "system").put("content", system);
+        messages.addObject().put("role", "user").put("content", message);
+        String text = complete(messages, null, temperature).path("content").asText(null);
+        if (text == null || text.isBlank()) throw new GroqUnavailableException("Groq returned no answer");
+        return text;
+    }
+
+    /**
+     * Sends a conversation, optionally with tools the model may call, and returns the model's message: its
+     * {@code content}, or the {@code tool_calls} it wants run first.
+     *
+     * @throws GroqUnavailableException when it's down, out of quota, resting after a failure, or answers nothing
+     */
+    public JsonNode complete(ArrayNode messages, ArrayNode tools, double temperature) {
         if (!isAvailable()) throw new GroqUnavailableException("Groq is " + (isConfigured() ? "resting after a failure" : "not configured"));
         try {
             if (!slots.tryAcquire(2, TimeUnit.SECONDS)) throw new GroqUnavailableException("Groq is busy with other requests");
@@ -82,13 +97,16 @@ public class GroqClient {
         try {
             for (String model = nextModel(); model != null; model = nextModel()) {
                 try {
-                    return ask(model, system, message, temperature);
+                    return ask(model, messages, tools, temperature);
                 } catch (HttpClientErrorException.TooManyRequests e) {
                     modelSkipUntil.put(model, Instant.now().plus(QUOTA_COOL_DOWN));
                     log.warn("Groq {} quota used up; trying the next model for {} minutes", model, QUOTA_COOL_DOWN.toMinutes());
                 }
             }
             throw new GroqUnavailableException("Groq quota used up on every model");
+        } catch (HttpClientErrorException.BadRequest e) {
+            // This request (often a garbled tool call), not Groq: don't rest, the next message may well work
+            throw new GroqUnavailableException("Groq rejected the request: " + e.getResponseBodyAsString(), e);
         } catch (RestClientException e) {
             rest(COOL_DOWN, e.getMessage());
             throw new GroqUnavailableException("Groq unreachable", e);
@@ -97,23 +115,22 @@ public class GroqClient {
         }
     }
 
-    private String ask(String model, String system, String message, double temperature) {
+    private JsonNode ask(String model, ArrayNode messages, ArrayNode tools, double temperature) {
         ObjectNode body = json.createObjectNode().put("model", model).put("temperature", temperature)
                 .put("max_completion_tokens", MAX_TOKENS);
         // Reasoning models think before answering; a little is plenty for chat and saves time and quota
         if (model.startsWith("openai/gpt-oss")) body.put("reasoning_effort", "low");
-        ArrayNode messages = body.putArray("messages");
-        messages.addObject().put("role", "system").put("content", system);
-        messages.addObject().put("role", "user").put("content", message);
+        body.set("messages", messages);
+        if (tools != null && !tools.isEmpty()) body.set("tools", tools);
         JsonNode res = http.post().uri("/chat/completions")
                 .header("Authorization", "Bearer " + apiKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body)
                 .retrieve()
                 .body(JsonNode.class);
-        String text = res == null ? null : res.at("/choices/0/message/content").asText(null);
-        if (text == null || text.isBlank()) throw new GroqUnavailableException("Groq returned no answer");
-        return text;
+        JsonNode message = res == null ? null : res.at("/choices/0/message");
+        if (message == null || !message.isObject()) throw new GroqUnavailableException("Groq returned no answer");
+        return message;
     }
 
     /** The first model whose quota isn't used up, or null. */

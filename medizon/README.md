@@ -276,7 +276,9 @@ pages, offers quick-reply chips and product cards, and can open pages for you (f
 **Hybrid**: Python answers first. When it couldn't answer (`"unresolved": true` in its reply), or is down,
 `ai/ChatFallback` answers instead (Groq, then Gemini when Groq is down or out of quota), with health guardrails (no
 diagnosis or dose changes, emergencies to 112, never inventing orders, stock or prices) in the customer's language.
-The LLM can't act; it points to the right page.
+Groq can act through the same `AssistantTools` as Python (orders, returns, cart, dose reminders and reminders,
+always as the signed-in user), so chat still does things while Python is asleep. Gemini can't act; it points to the
+right page.
 
 **Admins** can ask it for:
 - what needs attention: orders to confirm and ship, prescriptions to review, low stock, recent bad reviews;

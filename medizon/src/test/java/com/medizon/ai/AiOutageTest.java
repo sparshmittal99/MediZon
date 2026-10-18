@@ -54,7 +54,7 @@ class AiOutageTest {
     @Test
     void geminiAnswersWhatPythonCouldNot() {
         when(python.chat(any())).thenReturn(pythonReply("Sorry, I didn't quite get that.", true));
-        when(gemini.answer(any(), any())).thenReturn(Optional.of("Avoid alcohol with paracetamol."));
+        when(gemini.answer(any(), any())).thenReturn(Optional.of(new ChatFallback.Answer("Avoid alcohol with paracetamol.", false)));
         var r = service.chat(user, "can I take dolo with alcohol", null, null).reply();
         assertEquals("Avoid alcohol with paracetamol.", r.reply());
         assertEquals(1, r.suggestions().size());     // Python's chips stay
@@ -70,7 +70,7 @@ class AiOutageTest {
     @Test
     void pythonDownGeminiAnswers() {
         when(python.chat(any())).thenThrow(new ResourceAccessException("Connection refused"));
-        when(gemini.answer(any(), any())).thenReturn(Optional.of("Search for it on the Shop page."));
+        when(gemini.answer(any(), any())).thenReturn(Optional.of(new ChatFallback.Answer("Search for it on the Shop page.", false)));
         var r = service.chat(user, "do you have dolo", null, null).reply();
         assertEquals("Search for it on the Shop page.", r.reply());
         assertFalse(r.offline());
@@ -177,15 +177,60 @@ class AiOutageTest {
         assertThrows(GroqClient.GroqUnavailableException.class, () -> client.chat("system", "hi", 0.3));
     }
 
+    private ObjectNode groqSays(String text) {
+        return json.createObjectNode().put("role", "assistant").put("content", text);
+    }
+
     @Test
     void groqAnswersFirst() {
         GroqClient groq = mock(GroqClient.class);
         GeminiClient gem = mock(GeminiClient.class);
         when(groq.isAvailable()).thenReturn(true);
         when(gem.isAvailable()).thenReturn(true);
-        when(groq.chat(any(), any(), anyDouble())).thenReturn(" From Groq ");
-        assertEquals(Optional.of("From Groq"), new ChatFallback(groq, gem, json).answer(user, "can I take dolo with alcohol"));
+        when(groq.complete(any(), any(), anyDouble())).thenReturn(groqSays(" From Groq "));
+        var a = new ChatFallback(groq, gem, mock(AssistantTools.class), json).answer(user, "can I take dolo with alcohol");
+        assertEquals("From Groq", a.orElseThrow().text());
         verify(gem, never()).generate(any());
+    }
+
+    @Test
+    void groqLooksUpOrdersAsTheUserThenAnswers() {
+        GroqClient groq = mock(GroqClient.class);
+        AssistantTools tools = mock(AssistantTools.class);
+        when(groq.isAvailable()).thenReturn(true);
+        ObjectNode wantsOrders = json.createObjectNode().put("role", "assistant");
+        wantsOrders.putArray("tool_calls").addObject().put("id", "call_1").put("type", "function")
+                .putObject("function").put("name", "my_orders").put("arguments", "{}");
+        ObjectNode wantsCart = json.createObjectNode().put("role", "assistant");
+        wantsCart.putArray("tool_calls").addObject().put("id", "call_2").put("type", "function")
+                .putObject("function").put("name", "add_to_cart").put("arguments", "{\"medicine_id\": 7, \"quantity\": 2}");
+        when(groq.complete(any(), any(), anyDouble())).thenReturn(wantsOrders, wantsCart, groqSays("Your order MZ1 is Shipped; I added 2 packs."));
+        when(tools.execute(eq("my_orders"), any(), eq(user))).thenReturn(List.of(java.util.Map.of("order_number", "MZ1", "status", "Shipped")));
+        when(tools.execute(eq("add_to_cart"), any(), eq(user))).thenReturn(java.util.Map.of("ok", true));
+
+        var a = new ChatFallback(groq, mock(GeminiClient.class), tools, json).answer(user, "where is my order, and add 2 more").orElseThrow();
+        assertEquals("Your order MZ1 is Shipped; I added 2 packs.", a.text());
+        assertTrue(a.cartChanged());
+        verify(tools).execute(eq("add_to_cart"), argThat(args -> args.path("medicine_id").asLong() == 7), eq(user));
+        var sent = org.mockito.ArgumentCaptor.forClass(com.fasterxml.jackson.databind.node.ArrayNode.class);
+        verify(groq, times(3)).complete(sent.capture(), any(), anyDouble());
+        // the same conversation grows: system, user, then a call and its result per round
+        assertTrue(sent.getValue().toString().contains("MZ1"));
+    }
+
+    @Test
+    void aFailingActionGoesBackToGroqAsAnError() {
+        GroqClient groq = mock(GroqClient.class);
+        AssistantTools tools = mock(AssistantTools.class);
+        when(groq.isAvailable()).thenReturn(true);
+        ObjectNode wants = json.createObjectNode().put("role", "assistant");
+        wants.putArray("tool_calls").addObject().put("id", "c").put("type", "function")
+                .putObject("function").put("name", "create_reminder").put("arguments", "{\"text\":\"x\",\"due_at\":\"yesterday\"}");
+        when(groq.complete(any(), any(), anyDouble())).thenReturn(wants, groqSays("What time should I remind you?"));
+        when(tools.execute(any(), any(), any())).thenThrow(new com.medizon.service.BusinessException("Pick a time in the future."));
+        var a = new ChatFallback(groq, mock(GeminiClient.class), tools, json).answer(user, "remind me yesterday");
+        assertEquals("What time should I remind you?", a.orElseThrow().text());
+        assertFalse(a.get().cartChanged());
     }
 
     @Test
@@ -194,15 +239,16 @@ class AiOutageTest {
         GeminiClient gem = mock(GeminiClient.class);
         when(groq.isAvailable()).thenReturn(true);
         when(gem.isAvailable()).thenReturn(true);
-        when(groq.chat(any(), any(), anyDouble())).thenThrow(new GroqClient.GroqUnavailableException("quota used up"));
+        when(groq.complete(any(), any(), anyDouble())).thenThrow(new GroqClient.GroqUnavailableException("quota used up"));
         when(gem.generate(any())).thenReturn("From Gemini");
-        assertEquals(Optional.of("From Gemini"), new ChatFallback(groq, gem, json).answer(user, "can I take dolo with alcohol"));
+        var a = new ChatFallback(groq, gem, mock(AssistantTools.class), json).answer(user, "can I take dolo with alcohol");
+        assertEquals("From Gemini", a.orElseThrow().text());
     }
 
     @Test
     void bothLlmsDownIsEmpty() {
         GroqClient groq = mock(GroqClient.class);
         GeminiClient gem = mock(GeminiClient.class);
-        assertEquals(Optional.empty(), new ChatFallback(groq, gem, json).answer(user, "can I take dolo with alcohol"));
+        assertEquals(Optional.empty(), new ChatFallback(groq, gem, mock(AssistantTools.class), json).answer(user, "can I take dolo with alcohol"));
     }
 }

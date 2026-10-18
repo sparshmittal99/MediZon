@@ -68,10 +68,11 @@ public class AssistantService {
                     JsonNode cards = res.path("cards");
                     if (res.path("unresolved").asBoolean(false)) {
                         // Python couldn't answer: let the LLM, keeping Python's suggestion chips
-                        Optional<String> answer = llm.answer(user, message);
+                        Optional<ChatFallback.Answer> answer = llm.answer(user, message);
                         if (answer.isPresent()) {
-                            text = answer.get();
+                            text = answer.get().text();
                             cards = mapper.createArrayNode();
+                            if (answer.get().cartChanged()) cartCount = cartService.count(user);
                         }
                     }
                     AssistantReply reply = new AssistantReply(text, cards,
@@ -94,7 +95,7 @@ public class AssistantService {
         } catch (RuntimeException e) {     // unreachable, a bad answer, anything: chat must never break the page
             if (e instanceof RestClientException) log.warn("Assistant service unreachable: {}", e.getMessage());
             else log.error("Assistant chat failed", e);
-            // Python is down or asleep: the LLM answers what it can (it can't act); offline only when all are down
+            // Python is down or asleep: the LLM answers, and Groq can act too; offline only when all are down
             return new Result(withoutPython(user, message, payload), state);
         }
     }
@@ -104,7 +105,11 @@ public class AssistantService {
      * to answer: say hello (or that buttons need a minute) ourselves while it can still take typed questions.
      */
     private AssistantReply withoutPython(User user, String message, JsonNode payload) {
-        if (message != null && !message.isBlank()) return llm.answer(user, message).map(AssistantReply::text).orElseGet(AssistantReply::unavailable);
+        if (message != null && !message.isBlank()) {
+            return llm.answer(user, message).map(a -> a.cartChanged()
+                    ? new AssistantReply(a.text(), mapper.createArrayNode(), mapper.createArrayNode(), null, cartService.count(user), false)
+                    : AssistantReply.text(a.text())).orElseGet(AssistantReply::unavailable);
+        }
         if (!llm.isAvailable()) return AssistantReply.unavailable();
         if ("greet".equals(payload == null ? null : payload.path("intent").asText(null))) {
             return AssistantReply.text(user.isAdmin()
