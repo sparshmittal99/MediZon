@@ -120,7 +120,7 @@ class AiOutageTest {
 
     @Test
     void unreachableGroqIsSkippedAndNeverThrowsAnythingElse() {
-        GroqClient client = new GroqClient("test-key", "llama-3.3-70b-versatile", "http://127.0.0.1:9");
+        GroqClient client = new GroqClient("test-key", "openai/gpt-oss-120b", "http://127.0.0.1:9");
         assertTrue(client.isAvailable());
         assertThrows(GroqClient.GroqUnavailableException.class, () -> client.chat("system", "hi", 0.3));
         assertFalse(client.isAvailable());
@@ -129,8 +129,33 @@ class AiOutageTest {
     }
 
     @Test
+    void groqMovesToTheNextModelWhenOneRunsOutOfQuota() throws Exception {
+        java.util.List<String> asked = new java.util.concurrent.CopyOnWriteArrayList<>();
+        com.sun.net.httpserver.HttpServer fake = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        fake.createContext("/chat/completions", ex -> {
+            String model = json.readTree(ex.getRequestBody()).path("model").asText();
+            asked.add(model);
+            byte[] out = (model.equals("big") ? "{}" : "{\"choices\":[{\"message\":{\"content\":\"From small\"}}]}").getBytes();
+            ex.getResponseHeaders().add("Content-Type", "application/json");
+            ex.sendResponseHeaders(model.equals("big") ? 429 : 200, out.length);
+            ex.getResponseBody().write(out);
+            ex.close();
+        });
+        fake.start();
+        try {
+            GroqClient client = new GroqClient("test-key", "big, small", "http://127.0.0.1:" + fake.getAddress().getPort());
+            assertEquals("From small", client.chat("system", "hi", 0.3));
+            assertEquals("From small", client.chat("system", "hi", 0.3));
+            assertEquals(List.of("big", "small", "small"), asked);    // the used-up model isn't asked again
+            assertTrue(client.isAvailable());
+        } finally {
+            fake.stop(0);
+        }
+    }
+
+    @Test
     void groqWithoutKeyIsOff() {
-        GroqClient client = new GroqClient("", "llama-3.3-70b-versatile", "http://127.0.0.1:9");
+        GroqClient client = new GroqClient("", "openai/gpt-oss-120b", "http://127.0.0.1:9");
         assertFalse(client.isConfigured());
         assertThrows(GroqClient.GroqUnavailableException.class, () -> client.chat("system", "hi", 0.3));
     }

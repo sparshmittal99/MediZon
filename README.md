@@ -108,7 +108,7 @@ It's available on every page after sign-in.
 | Spring Validation, Spring Mail, Spring Scheduling | from Spring Boot 3.3.5 |
 | Apache POI (`poi-ooxml`, Excel export) | 5.3.0 |
 | Google Gemini API (optional: prescription reading, backup chat fallback) | `gemini-flash-latest` by default, called over REST |
-| Groq API (optional: chat fallback) | `llama-3.3-70b-versatile` by default, called over REST |
+| Groq API (optional: chat fallback) | `openai/gpt-oss-120b`, then `openai/gpt-oss-20b` by default, called over REST |
 | PostgreSQL JDBC driver | 42.7.4 |
 | Lombok | 1.18.46 |
 | JUnit 5 + Mockito (tests) | from `spring-boot-starter-test` |
@@ -262,7 +262,7 @@ Every setting has a default for local development, and each can be overridden wi
 | `ASSISTANT_TOKEN` | empty | Shared secret. Set the same value on both services. |
 | `GEMINI_API_KEY` | empty | Google Gemini key for reading prescriptions and the backup chat fallback. Set it on the **web app**, not the assistant. Empty turns both off. |
 | `GROQ_API_KEY` | empty | Groq key for the chat fallback (answers what the Python assistant can't, or everything while it's down or asleep). Set it on the **web app**. |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model for the chat fallback. |
+| `GROQ_MODEL` | `openai/gpt-oss-120b,openai/gpt-oss-20b` | Groq models for the chat fallback, tried in order; when one runs out of its daily quota the next answers. |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Gemini model. `gemini-flash-lite-latest` allows more free requests a day. |
 | `AI_PROVIDER` | `gemini` | Which AI reads prescriptions |
 | `AI_FAST_TRACK_SCORE` | `80` | AI score (out of 100, with no concerns) from which a prescription is fast-tracked for the pharmacist |

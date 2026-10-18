@@ -15,15 +15,20 @@ import org.springframework.web.client.RestClientException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Calls Groq (console.groq.com) for the chat fallback: fast, with a large free daily quota. Set {@code GROQ_API_KEY};
- * {@code GROQ_MODEL} changes the model. Text only: prescriptions are still read by Gemini.
+ * Calls Groq (console.groq.com) for the chat fallback: fast, with a free daily quota. Set {@code GROQ_API_KEY};
+ * {@code GROQ_MODEL} is a comma-separated list of models tried in order. Groq's quota is per model, so when one runs
+ * out the next one answers. Text only: prescriptions are still read by Gemini.
  *
- * <p>Like {@link GeminiClient}, a failing Groq is skipped for a while (longer when the quota ran out) and chat carries
- * on with Gemini, then the Python reply.
+ * <p>Like {@link GeminiClient}, a failing Groq is skipped for a while (a model whose quota ran out, just that model)
+ * and chat carries on with Gemini, then the Python reply.
  */
 @Slf4j
 @Component
@@ -34,17 +39,21 @@ public class GroqClient {
     private static final int MAX_CONCURRENT = 4;
 
     private final String apiKey;
-    private final String model;
+    /** Most replies are a few sentences; the cap also bounds reasoning, so a chat can't eat the per-minute tokens. */
+    private static final int MAX_TOKENS = 1024;
+
+    private final List<String> models;
+    private final Map<String, Instant> modelSkipUntil = new ConcurrentHashMap<>();
     private final RestClient http;
     private final ObjectMapper json = new ObjectMapper();
     private final Semaphore slots = new Semaphore(MAX_CONCURRENT);
     private volatile Instant skipUntil = Instant.EPOCH;
 
     public GroqClient(@Value("${medizon.ai.groq.api-key:}") String apiKey,
-                      @Value("${medizon.ai.groq.model:llama-3.3-70b-versatile}") String model,
+                      @Value("${medizon.ai.groq.model:openai/gpt-oss-120b,openai/gpt-oss-20b}") String models,
                       @Value("${medizon.ai.groq.url:https://api.groq.com/openai/v1}") String baseUrl) {
         this.apiKey = apiKey.trim();
-        this.model = model.trim();
+        this.models = Arrays.stream(models.split(",")).map(String::trim).filter(m -> !m.isEmpty()).toList();
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5_000);
         factory.setReadTimeout(20_000);
@@ -52,10 +61,10 @@ public class GroqClient {
     }
 
     /** Has a key. */
-    public boolean isConfigured() { return !apiKey.isEmpty(); }
+    public boolean isConfigured() { return !apiKey.isEmpty() && !models.isEmpty(); }
 
-    /** Configured and not resting after a failure. */
-    public boolean isAvailable() { return isConfigured() && Instant.now().isAfter(skipUntil); }
+    /** Configured, not resting after a failure, and some model still has quota. */
+    public boolean isAvailable() { return isConfigured() && Instant.now().isAfter(skipUntil) && nextModel() != null; }
 
     /**
      * Sends one system instruction and one user message and returns the answer's text.
@@ -71,22 +80,15 @@ public class GroqClient {
             throw new GroqUnavailableException("Interrupted waiting for Groq");
         }
         try {
-            ObjectNode body = json.createObjectNode().put("model", model).put("temperature", temperature);
-            ArrayNode messages = body.putArray("messages");
-            messages.addObject().put("role", "system").put("content", system);
-            messages.addObject().put("role", "user").put("content", message);
-            JsonNode res = http.post().uri("/chat/completions")
-                    .header("Authorization", "Bearer " + apiKey)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(body)
-                    .retrieve()
-                    .body(JsonNode.class);
-            String text = res == null ? null : res.at("/choices/0/message/content").asText(null);
-            if (text == null || text.isBlank()) throw new GroqUnavailableException("Groq returned no answer");
-            return text;
-        } catch (HttpClientErrorException.TooManyRequests e) {
-            rest(QUOTA_COOL_DOWN, "quota used up");
-            throw new GroqUnavailableException("Groq quota used up", e);
+            for (String model = nextModel(); model != null; model = nextModel()) {
+                try {
+                    return ask(model, system, message, temperature);
+                } catch (HttpClientErrorException.TooManyRequests e) {
+                    modelSkipUntil.put(model, Instant.now().plus(QUOTA_COOL_DOWN));
+                    log.warn("Groq {} quota used up; trying the next model for {} minutes", model, QUOTA_COOL_DOWN.toMinutes());
+                }
+            }
+            throw new GroqUnavailableException("Groq quota used up on every model");
         } catch (RestClientException e) {
             rest(COOL_DOWN, e.getMessage());
             throw new GroqUnavailableException("Groq unreachable", e);
@@ -95,10 +97,36 @@ public class GroqClient {
         }
     }
 
+    private String ask(String model, String system, String message, double temperature) {
+        ObjectNode body = json.createObjectNode().put("model", model).put("temperature", temperature)
+                .put("max_completion_tokens", MAX_TOKENS);
+        // Reasoning models think before answering; a little is plenty for chat and saves time and quota
+        if (model.startsWith("openai/gpt-oss")) body.put("reasoning_effort", "low");
+        ArrayNode messages = body.putArray("messages");
+        messages.addObject().put("role", "system").put("content", system);
+        messages.addObject().put("role", "user").put("content", message);
+        JsonNode res = http.post().uri("/chat/completions")
+                .header("Authorization", "Bearer " + apiKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(JsonNode.class);
+        String text = res == null ? null : res.at("/choices/0/message/content").asText(null);
+        if (text == null || text.isBlank()) throw new GroqUnavailableException("Groq returned no answer");
+        return text;
+    }
+
+    /** The first model whose quota isn't used up, or null. */
+    private String nextModel() {
+        Instant now = Instant.now();
+        return models.stream().filter(m -> now.isAfter(modelSkipUntil.getOrDefault(m, Instant.EPOCH))).findFirst().orElse(null);
+    }
+
     /** For the health check: why it's not available, or null when it is. */
     public String unavailableReason() {
         if (!isConfigured()) return "not configured (no GROQ_API_KEY)";
-        return isAvailable() ? null : "skipped after a failure until " + skipUntil;
+        if (!Instant.now().isAfter(skipUntil)) return "skipped after a failure until " + skipUntil;
+        return nextModel() == null ? "quota used up on every model; retrying soon" : null;
     }
 
     private void rest(Duration d, String why) {

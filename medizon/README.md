@@ -50,7 +50,7 @@ All settings are in `application.properties` and can be overridden with environm
 | `ASSISTANT_URL` | Where the assistant service runs (default `http://localhost:8001`) |
 | `ASSISTANT_TOKEN` | Optional shared secret; set the same value on both services |
 | `GEMINI_API_KEY` | Google Gemini key (web app only): prescription reading and the backup chat fallback. Empty turns both off |
-| `GROQ_API_KEY`, `GROQ_MODEL` | Groq key (web app only) for the chat fallback; model (default `llama-3.3-70b-versatile`) |
+| `GROQ_API_KEY`, `GROQ_MODEL` | Groq key (web app only) for the chat fallback; models tried in order (default `openai/gpt-oss-120b,openai/gpt-oss-20b`) |
 | `GEMINI_MODEL` | Gemini model (default `gemini-flash-latest`; `gemini-flash-lite-latest` allows more free requests) |
 | `AI_PROVIDER`, `AI_FAST_TRACK_SCORE` | Which AI reads prescriptions (default `gemini`); AI score from which a prescription is fast-tracked (default 80) |
 | `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_USER`, `MAIL_PASSWORD` | Email copies of reminders and alerts (logged only when disabled) |
