@@ -35,6 +35,7 @@ public class GlobalModelAdvice {
     private final AddressService addressService;
     private final CatalogService catalog;
     private final StockAlertService stockAlerts;
+    private final LiveUpdates liveUpdates;
 
     @ModelAttribute
     public void common(Model model, HttpServletRequest request, HttpServletResponse response) {
@@ -62,6 +63,9 @@ public class GlobalModelAdvice {
                 model.addAttribute("selectedAddressId", deliveryLocations.selectedAddressId(request));
             }
             model.addAttribute("me", u);
+            // The change this page is built from; the page reloads itself when a newer one arrives. Only for pages
+            // a plain reload can repeat (not a form result shown straight from a POST).
+            if ("GET".equals(request.getMethod())) model.addAttribute("liveVersion", liveUpdates.version(u));
             model.addAttribute("cartCount", cartService.count(u));
             NotificationDevice device = null;
             if (!u.isStaff()) {

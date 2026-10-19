@@ -7,6 +7,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,7 +15,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Live connections (Server-Sent Events) from browsers. When a notification is created, the user's open
  * connections get a "notify" event right away, and the page then fetches it; no waiting for the next poll.
- * Each browser keeps one connection and shares the news with its other tabs.
+ * Each browser keeps one connection and shares the news with its other tabs. The same connection carries
+ * "changed" events from {@link LiveUpdates}, so open pages redraw when what they show changes.
  */
 @Slf4j
 @Component
@@ -23,8 +25,10 @@ public class NotificationPush {
     private static final long TIMEOUT_MS = 30 * 60_000L;     // browsers reconnect on their own afterwards
 
     private final Map<Long, Set<SseEmitter>> emitters = new ConcurrentHashMap<>();
+    private final Set<Long> staffIds = ConcurrentHashMap.newKeySet();
 
-    public SseEmitter subscribe(Long userId) {
+    public SseEmitter subscribe(Long userId, boolean staff) {
+        if (staff) staffIds.add(userId);
         SseEmitter emitter = new SseEmitter(TIMEOUT_MS);
         Set<SseEmitter> mine = emitters.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet());
         mine.add(emitter);
@@ -50,6 +54,15 @@ public class NotificationPush {
         } else {
             push.run();
         }
+    }
+
+    /** Tells open pages that a change they may show was saved; {@code stamp} lets each page judge if it's newer. */
+    public void changed(Collection<Long> userIds, boolean staff, boolean everyone, long stamp) {
+        emitters.forEach((userId, mine) -> {
+            if (everyone || userIds.contains(userId) || (staff && staffIds.contains(userId))) {
+                mine.forEach(e -> send(e, SseEmitter.event().name("changed").data(stamp)));
+            }
+        });
     }
 
     /** Keeps idle connections open through proxies and clears ones whose browser has gone. */

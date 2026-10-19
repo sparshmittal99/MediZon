@@ -8,6 +8,7 @@
     <meta name="_csrf" th:content="${_csrf.token}">
     <meta name="_csrf_header" th:content="${_csrf.headerName}">
     <meta name="mz_base" th:content="@{/}">
+    <meta name="mz_live" th:if="${liveVersion != null}" th:content="${liveVersion}">
     <title th:text="${title} + ' | MediZon'">MediZon</title>
     <link rel="icon" href="/favicon.ico" th:href="@{/favicon.ico}" sizes="any">
     <link rel="icon" href="/favicon.svg" th:href="@{/favicon.svg}" type="image/svg+xml">

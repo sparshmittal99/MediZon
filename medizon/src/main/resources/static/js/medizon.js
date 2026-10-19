@@ -1,4 +1,4 @@
-/* MediZon front-end helpers: CSRF-aware fetch, notification polling, desktop alerts, confirm dialogs. */
+/* MediZon front-end helpers: CSRF-aware fetch, live page updates, notification polling, desktop alerts, confirm dialogs. */
 (function () {
     const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content;
     const base = (meta('mz_base') || '/').replace(/\/$/, '');
@@ -75,6 +75,66 @@
         return fetch(mzUrl(path), Object.assign({}, options, { headers, credentials: 'same-origin' }));
     };
 
+    // ---- live pages: a page reloads itself when something it shows is changed elsewhere ----
+    // The page knows the change version it was built from (meta mz_live). The server sends newer versions over the
+    // live connection (and the notification poll); a newer one reloads the page, unless the user is busy with it:
+    // typing, a filled-in form, an open dialog or the assistant. Then a "Refresh" pill waits for them instead.
+    const live = (function () {
+        const tag = document.querySelector('meta[name="mz_live"]');
+        let version = Number(tag?.content || 0);
+        let pending = 0, timer = null, leaving = false, pill = null;
+
+        const edited = (el) => {
+            if (el.disabled || el.type === 'hidden') return false;
+            if (el.type === 'file') return el.files.length > 0;
+            if (el.type === 'checkbox' || el.type === 'radio') return el.checked !== el.defaultChecked;
+            if (el.tagName === 'SELECT') return [...el.options].some(o => o.selected !== o.defaultSelected);
+            return el.value !== el.defaultValue;
+        };
+        const busy = () => {
+            const a = document.activeElement;
+            if (a && a.matches('textarea, select, [contenteditable="true"], input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit])')) return true;
+            if (document.querySelector('.modal.show, .offcanvas.show, .dropdown-menu.show, .mz-bot-panel:not([hidden])')) return true;
+            return [...document.querySelectorAll('form input, form textarea, form select')].some(edited);
+        };
+        const showPill = () => {
+            if (pill) return;
+            pill = document.createElement('button');
+            pill.type = 'button';
+            pill.className = 'mz-live-pill';
+            pill.innerHTML = '<i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Updated · Refresh';
+            pill.addEventListener('click', () => location.reload());
+            document.body.appendChild(pill);
+        };
+        function apply() {
+            timer = null;
+            if (pending <= version || leaving || document.hidden) return;   // hidden tabs catch up when shown
+            if (busy()) { showPill(); timer = setTimeout(apply, 2000); return; }
+            location.reload();
+        }
+        // Leaving the page anyway (a form was sent, a link opened): don't reload over the navigation.
+        window.addEventListener('beforeunload', () => { leaving = true; setTimeout(() => { leaving = false; }, 5000); });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && !timer) apply(); });
+
+        return {
+            // A newer change exists: wait a moment, so a reply to this page's own request can claim it first
+            seen(v) {
+                v = Number(v) || 0;
+                if (!tag || v <= version) return;
+                pending = Math.max(pending, v);
+                if (!timer) timer = setTimeout(apply, 800);
+            },
+            // This page made the change itself and already shows it
+            adopt(v) { v = Number(v) || 0; if (v > version) version = v; },
+        };
+    })();
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (...args) => nativeFetch(...args).then(res => {
+        const v = res.headers.get('X-MZ-Live');
+        if (v) live.adopt(v);
+        return res;
+    });
+
     // Number boxes ignore the mouse wheel. Scrolling the page over a focused price box used to step it down a
     // paisa a tick, so an MRP typed as 600 could be saved as 599.81.
     document.addEventListener('wheel', (e) => {
@@ -124,6 +184,7 @@
     //   moment a notification is created, and that tab tells the other tabs over a BroadcastChannel.
     // - Each tab then fetches anything newer than the last id it has shown (so every tab gets every alert),
     //   and also polls every 30 s as a safety net.
+    // - The same connection carries "changed" events, shared with the other tabs the same way (see live pages).
     // - Only the connection-holding tab raises the desktop notification, so there is one popup per alert.
     const store = (key) => ({
         get() { try { return Number(localStorage.getItem(key) || 0); } catch (e) { return 0; } },
@@ -144,6 +205,7 @@
                 if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) return;
                 const data = await res.json();
                 setBadge('mzBellCount', data.unread);
+                live.seen(data.version);
                 data.items.forEach(item => {
                     if (item.id <= tabSeen) return;
                     toast(item);
@@ -161,6 +223,7 @@
     function listen() {
         const events = new EventSource(mzUrl('/api/notifications/stream'));
         events.addEventListener('notify', () => { poll(); if (tabs) tabs.postMessage('notify'); });
+        events.addEventListener('changed', (e) => { live.seen(e.data); if (tabs) tabs.postMessage({ changed: e.data }); });
         events.addEventListener('open', () => poll());       // catch up after a reconnect
     }
 
@@ -168,7 +231,7 @@
     if (document.getElementById('mzBellCount')) {
         poll();
         setInterval(poll, 30000);
-        if (tabs) tabs.onmessage = () => poll();
+        if (tabs) tabs.onmessage = (e) => (e.data && e.data.changed ? live.seen(e.data.changed) : poll());
         document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
         if (canElect) {
             // Whichever tab gets the lock keeps the connection; when it closes, another tab takes over.

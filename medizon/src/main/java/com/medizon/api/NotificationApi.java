@@ -4,6 +4,7 @@ import com.medizon.domain.NotificationDevice;
 import com.medizon.domain.User;
 import com.medizon.service.CurrentUser;
 import com.medizon.service.DeviceService;
+import com.medizon.service.LiveUpdates;
 import jakarta.servlet.http.HttpServletRequest;
 import com.medizon.service.NotificationPush;
 import com.medizon.service.NotificationService;
@@ -31,6 +32,7 @@ public class NotificationApi {
     private final NotificationPush push;
     private final JdbcTemplate jdbc;
     private final DeviceService deviceService;
+    private final LiveUpdates liveUpdates;
 
     /**
      * Live connection: a "notify" event arrives the moment a notification is created.
@@ -39,11 +41,14 @@ public class NotificationApi {
      */
     @GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(Principal principal) {
-        Long userId = jdbc.queryForObject("select id from users where lower(email) = lower(?)", Long.class, principal.getName());
-        return push.subscribe(userId);
+        Map<String, Object> user = jdbc.queryForMap("select id, role from users where lower(email) = lower(?)", principal.getName());
+        return push.subscribe(((Number) user.get("id")).longValue(), !"CUSTOMER".equals(user.get("role")));
     }
 
-    /** {@code after} is the newest notification id this browser has already shown. */
+    /**
+     * {@code after} is the newest notification id this browser has already shown. {@code version} is the newest
+     * change for this user, so a page that missed a live "changed" event still catches up.
+     */
     @GetMapping("/poll")
     public Map<String, Object> poll(@RequestParam(defaultValue = "0") long after, HttpServletRequest request) {
         User user = currentUser.get();
@@ -57,6 +62,6 @@ public class NotificationApi {
                         "url", "/notifications/" + n.getId() + "/open"))
                 .toList();
         return Map.of("unread", notificationService.unreadCount(user, device), "items", fresh,
-                "latest", notificationService.latestId(user));
+                "latest", notificationService.latestId(user), "version", liveUpdates.version(user));
     }
 }

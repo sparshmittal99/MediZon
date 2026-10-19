@@ -1097,3 +1097,19 @@ html.translated-ltr h1, html.translated-ltr h2, html.translated-ltr h3, html.tra
     .mz-raise { flex-direction: column; }
     .mz-ticket-head .badge { font-size: .8rem !important; }
 }
+
+/* Live pages: shown when the page changed elsewhere while the user was busy with it (see medizon.js) */
+.mz-live-pill {
+    position: fixed;
+    left: 50%;
+    bottom: 5.5rem;
+    transform: translateX(-50%);
+    z-index: 1080;
+    border: 0;
+    border-radius: 999px;
+    padding: .5rem 1rem;
+    background: var(--bs-primary);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 .5rem 1.25rem rgba(0, 0, 0, .2);
+}
