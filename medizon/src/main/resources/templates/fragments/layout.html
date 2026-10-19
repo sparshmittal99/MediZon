@@ -155,6 +155,9 @@
                 <button type="button" class="mz-catbar-all" data-bs-toggle="offcanvas" data-bs-target="#mzMenu" aria-controls="mzMenu">
                     <i class="bi bi-list" aria-hidden="true"></i>All</button>
                 <a th:href="@{/medicines}">All medicines</a>
+                <th:block sec:authorize="hasRole('CUSTOMER')">
+                    <a th:href="@{/plans}">My medicines</a>
+                </th:block>
                 <!-- Upload a prescription (signed-in customers only): the medicines on it go into the cart once a pharmacist approves it -->
                 <form sec:authorize="hasRole('CUSTOMER')" th:action="@{/prescriptions}" method="post" enctype="multipart/form-data"
                       class="mz-catbar-form" data-mz-rx-quick>
@@ -163,9 +166,6 @@
                         <input type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" multiple class="visually-hidden">
                     </label>
                 </form>
-                <th:block sec:authorize="hasRole('CUSTOMER')">
-                    <a th:href="@{/plans}">My medicines</a>
-                </th:block>
                 <a th:each="c : ${navCategories}" th:href="@{/medicines(category=${c})}" th:text="${c}">Category</a>
             </div>
         </div>

@@ -78,11 +78,11 @@
     // ---- live pages: a page reloads itself when something it shows is changed elsewhere ----
     // The page knows the change version it was built from (meta mz_live). The server sends newer versions over the
     // live connection (and the notification poll); a newer one reloads the page, unless the user is busy with it:
-    // typing, a filled-in form, an open dialog or the assistant. Then a "Refresh" pill waits for them instead.
+    // typing, a filled-in form, an open dialog or the assistant. Then it waits and reloads once they're done.
     const live = (function () {
         const tag = document.querySelector('meta[name="mz_live"]');
         let version = Number(tag?.content || 0);
-        let pending = 0, timer = null, leaving = false, pill = null;
+        let pending = 0, timer = null, leaving = false;
 
         const edited = (el) => {
             if (el.disabled || el.type === 'hidden') return false;
@@ -97,19 +97,10 @@
             if (document.querySelector('.modal.show, .offcanvas.show, .dropdown-menu.show, .mz-bot-panel:not([hidden])')) return true;
             return [...document.querySelectorAll('form input, form textarea, form select')].some(edited);
         };
-        const showPill = () => {
-            if (pill) return;
-            pill = document.createElement('button');
-            pill.type = 'button';
-            pill.className = 'mz-live-pill';
-            pill.innerHTML = '<i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Updated · Refresh';
-            pill.addEventListener('click', () => location.reload());
-            document.body.appendChild(pill);
-        };
         function apply() {
             timer = null;
             if (pending <= version || leaving || document.hidden) return;   // hidden tabs catch up when shown
-            if (busy()) { showPill(); timer = setTimeout(apply, 2000); return; }
+            if (busy()) { timer = setTimeout(apply, 2000); return; }
             location.reload();
         }
         // Leaving the page anyway (a form was sent, a link opened): don't reload over the navigation.
