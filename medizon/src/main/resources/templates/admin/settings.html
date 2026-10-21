@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Return settings')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-w-page">
+    <h1 class="mz-page-title">Return settings</h1>
+    <p class="small text-muted mb-4">Changes apply to returns requested from now on. Returns already requested keep the pickup day and
+        refund timing they were shown. Staff can still move one return's pickup on its page.
+        <span th:if="${settings.updatedAt != null}"
+              th:text="'Last changed ' + ${#temporals.format(settings.updatedAt, 'd MMM yyyy, h:mm a')} + ' by ' + ${settings.updatedBy} + '.'"></span></p>
+
+    <form th:action="@{/admin/settings}" th:object="${settings}" method="post" class="row g-4">
+        <div class="col-lg-6">
+            <section class="mz-panel h-100">
+                <h2 class="h6 mb-3"><i class="bi bi-arrow-return-left me-1 text-success"></i>Returns and pickup</h2>
+                <label class="form-label small" for="returnWindowDays">Return window</label>
+                <div class="input-group mb-1"><input class="form-control" th:field="*{returnWindowDays}" type="number" min="1" max="60" required>
+                    <span class="input-group-text">days after delivery</span></div>
+                <div class="form-text mb-3">How long customers can ask for a return. Shown on product pages and in Help.</div>
+
+                <span class="form-label small d-block">Pickup is booked</span>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <input class="form-control" style="max-width: 6rem" th:field="*{pickupMinDays}" type="number" min="0" max="14" required aria-label="Earliest pickup, days">
+                    <span>to</span>
+                    <input class="form-control" style="max-width: 6rem" th:field="*{pickupMaxDays}" type="number" min="0" max="14" required aria-label="Latest pickup, days">
+                    <span class="text-nowrap">days after the request</span>
+                </div>
+                <div class="form-text">A day in this range is picked for each return. Set both the same for a fixed day; 0 is the same day.</div>
+            </section>
+        </div>
+        <div class="col-lg-6">
+            <section class="mz-panel h-100">
+                <h2 class="h6 mb-3"><i class="bi bi-cash-coin me-1 text-success"></i>Refund timing after pickup</h2>
+                <div class="row g-3">
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="upiRefundDays">UPI</label>
+                        <div class="input-group"><input class="form-control" th:field="*{upiRefundDays}" type="number" min="0" max="30" required>
+                            <span class="input-group-text">days</span></div>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="bankRefundDays">Bank account</label>
+                        <div class="input-group"><input class="form-control" th:field="*{bankRefundDays}" type="number" min="0" max="30" required>
+                            <span class="input-group-text">days</span></div>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="cardRefundDays">Card (original method)</label>
+                        <div class="input-group"><input class="form-control" th:field="*{cardRefundDays}" type="number" min="0" max="30" required>
+                            <span class="input-group-text">days</span></div>
+                    </div>
+                    <div class="col-sm-6">
+                        <span class="form-label small d-block">MediZon Money</span>
+                        <p class="mb-0 pt-2 small"><i class="bi bi-lightning-charge text-success me-1"></i>Always instant</p>
+                    </div>
+                </div>
+                <div class="form-text mt-3">UPI-paid orders refunded to their original method use the UPI timing. On the day, the refund is paid
+                    automatically; staff can pay one sooner from the return.</div>
+            </section>
+        </div>
+        <div class="col-12">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save settings</button>
+        </div>
+    </form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

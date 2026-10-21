@@ -9,4 +9,7 @@ import java.util.Optional;
 public interface CouponRepository extends JpaRepository<Coupon, Long> {
     Optional<Coupon> findByCodeIgnoreCase(String code);
     List<Coupon> findByActiveTrueOrderByMinOrderAscIdAsc();
+    List<Coupon> findAllByOrderByActiveDescCreatedAtDesc();
+    boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
+    boolean existsByCodeIgnoreCase(String code);
 }

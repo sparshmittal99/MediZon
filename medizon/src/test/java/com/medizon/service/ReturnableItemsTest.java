@@ -23,9 +23,11 @@ class ReturnableItemsTest {
     private final ReturnRequestRepository returns = mock(ReturnRequestRepository.class);
     private final OrderService orders = mock(OrderService.class);
     private final DeliveryAreaService areas = mock(DeliveryAreaService.class);
+    private final ReturnSettingsService settings = mock(ReturnSettingsService.class);
+    { when(settings.get()).thenReturn(ReturnSettings.defaults()); }
     private final ReturnService service = new ReturnService(returns, orders, mock(MedicationPlanService.class),
             mock(FileStorageService.class), mock(NotificationService.class), mock(StaffAlerts.class),
-            mock(AddressService.class), areas, Validation.buildDefaultValidatorFactory().getValidator(), mock(WalletService.class));
+            mock(AddressService.class), areas, Validation.buildDefaultValidatorFactory().getValidator(), mock(WalletService.class), settings);
 
     private static OrderItem item(long id, String name, Boolean returnableAtOrder, boolean medicineReturnable) {
         Medicine m = new Medicine();
@@ -129,7 +131,7 @@ class ReturnableItemsTest {
     void pickupDateStaysInTheBookingRange() {
         LocalDate today = LocalDate.now();
         for (int k = 0; k < 50; k++) {
-            assertThat(service.pickupDate()).isBetween(today.plusDays(ReturnService.PICKUP_MIN_DAYS), today.plusDays(ReturnService.PICKUP_MAX_DAYS));
+            assertThat(service.pickupDate()).isBetween(today.plusDays(1), today.plusDays(3));
         }
         LocalDate shown = today.plusDays(2);
         assertThat(service.pickupDate(shown)).isEqualTo(shown);

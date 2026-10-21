@@ -33,11 +33,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ReturnService {
 
-    public static final int RETURN_WINDOW_DAYS = 7;
     public static final int MAX_IMAGES = 3;
-    /** Pickups are booked this many days ahead. No courier slots yet, so the day is picked at random in the range. */
-    public static final int PICKUP_MIN_DAYS = 1;
-    public static final int PICKUP_MAX_DAYS = 3;
 
     private static final Pattern PIN_IN_TEXT = Pattern.compile("(?<![0-9])[1-9][0-9]{5}(?![0-9])");
     private static final Pattern UPI_ID = Pattern.compile("^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$");
@@ -54,12 +50,13 @@ public class ReturnService {
     private final DeliveryAreaService deliveryAreas;
     private final Validator validator;
     private final WalletService wallet;
+    private final ReturnSettingsService settings;
 
     // ------------------------------------------------------------------ customer
 
     /** Last day a return can be requested. */
     public LocalDate returnBy(Order o) {
-        return o.getDeliveredAt() == null ? null : o.getDeliveredAt().toLocalDate().plusDays(RETURN_WINDOW_DAYS);
+        return o.getDeliveredAt() == null ? null : o.getDeliveredAt().toLocalDate().plusDays(settings.get().getReturnWindowDays());
     }
 
     /** Does the order have anything that can be returned at all? Orders of only non-returnable items have no return option. */
@@ -100,15 +97,20 @@ public class ReturnService {
         return out;
     }
 
-    /** A pickup day for a return requested today. */
+    /**
+     * A pickup day for a return requested today, in the admin's range. No courier slots yet, so the day is picked at
+     * random in it; staff can move it on the return.
+     */
     public LocalDate pickupDate() {
-        return LocalDate.now().plusDays(ThreadLocalRandom.current().nextInt(PICKUP_MIN_DAYS, PICKUP_MAX_DAYS + 1));
+        ReturnSettings s = settings.get();
+        return LocalDate.now().plusDays(ThreadLocalRandom.current().nextInt(s.getPickupMinDays(), s.getPickupMaxDays() + 1));
     }
 
     /** The date the form showed, while it's still in the pickup range; otherwise a fresh one. */
     LocalDate pickupDate(LocalDate shown) {
         LocalDate today = LocalDate.now();
-        boolean ok = shown != null && !shown.isBefore(today.plusDays(PICKUP_MIN_DAYS)) && !shown.isAfter(today.plusDays(PICKUP_MAX_DAYS));
+        ReturnSettings s = settings.get();
+        boolean ok = shown != null && !shown.isBefore(today.plusDays(s.getPickupMinDays())) && !shown.isAfter(today.plusDays(s.getPickupMaxDays()));
         return ok ? shown : pickupDate();
     }
 
@@ -235,6 +237,7 @@ public class ReturnService {
         r.setPickupPhone(phone);
         r.setPickupAddress(address);
         r.setPickupDate(pickupDate(f.getPickupDate()));
+        r.setRefundDays(r.getRefundMode().days(o.getPaymentMethod(), settings.get()));
     }
 
     private void requirePickupArea(String pincode) {
@@ -344,7 +347,7 @@ public class ReturnService {
         r.setAdminNote(n);
         r.setDecidedAt(LocalDateTime.now());
         // Approved on or after the planned day: book the next one
-        if (approve && r.getPickupDate() != null && r.getPickupDate().isBefore(LocalDate.now().plusDays(PICKUP_MIN_DAYS))) {
+        if (approve && r.getPickupDate() != null && r.getPickupDate().isBefore(LocalDate.now().plusDays(Math.max(1, settings.get().getPickupMinDays())))) {
             r.setPickupDate(pickupDate());
         }
         notifyCustomer(r, approve ? "Return approved" : "Return not approved", approve
@@ -379,7 +382,8 @@ public class ReturnService {
                     + ". ₹" + toWallet + " is in your MediZon Money now, ready for your next order.");
             return finishRefund(r, false);
         }
-        int days = r.getRefundMode() == null ? 7 : r.getRefundMode().days(o.getPaymentMethod());
+        int days = r.getRefundDays() != null ? r.getRefundDays()
+                : r.getRefundMode() == null ? settings.get().getBankRefundDays() : r.getRefundMode().days(o.getPaymentMethod(), settings.get());
         r.setRefundDueOn(LocalDate.now().plusDays(days));
         notifyCustomer(r, "Return picked up", "We've collected the packs for return " + r.getReturnNumber() + "."
                 + (toWallet.signum() > 0 ? " ₹" + toWallet + " is back in your MediZon Money." : "")
@@ -414,6 +418,21 @@ public class ReturnService {
             notifyCustomer(r, "Refund processed", "₹" + r.getPayoutAmount() + " for return " + r.getReturnNumber()
                     + " is refunded" + (r.getRefundTo() == null ? "." : " to " + r.getRefundTo() + "."));
         }
+        return r;
+    }
+
+    /** Staff move a return's pickup to another day, before it's picked up; the customer is told. */
+    @Transactional
+    public ReturnRequest reschedulePickup(Long id, LocalDate day) {
+        ReturnRequest r = get(id);
+        if (r.getStatus() != ReturnStatus.REQUESTED && r.getStatus() != ReturnStatus.APPROVED) {
+            throw new BusinessException("The pickup can only be moved before the packs are collected.");
+        }
+        if (day == null || day.isBefore(LocalDate.now())) throw new BusinessException("Choose today or a later day for the pickup.");
+        if (day.isAfter(LocalDate.now().plusDays(30))) throw new BusinessException("Choose a pickup day within the next 30 days.");
+        if (day.equals(r.getPickupDate())) return r;
+        r.setPickupDate(day);
+        notifyCustomer(r, "Pickup moved", "The pickup for return " + r.getReturnNumber() + " is now on " + day(day) + ".");
         return r;
     }
 

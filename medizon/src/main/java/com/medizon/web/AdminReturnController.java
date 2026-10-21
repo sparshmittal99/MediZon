@@ -8,10 +8,15 @@ import com.medizon.service.CurrentUser;
 import com.medizon.service.ReturnService;
 import com.medizon.service.StoreService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 /**
  * Return requests: approve or reject, then mark picked up and refunded. A store account handles its own store's
@@ -68,6 +73,17 @@ public class AdminReturnController {
         checked(id);
         ReturnRequest r = returnService.refund(id);
         ra.addFlashAttribute("success", "₹" + r.getRefundAmount() + " refunded for return " + r.getReturnNumber() + ".");
+        return "redirect:/admin/returns/" + id;
+    }
+
+    @PostMapping("/{id}/pickup-date")
+    public String pickupDate(@PathVariable Long id,
+                             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate day,
+                             RedirectAttributes ra) {
+        checked(id);
+        ReturnRequest r = returnService.reschedulePickup(id, day);
+        ra.addFlashAttribute("success", "Pickup for " + r.getReturnNumber() + " set for "
+                + r.getPickupDate().format(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH)) + ". The customer has been told.");
         return "redirect:/admin/returns/" + id;
     }
 

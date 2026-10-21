@@ -730,6 +730,21 @@
         });
     });
 
+    // ---- admin promo form: ₹ or % on the discount, and the cap only for percent promos ----
+    document.querySelectorAll('[data-mz-promo-form]').forEach(form => {
+        const sync = () => {
+            const pct = form.querySelector('[data-mz-promo-kind]:checked')?.value !== 'FLAT';
+            form.querySelector('[data-mz-promo-unit-pre]').hidden = pct;
+            form.querySelector('[data-mz-promo-unit-post]').hidden = !pct;
+            const cap = form.querySelector('[data-mz-promo-cap]');
+            cap.hidden = !pct;
+            cap.querySelector('input').disabled = !pct;
+            form.querySelector('#amount').max = pct ? '100' : '';
+        };
+        form.querySelectorAll('[data-mz-promo-kind]').forEach(r => r.addEventListener('change', sync));
+        sync();
+    });
+
     // ---- checkout: MediZon Money pays as much as it can; the chosen method pays the rest ----
     document.querySelectorAll('[data-mz-checkout-pay]').forEach(box => {
         const use = document.querySelector('[data-mz-use-wallet]');

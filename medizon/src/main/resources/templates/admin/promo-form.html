@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${promo.id == null} ? 'Add promo' : 'Edit ' + ${promo.code})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-w-page">
+    <a th:href="@{/admin/promos}" class="small"><i class="bi bi-arrow-left"></i> All promos</a>
+    <h1 class="mz-page-title mt-2 mb-4" th:text="${promo.id == null} ? 'Add promo' : 'Edit ' + ${promo.code}">Add promo</h1>
+
+    <form th:action="@{/admin/promos}" th:object="${promo}" method="post" class="row g-4" data-mz-promo-form>
+        <input type="hidden" th:field="*{id}">
+        <div class="col-lg-8">
+            <section class="mz-panel mb-4">
+                <h2 class="h6 mb-3">Code and discount</h2>
+                <div class="row g-3">
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="code">Code</label>
+                        <input class="form-control text-uppercase" th:field="*{code}" maxlength="20" required placeholder="HEALTH10"
+                               pattern="^[A-Za-z0-9]{3,20}$" autocomplete="off">
+                        <div class="form-text">3 to 20 letters or digits. Customers type this at checkout.</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <span class="form-label small d-block">Type</span>
+                        <div class="btn-group w-100" role="group" aria-label="Discount type">
+                            <th:block th:each="k : ${kinds}">
+                                <input type="radio" class="btn-check" th:field="*{kind}" th:value="${k}" data-mz-promo-kind>
+                                <label class="btn btn-outline-primary" th:for="${#ids.prev('kind')}" th:text="${k.name() == 'PERCENT'} ? 'Percent off' : 'Flat ₹ off'"></label>
+                            </th:block>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small" for="amount"><span data-mz-promo-amount-label>Discount</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text" data-mz-promo-unit-pre>₹</span>
+                            <input class="form-control" th:field="*{amount}" type="number" min="1" step="0.01" required>
+                            <span class="input-group-text" data-mz-promo-unit-post>%</span>
+                        </div>
+                    </div>
+                    <div class="col-sm-4" data-mz-promo-cap>
+                        <label class="form-label small" for="maxDiscount">Up to <span class="text-muted fw-normal">(optional)</span></label>
+                        <div class="input-group"><span class="input-group-text">₹</span>
+                            <input class="form-control" th:field="*{maxDiscount}" type="number" min="1" step="0.01" placeholder="No cap"></div>
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small" for="minOrder">Minimum order</label>
+                        <div class="input-group"><span class="input-group-text">₹</span>
+                            <input class="form-control" th:field="*{minOrder}" type="number" min="0" step="0.01"></div>
+                        <div class="form-text">Medicines, before delivery.</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="mz-panel">
+                <h2 class="h6 mb-1">What customers see</h2>
+                <p class="small text-muted mb-3">Leave these blank and they're written for you, e.g. "10% off up to ₹100" and
+                    "On medicines worth ₹299 or more."</p>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label small" for="title">Title</label>
+                        <input class="form-control" th:field="*{title}" maxlength="80">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small" for="description">Description</label>
+                        <input class="form-control" th:field="*{description}" maxlength="200">
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="col-lg-4">
+            <section class="mz-panel mb-4">
+                <h2 class="h6 mb-3">Limits</h2>
+                <label class="form-label small" for="usesPerDay">Uses per customer each day</label>
+                <input class="form-control mb-3" th:field="*{usesPerDay}" type="number" min="1" max="10" required>
+                <label class="form-label small" for="validUntil">Last day <span class="text-muted fw-normal">(optional)</span></label>
+                <input class="form-control" th:field="*{validUntil}" type="date">
+                <div class="form-text">Empty for no end date.</div>
+            </section>
+            <section class="mz-panel mb-4">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" th:field="*{active}" role="switch">
+                    <label class="form-check-label" for="active1">Live: show it at checkout</label>
+                </div>
+            </section>
+            <div class="d-grid gap-2">
+                <button class="btn btn-primary" type="submit" th:text="${promo.id == null} ? 'Add promo' : 'Save promo'">Save</button>
+                <a th:href="@{/admin/promos}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </div>
+    </form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

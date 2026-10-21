@@ -67,12 +67,15 @@ class PromoAndWalletTest {
 
     @Test
     void refundsArriveOnTheirDay() {
-        assertThat(RefundMode.WALLET.days(PaymentMethod.CARD)).isZero();
-        assertThat(RefundMode.UPI.days(PaymentMethod.COD)).isEqualTo(2);
-        assertThat(RefundMode.BANK.days(PaymentMethod.COD)).isEqualTo(7);
-        assertThat(RefundMode.ORIGINAL.days(PaymentMethod.UPI)).isEqualTo(2);
-        assertThat(RefundMode.ORIGINAL.days(PaymentMethod.CARD)).isEqualTo(7);
-        assertThat(RefundMode.WALLET.timing(PaymentMethod.UPI)).isEqualTo("Instantly after pickup");
+        ReturnSettings s = ReturnSettings.defaults();
+        assertThat(RefundMode.WALLET.days(PaymentMethod.CARD, s)).isZero();
+        assertThat(RefundMode.UPI.days(PaymentMethod.COD, s)).isEqualTo(2);
+        assertThat(RefundMode.BANK.days(PaymentMethod.COD, s)).isEqualTo(7);
+        assertThat(RefundMode.ORIGINAL.days(PaymentMethod.UPI, s)).isEqualTo(2);
+        assertThat(RefundMode.ORIGINAL.days(PaymentMethod.CARD, s)).isEqualTo(7);
+        assertThat(RefundMode.WALLET.timing(PaymentMethod.UPI, s)).isEqualTo("Instantly after pickup");
+        s.setBankRefundDays(1);
+        assertThat(RefundMode.BANK.timing(PaymentMethod.COD, s)).isEqualTo("1 day after pickup");
     }
 
     @Test

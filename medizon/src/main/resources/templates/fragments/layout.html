@@ -328,10 +328,12 @@
             <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','STORE')"><a class="nav-link" th:classappend="${active == 'medicines'} ? 'active'" th:href="@{/admin/medicines}">Catalog</a></li>
             <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'stores'} ? 'active'" th:href="@{/admin/stores}">Stores</a></li>
             <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'locations'} ? 'active'" th:href="@{/admin/locations}">Delivery areas</a></li>
+            <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'promos'} ? 'active'" th:href="@{/admin/promos}">Promos</a></li>
             <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'users'} ? 'active'" th:href="@{/admin/users}">Users</a></li>
             <li class="nav-item" sec:authorize="hasRole('STAFF')"><a class="nav-link" th:classappend="${active == 'support'} ? 'active'" th:href="@{/admin/support}">Support</a></li>
             <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','SUPPORT')"><a class="nav-link" th:classappend="${active == 'reviews'} ? 'active'" th:href="@{/admin/reviews}">Reviews</a></li>
             <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'monitoring'} ? 'active'" th:href="@{/admin/monitoring}">Monitoring</a></li>
+            <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'settings'} ? 'active'" th:href="@{/admin/settings}">Settings</a></li>
         </ul>
     </div>
 </div>

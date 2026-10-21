@@ -30,8 +30,18 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findTop8ByStoreOrderByCreatedAtDesc(Store store);
     List<Order> findByCheckoutRefOrderByIdAsc(String checkoutRef);
 
-    /** Has the customer used this promo on an order (not cancelled) since {@code since}? */
-    boolean existsByUserAndCouponCodeIgnoreCaseAndCreatedAtAfterAndStatusNot(User user, String couponCode, LocalDateTime since, OrderStatus status);
+    /** Checkouts (a split cart counts once) on which the customer used this promo since {@code since}, cancelled ones left out. */
+    @Query("""
+            select count(distinct coalesce(o.checkoutRef, o.orderNumber)) from CustomerOrder o
+            where o.user = :user and upper(o.couponCode) = upper(:code) and o.createdAt > :since and o.status <> :cancelled""")
+    long promoUses(@Param("user") User user, @Param("code") String code, @Param("since") LocalDateTime since,
+                   @Param("cancelled") OrderStatus cancelled);
+
+    /** Per promo code: checkouts it was used on and rupees it took off, cancelled orders left out. */
+    @Query("""
+            select upper(o.couponCode), count(distinct coalesce(o.checkoutRef, o.orderNumber)), coalesce(sum(o.discount), 0)
+            from CustomerOrder o where o.couponCode is not null and o.status <> :cancelled group by upper(o.couponCode)""")
+    List<Object[]> promoTotals(@Param("cancelled") OrderStatus cancelled);
     List<Order> findByUser(User user);
     long countBySource(OrderSource source);
     long countByCreatedAtAfter(LocalDateTime since);

@@ -39,6 +39,7 @@ public class OrderController {
     private final SupportService supportService;
     private final CouponService couponService;
     private final WalletService walletService;
+    private final ReturnSettingsService returnSettings;
 
     /** The promo code applied at checkout, kept in the session until the order is placed or it's removed. */
     static final String COUPON = "mzCoupon";
@@ -66,8 +67,8 @@ public class OrderController {
         model.addAttribute("paymentMethods", PaymentMethod.payable());
         List<Coupon> promos = couponService.available();
         model.addAttribute("promos", promos);
-        model.addAttribute("promosUsedToday", promos.stream().map(Coupon::getCode)
-                .filter(c -> couponService.usedToday(user, c)).collect(java.util.stream.Collectors.toSet()));
+        model.addAttribute("promosUsedToday", promos.stream().filter(c -> couponService.usedToday(user, c))
+                .map(Coupon::getCode).collect(java.util.stream.Collectors.toSet()));
         model.addAttribute("walletBalance", walletService.balance(user));
         model.addAttribute("prescriptions", prescriptionService.validForUser(user));
         // Which prescription(s) each prescription medicine comes from, and anything none of them covers
@@ -234,7 +235,8 @@ public class OrderController {
         model.addAttribute("orderAddressOk", orderAddressOk);
         model.addAttribute("addressTypes", AddressType.values());
         Map<String, String> timings = new HashMap<>();
-        for (RefundMode m : RefundMode.values()) timings.put(m.name(), m.timing(o.getPaymentMethod()));
+        ReturnSettings rs = returnSettings.get();
+        for (RefundMode m : RefundMode.values()) timings.put(m.name(), m.timing(o.getPaymentMethod(), rs));
         model.addAttribute("refundTimings", timings);
         return "orders/return";
     }

@@ -24,6 +24,7 @@ public class MedicineController {
     private final DeliveryLocations deliveryLocations;
     private final CurrentUser currentUser;
     private final MedicationPlanService planService;
+    private final ReturnSettingsService returnSettings;
 
     @GetMapping("/medicines")
     public String list(@RequestParam(defaultValue = "") String q,
@@ -45,7 +46,7 @@ public class MedicineController {
         String pin = deliveryLocations.pincode(request);
         Product p = catalog.product(m, pin);
         model.addAttribute("m", p);
-        model.addAttribute("returnDays", ReturnService.RETURN_WINDOW_DAYS);
+        model.addAttribute("returnDays", returnSettings.get().getReturnWindowDays());
         // When it would arrive, from the store that would deliver it
         if (p.isInStock()) catalog.estimate(p.getOffer()).ifPresent(e -> model.addAttribute("delivery", e));
         // Dose reminders are offered once the medicine has been delivered for someone in the household (not "Others")

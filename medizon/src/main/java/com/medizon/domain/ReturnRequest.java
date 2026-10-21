@@ -90,6 +90,9 @@ public class ReturnRequest {
     /** When the rest of the refund lands, set at pickup. */
     private LocalDate refundDueOn;
 
+    /** Days after pickup the refund was promised in, from the settings when it was requested. Null on older returns. */
+    private Integer refundDays;
+
     /** The returned packs went back on the shelf when picked up. */
     private boolean restocked;
 
@@ -127,7 +130,8 @@ public class ReturnRequest {
 
     /** "Instantly after pickup", "2 days after pickup"; null for returns from before refunds had a mode. */
     public String getRefundTiming() {
-        return refundMode == null ? null : refundMode.timing(order.getPaymentMethod());
+        if (refundMode == null) return null;
+        return RefundMode.timing(refundDays != null ? refundDays : refundMode.days(order.getPaymentMethod(), ReturnSettings.defaults()));
     }
 
     /** Last four digits only, for the customer's screens and notifications. */

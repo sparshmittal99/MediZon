@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Promos')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+        <h1 class="mz-page-title mb-0">Promos</h1>
+        <a th:href="@{/admin/promos/new}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add promo</a>
+    </div>
+    <p class="small text-muted mb-4">Live promos show as cards at checkout. A promo comes off the medicines (not delivery) and is
+        printed on the invoice. Switch one off rather than changing a code customers have already used.</p>
+
+    <div th:if="${#lists.isEmpty(promos)}" class="mz-panel mz-empty"><i class="bi bi-ticket-perforated"></i>
+        <p class="mb-0">No promos yet. Add one and it shows at checkout straight away.</p></div>
+    <div th:unless="${#lists.isEmpty(promos)}" class="mz-panel-flush">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>Code</th><th>Discount</th><th class="text-end">Min. order</th><th class="text-end">Per customer a day</th>
+                    <th>Ends</th><th class="text-end">Used</th><th class="text-end">Given</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                <tr th:each="c : ${promos}" th:classappend="${!c.live} ? 'mz-user-off'" th:with="u=${usage.get(#strings.toUpperCase(c.code))}">
+                    <td><a class="mz-promo-code d-inline-block text-decoration-none" th:href="@{/admin/promos/{id}(id=${c.id})}" th:text="${c.code}">CODE</a></td>
+                    <td><span class="fw-semibold" th:text="${c.title}"></span>
+                        <div class="small text-muted" th:text="${c.description}"></div></td>
+                    <td class="text-end" th:text="${c.minOrder.signum() == 0} ? 'None' : '₹' + ${c.minOrder}"></td>
+                    <td class="text-end" th:text="${c.usesPerDay} + (${c.usesPerDay == 1} ? ' time' : ' times')"></td>
+                    <td class="small text-nowrap" th:text="${c.validUntil != null} ? ${#temporals.format(c.validUntil, 'd MMM yyyy')} : 'No end'"></td>
+                    <td class="text-end" th:text="${u != null} ? ${u.uses()} : 0"></td>
+                    <td class="text-end text-nowrap" th:text="'₹' + (${u != null} ? ${u.given()} : '0.00')"></td>
+                    <td><span class="badge"
+                              th:classappend="${c.live} ? 'text-bg-success' : (${c.expired} ? 'text-bg-warning' : 'text-bg-secondary')"
+                              th:text="${c.live} ? 'Live' : (${c.expired} ? 'Ended' : 'Off')"></span></td>
+                    <td class="text-end text-nowrap">
+                        <a th:href="@{/admin/promos/{id}(id=${c.id})}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        <form th:action="@{/admin/promos/{id}/active(id=${c.id})}" method="post" class="d-inline">
+                            <input type="hidden" name="active" th:value="${!c.active}">
+                            <button class="btn btn-sm" th:classappend="${c.active} ? 'btn-outline-danger' : 'btn-outline-success'" type="submit"
+                                    th:text="${c.active} ? 'Switch off' : 'Switch on'">Switch off</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

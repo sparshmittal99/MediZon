@@ -11,8 +11,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * A promo code taken off the medicines in an order (not the delivery fee). A customer can use each code once a day.
- * Seeded with a few sample promos for now; the admin will manage them later.
+ * A promo code taken off the medicines in an order (not the delivery fee). The admin manages them under Promos; each
+ * can be used a set number of times a day by each customer.
  */
 @Entity
 @Table(name = "coupons")
@@ -53,6 +53,10 @@ public class Coupon {
 
     private boolean active = true;
 
+    /** Checkouts a customer can use it on each day. */
+    @Column(columnDefinition = "integer not null default 1")
+    private int usesPerDay = 1;
+
     /** Last day it can be used; null for no end. */
     private LocalDate validUntil;
 
@@ -67,6 +71,15 @@ public class Coupon {
         this.maxDiscount = maxDiscount == null ? null : new BigDecimal(maxDiscount);
         this.minOrder = new BigDecimal(minOrder);
     }
+
+    /** "10% off up to ₹100" or "₹50 off": what the promo gives, for a title left blank. */
+    public String describe() {
+        String off = kind == Kind.FLAT ? "₹" + amount.stripTrailingZeros().toPlainString() + " off"
+                : amount.stripTrailingZeros().toPlainString() + "% off";
+        return off + (kind == Kind.PERCENT && maxDiscount != null ? " up to ₹" + maxDiscount.stripTrailingZeros().toPlainString() : "");
+    }
+
+    public boolean isExpired() { return validUntil != null && LocalDate.now().isAfter(validUntil); }
 
     public boolean isLive() {
         return active && (validUntil == null || !LocalDate.now().isAfter(validUntil));

@@ -14,19 +14,21 @@ public enum RefundMode {
 
     public String getLabel() { return label; }
 
-    /** Days after pickup the money arrives: MediZon Money at once, UPI in 2, bank accounts and cards in 7. */
-    public int days(PaymentMethod paidBy) {
+    /** Days after pickup the money arrives, as the admin has set them; MediZon Money is always at once. */
+    public int days(PaymentMethod paidBy, ReturnSettings s) {
         return switch (this) {
             case WALLET -> 0;
-            case UPI -> 2;
-            case BANK -> 7;
-            case ORIGINAL -> paidBy == PaymentMethod.UPI ? 2 : paidBy == PaymentMethod.WALLET ? 0 : 7;
+            case UPI -> s.getUpiRefundDays();
+            case BANK -> s.getBankRefundDays();
+            case ORIGINAL -> paidBy == PaymentMethod.UPI ? s.getUpiRefundDays()
+                    : paidBy == PaymentMethod.WALLET ? 0 : s.getCardRefundDays();
         };
     }
 
-    /** "Instantly after pickup", "2 days after pickup". */
-    public String timing(PaymentMethod paidBy) {
-        int d = days(paidBy);
-        return d == 0 ? "Instantly after pickup" : d + " days after pickup";
+    public String timing(PaymentMethod paidBy, ReturnSettings s) { return timing(days(paidBy, s)); }
+
+    /** "Instantly after pickup", "1 day after pickup", "7 days after pickup". */
+    public static String timing(int days) {
+        return days <= 0 ? "Instantly after pickup" : days + (days == 1 ? " day" : " days") + " after pickup";
     }
 }

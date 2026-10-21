@@ -2,6 +2,7 @@ package com.medizon.dto;
 
 import com.medizon.domain.RefundMode;
 import lombok.Data;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDate;
 
@@ -23,6 +24,7 @@ public class ReturnPickupForm {
     private boolean saveAddress;
 
     /** The date shown on the form, kept if it's still a date we can pick up on. */
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate pickupDate;
 
     /** Only asked for cash on delivery orders; prepaid orders are refunded to the payment method used. */
