@@ -63,6 +63,19 @@ public class Order {
     private BigDecimal roundOff = BigDecimal.ZERO;
     @Column(precision = 10, scale = 2) private BigDecimal total = BigDecimal.ZERO;
 
+    /** Promo applied at checkout and the rupees it took off the medicines (already out of {@link #total}). */
+    @Column(length = 20)
+    private String couponCode;
+    @Column(precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 0")
+    private BigDecimal discount = BigDecimal.ZERO;
+
+    /** Part of the total paid with MediZon Money; the rest was paid by {@link #paymentMethod}. */
+    @Column(precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 0")
+    private BigDecimal walletUsed = BigDecimal.ZERO;
+    /** MediZon Money already given back on returns or cancellation, so it isn't given back twice. */
+    @Column(precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 0")
+    private BigDecimal walletRefunded = BigDecimal.ZERO;
+
     @Column(length = 500)
     private String shippingAddress;
     private String contactPhone;
@@ -155,6 +168,24 @@ public class Order {
     }
 
     public boolean isRounded() { return roundOff != null && roundOff.signum() != 0; }
+
+    public boolean isDiscounted() { return discount != null && discount.signum() > 0; }
+
+    public boolean isPaidWithWallet() { return walletUsed != null && walletUsed.signum() > 0; }
+
+    /** What was paid (or is due in cash) other than MediZon Money. */
+    public BigDecimal getAmountDue() {
+        return total.subtract(walletUsed == null ? BigDecimal.ZERO : walletUsed);
+    }
+
+    /** Medicines before the promo. */
+    public BigDecimal getItemsTotal() { return subtotal; }
+
+    /** "MediZon Money ₹120.00 + UPI ₹80.00", "MediZon Money" or "UPI". */
+    public String getPaymentLabel() {
+        if (!isPaidWithWallet() || paymentMethod == PaymentMethod.WALLET) return paymentMethod.getLabel();
+        return PaymentMethod.WALLET.getLabel() + " ₹" + walletUsed + " + " + paymentMethod.getLabel() + " ₹" + getAmountDue();
+    }
 
     public String getRoundOffLabel() { return RoundOff.label(roundOff); }
 }

@@ -7,7 +7,7 @@
 <th:block th:if="${me.admin}"><div th:replace="~{fragments/layout :: adminNav}"></div></th:block>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
-<main class="container mz-page" style="max-width: 860px">
+<main class="container mz-page mz-w-page">
     <div class="mz-account-head mb-4">
         <span class="mz-avatar" aria-hidden="true" th:text="${#strings.toUpperCase(#strings.substring(me.firstName + '?', 0, 1))}">A</span>
         <div class="min-w-0">

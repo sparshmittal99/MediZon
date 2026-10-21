@@ -203,10 +203,10 @@ public class SalesExcelService {
             text(row, 4, o.getUser().getFullName(), null);
             text(row, 5, inv != null ? inv.getPlaceOfSupply() : o.getShippingState(), null);
             text(row, 6, o.getStatus().getLabel(), null);
-            text(row, 7, o.getPaymentMethod().getLabel(), null);
+            text(row, 7, o.getPaymentLabel(), null);
             text(row, 8, capitalize(o.getPaymentStatus().name()), null);
             num(row, 9, o.getItemCount(), st.integer);
-            money(row, 10, o.getSubtotal(), st.money);
+            money(row, 10, o.getSubtotal().subtract(o.getDiscount()), st.money);   // after any promo, so the columns add up
             money(row, 11, o.getDeliveryFee(), st.money);
             money(row, 12, o.getRoundOff(), st.money);
             money(row, 13, o.getTotal(), st.money);

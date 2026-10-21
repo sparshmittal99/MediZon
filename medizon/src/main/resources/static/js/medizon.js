@@ -730,6 +730,168 @@
         });
     });
 
+    // ---- checkout: MediZon Money pays as much as it can; the chosen method pays the rest ----
+    document.querySelectorAll('[data-mz-checkout-pay]').forEach(box => {
+        const use = document.querySelector('[data-mz-use-wallet]');
+        if (!use) return;
+        const total = Number(box.dataset.total), balance = Number(box.dataset.balance);
+        const rest = document.querySelector('[data-mz-pay-rest]');
+        const restLabel = document.querySelector('[data-mz-pay-rest-label]');
+        const covers = document.querySelector('[data-mz-wallet-covers]');
+        const money = n => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const sync = () => {
+            const used = use.checked ? Math.min(balance, total) : 0;
+            const toPay = Math.round((total - used) * 100) / 100;
+            box.querySelector('[data-mz-wallet-line]').hidden = used === 0;
+            box.querySelector('[data-mz-wallet-amount]').textContent = '− ' + money(used);
+            box.querySelector('[data-mz-to-pay-line]').hidden = used === 0;
+            box.querySelector('[data-mz-to-pay]').textContent = money(toPay);
+            covers.hidden = toPay > 0;
+            rest.hidden = toPay <= 0;
+            rest.querySelectorAll('input').forEach(i => { i.disabled = toPay <= 0; });
+            restLabel.hidden = used === 0 || toPay <= 0;
+            restLabel.textContent = `Pay the remaining ${money(toPay)} by`;
+        };
+        use.addEventListener('change', sync);
+        sync();
+    });
+
+    // ---- return request: step 1 (items, reason, photos) then step 2 (pickup address, date, refund) ----
+    document.querySelectorAll('[data-mz-return-form]').forEach(form => {
+        const step1 = form.querySelector('[data-mz-return-step="1"]');
+        const step2 = form.querySelector('[data-mz-return-step="2"]');
+        const mark2 = form.querySelector('[data-mz-step-mark="2"]');
+        const stepErr = form.querySelector('[data-mz-step-error]');
+        const submitErr = form.querySelector('[data-mz-submit-error]');
+        const qtys = [...form.querySelectorAll('input[name=qty]')];
+        const photos = form.querySelector('[data-mz-return-photos]');
+        let onStep2 = false;
+
+        form.querySelector('[data-mz-return-steps]').hidden = false;
+        form.querySelector('[data-mz-step-nav]').hidden = false;
+        form.querySelector('[data-mz-step-back]').hidden = false;
+        form.querySelector('[data-mz-step-cancel]').hidden = true;
+
+        const show = (two) => {
+            onStep2 = two;
+            step1.hidden = two;
+            step2.hidden = !two;
+            mark2.classList.toggle('done', two);
+            form.closest('main').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+        const fail = (box, msg) => { box.textContent = msg; box.hidden = false; return false; };
+
+        // The same checks the server makes, so a mistake doesn't send the customer back to an empty form
+        const step1Ok = () => {
+            stepErr.hidden = true;
+            if (qtys.some(q => Number(q.value) < 0 || Number(q.value) > Number(q.max) || !Number.isInteger(Number(q.value)))) {
+                return fail(stepErr, 'Check the number of packs: you can return up to the amount shown for each medicine.');
+            }
+            if (!qtys.some(q => Number(q.value) > 0)) return fail(stepErr, 'Choose the packs you want to return.');
+            const reason = form.querySelector('input[name=reason]:checked');
+            if (!reason) return fail(stepErr, 'Choose a reason for the return.');
+            if (reason.value === 'OTHER' && !form.querySelector('[name=details]').value.trim()) return fail(stepErr, "Tell us what's wrong.");
+            if (!photos.files.length) return fail(stepErr, 'Add at least one photo of the medicine and its packaging.');
+            return true;
+        };
+
+        // Refund total follows the packs chosen in step 1
+        const total = form.querySelector('[data-mz-refund-total]');
+        const syncTotal = () => {
+            // What was paid per pack, after any promo (the server rounds the same way: down to the paisa)
+            const sum = qtys.reduce((s, q) => {
+                const n = Math.max(0, Number(q.value) || 0), of = Number(q.dataset.of || 1), net = Number(q.dataset.net || 0);
+                return s + (n >= of ? net : Math.floor(net * n / of * 100) / 100);
+            }, 0);
+            total.textContent = '₹' + sum.toFixed(2);
+        };
+        qtys.forEach(q => q.addEventListener('input', syncTotal));
+
+        // Inputs of an unchosen option are switched off, so they're neither checked nor sent
+        const toggle = (box, on) => {
+            box.hidden = !on;
+            box.querySelectorAll('input, select').forEach(i => { i.disabled = !on; });
+        };
+        const newBox = form.querySelector('[data-mz-pickup-new]');
+        const syncPickup = () => toggle(newBox, form.querySelector('[data-mz-pickup-from]:checked')?.value === 'new');
+        form.querySelectorAll('[data-mz-pickup-from]').forEach(r => r.addEventListener('change', syncPickup));
+        const refundBoxes = [...form.querySelectorAll('[data-mz-refund-for]')];
+        const syncRefund = () => {
+            const mode = form.querySelector('[data-mz-refund-mode]:checked')?.value;
+            refundBoxes.forEach(b => toggle(b, b.dataset.mzRefundFor === mode));
+        };
+        form.querySelectorAll('[data-mz-refund-mode]').forEach(r => r.addEventListener('change', syncRefund));
+
+        // A typed PIN code is checked against the areas we serve
+        const pin = form.querySelector('[data-mz-pickup-pin]');
+        const pinStatus = form.querySelector('[data-mz-pickup-pin-status]');
+        let pinOk = null, pinTimer;
+        pin.addEventListener('input', () => {
+            clearTimeout(pinTimer);
+            pinOk = null;
+            pinStatus.textContent = '';
+            const p = pin.value.replace(/\s+/g, '');
+            if (!/^[1-9][0-9]{5}$/.test(p)) return;
+            pinTimer = setTimeout(async () => {
+                try {
+                    const res = await mzFetch('/api/location/check?pincode=' + p);
+                    const data = await res.json();
+                    if (pin.value.replace(/\s+/g, '') !== p) return;   // typed on meanwhile
+                    pinOk = !!data.serviceable;
+                    pinStatus.className = 'small mt-1 ' + (pinOk ? 'text-success' : 'text-danger');
+                    pinStatus.textContent = pinOk ? `We pick up from ${p}` : `We don't pick up from ${p} yet`;
+                } catch (e) { pinOk = null; }
+            }, 300);
+        });
+
+        const step2Ok = () => {
+            submitErr.hidden = true;
+            const from = form.querySelector('[data-mz-pickup-from]:checked');
+            if (!from) return fail(submitErr, 'Choose where we should pick the packs up from.');
+            if (from.value === 'new') {
+                const bad = [...newBox.querySelectorAll('input[required]')].find(i => !i.checkValidity());
+                if (bad) {
+                    bad.focus();
+                    return fail(submitErr, 'Fill in the pickup address: ' + form.querySelector(`label[for="${bad.id}"]`).textContent.trim().toLowerCase() + '.');
+                }
+                if (pinOk === false) return fail(submitErr, "We don't pick up from that PIN code yet. Choose another address.");
+            }
+            const modes = form.querySelectorAll('[data-mz-refund-mode]');
+            if (modes.length) {
+                const mode = form.querySelector('[data-mz-refund-mode]:checked');
+                if (!mode) return fail(submitErr, 'Choose where the refund should go.');
+                const box = form.querySelector(`[data-mz-refund-for="${mode.value}"]`);
+                const bad = box && [...box.querySelectorAll('input[required]')].find(i => !i.checkValidity());
+                if (bad) {
+                    bad.focus();
+                    return fail(submitErr, 'Check the ' + form.querySelector(`label[for="${bad.id}"]`).textContent.trim().toLowerCase() + '.');
+                }
+                const same = box && box.querySelector('[data-mz-same-as]');
+                if (same && same.value.trim() !== form.querySelector('#' + same.dataset.mzSameAs).value.trim()) {
+                    same.focus();
+                    return fail(submitErr, "The account numbers don't match.");
+                }
+            }
+            return true;
+        };
+
+        form.querySelector('[data-mz-step-next]').addEventListener('click', () => { if (step1Ok()) show(true); });
+        form.querySelector('[data-mz-step-back]').addEventListener('click', () => show(false));
+        form.addEventListener('submit', (e) => {
+            if (!onStep2) {   // Enter pressed in step 1
+                e.preventDefault();
+                if (step1Ok()) show(true);
+            } else if (!step2Ok()) {
+                e.preventDefault();
+            }
+        });
+
+        syncTotal();
+        syncPickup();
+        syncRefund();
+        step2.hidden = true;
+    });
+
     // ---- support ticket: notice a reply while the page is open. Shows it right away, unless a reply is being typed ----
     (function () {
         const page = document.querySelector('[data-mz-ticket-poll]');

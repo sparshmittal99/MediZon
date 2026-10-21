@@ -99,7 +99,7 @@
                     : 'Add one to get dose reminders and a heads-up before it runs out. Medicines bought for this person show up here when delivered.'"></p>
         </div>
 
-        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3" th:if="${list != null}">
+        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-3xl-4 g-3" th:if="${list != null}">
             <div class="col" th:each="p : ${list}" th:id="'plan-' + ${p.id}">
                 <!-- Common shelf: what's at home, no reminders -->
                 <article class="mz-plan mz-shelf-item" th:if="${p.onCommonShelf}">

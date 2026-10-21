@@ -36,6 +36,37 @@ h1, h2, h3, h4, h5, h6 { color: var(--mz-ink); font-weight: 700; letter-spacing:
 a { text-underline-offset: 2px; }
 :focus-visible { outline: 3px solid rgba(14, 107, 87, .45); outline-offset: 2px; }
 
+/* ---------- Screen-filling layout ----------
+   Bootstrap's containers stop at 1320px, leaving wide empty margins on laptops and monitors. Pages here grow with the
+   screen up to a generous cap, with side padding that scales from phone to monitor. On big monitors the whole UI
+   (type, spacing, controls: all rem-based) steps up a little so it fills the screen instead of looking tiny. */
+@media (min-width: 1600px) { html { font-size: 106.25%; } }   /* 17px */
+@media (min-width: 1920px) { html { font-size: 112.5%; } }    /* 18px */
+@media (min-width: 2400px) { html { font-size: 125%; } }      /* 20px */
+.container, .container-sm, .container-md, .container-lg, .container-xl, .container-xxl {
+    max-width: 120rem;
+    padding-left: clamp(1rem, 2.6vw, 2.75rem);
+    padding-right: clamp(1rem, 2.6vw, 2.75rem);
+}
+/* Pages that read best narrower than the screen (forms, a document): sized in rem so they grow with it too */
+.mz-w-form { max-width: 60rem; }      /* single-column forms */
+.mz-w-page { max-width: 74rem; }      /* lists and settings */
+.mz-w-wide { max-width: 88rem; }      /* admin forms with side panels */
+.mz-w-doc { max-width: 66rem; }       /* the invoice, an A4 page on screen */
+/* Product and card grids get more columns as the screen widens */
+@media (min-width: 1800px) {
+    .row-cols-3xl-5 > * { flex: 0 0 auto; width: 20%; }
+    .row-cols-3xl-6 > * { flex: 0 0 auto; width: 16.6666667%; }
+}
+
+/* Scrolling areas inside the page (rails, tables, the chat, lists) scroll without a visible bar; only the page has one */
+body * { scrollbar-width: none; }
+body *::-webkit-scrollbar { display: none; }
+
+/* Two-line label in the navbar: "Returns" over "& Orders" */
+.mz-icon-label-2 { line-height: 1.05; }
+.mz-icon-label-2 small { display: block; font-size: .72rem; font-weight: 500; opacity: .85; }
+
 /* ---------- Buttons ---------- */
 .btn-primary {
     --bs-btn-bg: var(--mz-green); --bs-btn-border-color: var(--mz-green);
@@ -587,6 +618,15 @@ a { text-underline-offset: 2px; }
 .mz-addr-pick-body i { color: var(--mz-green); }
 .mz-addr-add { align-items: center; border-style: dashed; color: var(--mz-green); }
 .mz-addr-add:hover { background: var(--mz-mint); }
+/* Promo codes at checkout: a ticket-like code next to what it gives */
+.mz-promo-card { display: flex; gap: .75rem; align-items: center; padding: .65rem .8rem; border: 1px dashed #A9C9BB;
+    border-radius: .8rem; background: #fff; }
+.mz-promo-card.is-on { border-style: solid; border-color: var(--mz-green); background: var(--mz-mint); }
+.mz-promo-card.is-off { opacity: .6; }
+.mz-promo-code { flex: none; min-width: 5.5rem; padding: .3rem .5rem; border-radius: .4rem; background: var(--mz-mint);
+    color: var(--mz-green); font-weight: 700; font-size: .8rem; letter-spacing: .04em; text-align: center; }
+.mz-promo-applied { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .6rem .8rem;
+    border: 1px solid var(--mz-green); border-radius: .8rem; background: var(--mz-mint); color: var(--mz-green); }
 .mz-addr-option .mz-addr-check { color: transparent; font-size: 1rem; }
 .mz-addr-option.is-selected { border-color: var(--mz-green); background: var(--mz-mint); }
 .mz-addr-option.is-selected .mz-addr-check { color: var(--mz-green); }
@@ -762,8 +802,10 @@ a { text-underline-offset: 2px; }
 
 /* ---------- Home: banners, then cards over their lower edge ---------- */
 body.mz-home { background: #EAF1ED; }
-.mz-banner { position: relative; height: 320px; overflow: hidden; color: #fff; }
+.mz-banner { position: relative; height: 20rem; overflow: hidden; color: #fff; }
 .mz-banner-row { position: relative; height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding-bottom: 5.5rem; }
+/* Room for the carousel arrows, so they never sit on the headline */
+@media (min-width: 576px) { .mz-banner .mz-banner-row { padding-left: max(3.25rem, clamp(1rem, 2.6vw, 2.75rem)); padding-right: max(3.25rem, clamp(1rem, 2.6vw, 2.75rem)); } }
 .mz-banner-deals { background: linear-gradient(120deg, #0A4E40 0%, #0E6B57 55%, #2BA36B 100%); }
 .mz-banner-remind { background: linear-gradient(120deg, #2E2366 0%, #5B5BD6 60%, #8C8CF0 100%); }
 .mz-banner-delivery { background: linear-gradient(120deg, #7A3E00 0%, #C9781A 55%, #F0B256 100%); }
@@ -837,10 +879,12 @@ body.mz-home { background: #EAF1ED; }
     background: #fff; color: var(--mz-red); font-size: .9rem; font-weight: 800; }
 
 /* A row of product cards that scrolls sideways */
-.mz-rail { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .4rem; scroll-snap-type: x mandatory; scrollbar-width: thin; }
+.mz-rail { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .4rem; scroll-snap-type: x mandatory; }
 .mz-rail-item { flex: 0 0 13.5rem; scroll-snap-align: start; }
 .mz-how { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-.mz-how li { display: flex; align-items: flex-start; gap: .75rem; color: var(--mz-muted); font-size: .9rem; }
+/* Each step a tile, so the three fill the card evenly whatever the screen width */
+.mz-how li { display: flex; align-items: center; gap: .9rem; height: 100%; padding: 1rem 1.15rem; border-radius: .8rem;
+    background: var(--mz-paper); border: 1px solid var(--mz-line); color: var(--mz-muted); font-size: .9rem; }
 .mz-how i { flex: none; display: flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; border-radius: 50%;
     background: var(--mz-mint); color: var(--mz-green); font-size: 1.15rem; }
 .mz-how strong { display: block; color: var(--mz-ink); }
@@ -873,6 +917,7 @@ body.mz-home { background: #EAF1ED; }
 .mz-footer-trust { background: #fff; color: var(--mz-ink); border-top: 1px solid var(--mz-line); }
 .mz-trust { list-style: none; margin: 0; padding: 1.4rem 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem 1.5rem; }
 .mz-trust li { display: flex; align-items: center; gap: .8rem; min-width: 0; }
+@media (min-width: 992px) { .mz-trust li { justify-content: center; } }   /* each centred in its quarter */
 .mz-trust i { flex: none; width: 2.7rem; height: 2.7rem; border-radius: 50%; background: var(--mz-mint); color: var(--mz-green);
     display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
 .mz-trust strong { display: block; font-size: .92rem; line-height: 1.25; }
@@ -1019,7 +1064,7 @@ html.translated-ltr h1, html.translated-ltr h2, html.translated-ltr h3, html.tra
 /* ---------- Help & support: quick answers, tickets and their conversation ---------- */
 .min-w-0 { min-width: 0; }
 .flex-none { flex: none; }
-.mz-narrow { max-width: 52rem; }
+.mz-narrow { max-width: 64rem; }
 
 .mz-quick-asks { display: flex; flex-wrap: wrap; gap: .5rem; }
 .mz-quick-ask {

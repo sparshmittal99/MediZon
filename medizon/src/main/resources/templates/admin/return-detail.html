@@ -62,6 +62,29 @@
         </div>
 
         <div class="col-lg-4">
+            <div class="mz-panel mb-3" th:if="${r.pickupAddress != null}">
+                <h2 class="h6">Pick up</h2>
+                <p class="small fw-semibold mb-1" th:text="${#temporals.format(r.pickupDate, 'EEEE, d MMM')}"></p>
+                <p class="small mb-0" th:text="${r.pickupName} + (${r.pickupPhone} != null ? ' · ' + ${r.pickupPhone} : '')"></p>
+                <p class="small text-muted mb-0" th:text="${r.pickupAddress}"></p>
+            </div>
+
+            <div class="mz-panel mb-3" th:if="${r.refundMode != null}">
+                <h2 class="h6">Refund to</h2>
+                <p class="small mb-0" th:if="${r.refundMode.name() == 'ORIGINAL'}" th:text="'Original payment method (' + ${r.order.paymentMethod.label} + ')'"></p>
+                <p class="small mb-0" th:if="${r.refundMode.name() == 'WALLET'}">MediZon Money</p>
+                <p class="small text-muted mt-1 mb-0" th:text="${r.refundTiming}"></p>
+                <p class="small mt-1 mb-0" th:if="${r.walletRefund.signum() > 0}" th:text="'₹' + ${r.walletRefund} + ' paid into MediZon Money at pickup'"></p>
+                <p class="small mt-1 mb-0" th:if="${r.refundDueOn != null and r.status.name() == 'PICKED_UP'}"
+                   th:text="'₹' + ${r.payoutAmount} + ' goes out automatically on ' + ${#temporals.format(r.refundDueOn, 'EEE, d MMM')}"></p>
+                <p class="small mb-0" th:if="${r.refundMode.name() == 'UPI'}">UPI ID <strong th:text="${r.refundUpiId}"></strong></p>
+                <dl class="small mb-0" th:if="${r.refundMode.name() == 'BANK'}">
+                    <dt>Account holder</dt><dd th:text="${r.refundAccountName}"></dd>
+                    <dt>Account number</dt><dd th:text="${r.status.name() == 'PICKED_UP'} ? ${r.refundAccountNumber} : ${r.maskedAccountNumber}"></dd>
+                    <dt>IFSC</dt><dd class="mb-0" th:text="${r.refundIfsc}"></dd>
+                </dl>
+            </div>
+
             <div class="mz-panel mb-3" th:if="${r.adminNote != null or r.decidedAt != null}">
                 <h2 class="h6">Decision</h2>
                 <p class="small mb-1" th:if="${r.decidedAt}" th:text="${#temporals.format(r.decidedAt, 'd MMM yyyy, h:mm a')}"></p>
@@ -95,11 +118,13 @@
 
             <!-- Picked up: refund -->
             <form th:if="${r.status.name() == 'PICKED_UP'}" th:action="@{/admin/returns/{id}/refund(id=${r.id})}" method="post" class="mz-panel"
-                  th:attr="data-mz-confirm='Refund ₹' + ${r.refundAmount} + ' to ' + ${r.user.fullName} + '?'"
+                  th:attr="data-mz-confirm='Refund ₹' + ${r.payoutAmount} + ' to ' + ${r.user.fullName} + ' now?'"
                   data-mz-confirm-title="Refund" data-mz-confirm-ok="Refund">
                 <h2 class="h6">Refund</h2>
-                <p class="small" th:text="'Paid by ' + ${r.order.paymentMethod.label} + '. Refund ₹' + ${r.refundAmount} + ' through the same method, then mark it done.'"></p>
-                <button class="btn btn-primary w-100" type="submit">Mark refunded</button>
+                <p class="small" th:text="'Paid by ' + ${r.order.paymentLabel} + '. ₹' + ${r.payoutAmount}
+                        + (${r.refundTo} != null ? ' to ' + ${r.refundTo} : ' through the same method')
+                        + (${r.refundDueOn} != null ? ' is paid automatically on ' + ${#temporals.format(r.refundDueOn, 'd MMM')} + '. Pay it sooner and mark it here.' : '. Pay it, then mark it done.')"></p>
+                <button class="btn btn-primary w-100" type="submit">Mark refunded now</button>
             </form>
         </div>
     </div>

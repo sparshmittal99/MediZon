@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('MediZon Money')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-w-form">
+    <h1 class="mz-page-title">MediZon Money</h1>
+
+    <section class="mz-panel mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <div class="small text-muted">Balance</div>
+            <div class="display-6 fw-bold" th:text="'₹' + ${#numbers.formatDecimal(balance, 1, 'COMMA', 2, 'POINT')}">₹0.00</div>
+        </div>
+        <p class="small text-muted mb-0" style="max-width: 24rem">Refunds you take as MediZon Money arrive the moment the packs are
+            picked up. Use it at checkout: it pays as much of the order as it can, and you pay the rest any way you like.</p>
+    </section>
+
+    <section class="mz-panel-flush">
+        <h2 class="h6 px-3 pt-3">Activity</h2>
+        <p th:if="${#lists.isEmpty(history)}" class="small text-muted px-3 pb-3 mb-0">No MediZon Money yet. Choose it as the refund
+            method when you return something.</p>
+        <ul th:unless="${#lists.isEmpty(history)}" class="list-group list-group-flush">
+            <li th:each="t : ${history}" class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <a th:if="${t.link}" th:href="@{${t.link}}" th:text="${t.description}"></a>
+                    <span th:unless="${t.link}" th:text="${t.description}"></span>
+                    <div class="small text-muted" th:text="${#temporals.format(t.createdAt, 'd MMM yyyy, h:mm a')}"></div>
+                </div>
+                <div class="text-end">
+                    <div class="fw-semibold" th:classappend="${t.credit} ? 'text-success'"
+                         th:text="(${t.credit} ? '+ ₹' : '− ₹') + ${#numbers.formatDecimal(t.amount.abs(), 1, 'COMMA', 2, 'POINT')}"></div>
+                    <div class="small text-muted" th:text="'Balance ₹' + ${t.balanceAfter}"></div>
+                </div>
+            </li>
+        </ul>
+    </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

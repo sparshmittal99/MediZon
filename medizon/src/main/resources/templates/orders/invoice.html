@@ -6,7 +6,7 @@
 <th:block th:if="${adminView}"><div th:replace="~{fragments/layout :: adminNav}"></div></th:block>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
-<main class="container mz-page" style="max-width: 980px" th:with="o=${inv.order}, s=${inv.seller}">
+<main class="container mz-page mz-w-doc" th:with="o=${inv.order}, s=${inv.seller}">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 mz-no-print">
         <a th:href="${adminView} ? @{/admin/orders/{id}(id=${o.id})} : @{/orders/{id}(id=${o.id})}" class="small">
             <i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
@@ -59,7 +59,8 @@
                 <h2>Supply</h2>
                 <div><strong>Place of supply:</strong> <span th:text="${inv.placeOfSupply}"></span></div>
                 <div th:text="${inv.interState} ? 'Inter-state supply (IGST)' : 'Intra-state supply (CGST + SGST)'"></div>
-                <div><strong>Payment:</strong> <span th:text="${o.paymentMethod.label} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></span></div>
+                <div><strong>Payment:</strong> <span th:text="${o.paymentLabel} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></span></div>
+                <div th:if="${inv.discounted}"><strong>Promo code:</strong> <span th:text="${inv.couponCode}"></span></div>
             </div>
             <!-- Who the medicines are for and, for prescription medicines, who prescribed them and when -->
             <div th:if="${!#strings.isEmpty(inv.patients) or !#lists.isEmpty(inv.prescriptions) or o.doctorName != null}">
@@ -80,6 +81,7 @@
                 <thead>
                 <tr>
                     <th>#</th><th>Item</th><th>HSN</th><th class="text-end">Qty</th><th class="text-end">Rate (incl. GST)</th>
+                    <th th:if="${inv.discounted}" class="text-end">Discount</th>
                     <th class="text-end">Taxable value</th><th class="text-end">GST %</th>
                     <th:block th:unless="${inv.interState}"><th class="text-end">CGST</th><th class="text-end">SGST</th></th:block>
                     <th th:if="${inv.interState}" class="text-end">IGST</th>
@@ -96,6 +98,7 @@
                     <td th:text="${#strings.isEmpty(l.hsnCode)} ? '-' : ${l.hsnCode}"></td>
                     <td class="text-end" th:text="${l.quantity}"></td>
                     <td class="text-end" th:text="${#numbers.formatDecimal(l.unitPrice, 1, 'COMMA', 2, 'POINT')}"></td>
+                    <td th:if="${inv.discounted}" class="text-end" th:text="${l.discount.signum() > 0} ? '−' + ${#numbers.formatDecimal(l.discount, 1, 'COMMA', 2, 'POINT')} : '-'"></td>
                     <td class="text-end" th:text="${#numbers.formatDecimal(l.taxableValue, 1, 'COMMA', 2, 'POINT')}"></td>
                     <td class="text-end" th:text="${l.gstRate.toPlainString()} + '%'"></td>
                     <th:block th:unless="${inv.interState}">
@@ -131,6 +134,11 @@
                 <p class="small mb-0"><strong>Amount in words:</strong> <span th:text="${inv.amountInWords}"></span></p>
             </div>
             <dl class="mz-invoice-totals">
+                <th:block th:if="${inv.discounted}">
+                    <dt>Amount</dt><dd th:text="'₹' + ${#numbers.formatDecimal(inv.invoiceValue.add(inv.discountTotal), 1, 'COMMA', 2, 'POINT')}"></dd>
+                    <dt th:text="'Promo discount (' + ${inv.couponCode} + ')'">Promo discount</dt>
+                    <dd th:text="'− ₹' + ${#numbers.formatDecimal(inv.discountTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
+                </th:block>
                 <dt>Taxable value</dt><dd th:text="'₹' + ${#numbers.formatDecimal(inv.taxableTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
                 <th:block th:unless="${inv.interState}">
                     <dt>CGST</dt><dd th:text="'₹' + ${#numbers.formatDecimal(inv.cgstTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
@@ -144,6 +152,10 @@
                 </th:block>
                 <dt class="mz-invoice-grand">Total</dt>
                 <dd class="mz-invoice-grand" th:text="'₹' + ${#numbers.formatDecimal(inv.grandTotal, 1, 'COMMA', 2, 'POINT')}"></dd>
+                <th:block th:if="${o.paidWithWallet and o.paymentMethod.name() != 'WALLET'}">
+                    <dt>Paid with MediZon Money</dt><dd th:text="'₹' + ${#numbers.formatDecimal(o.walletUsed, 1, 'COMMA', 2, 'POINT')}"></dd>
+                    <dt th:text="${o.paymentMethod.label}">UPI</dt><dd th:text="'₹' + ${#numbers.formatDecimal(o.amountDue, 1, 'COMMA', 2, 'POINT')}"></dd>
+                </th:block>
             </dl>
         </section>
 

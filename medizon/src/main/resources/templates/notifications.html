@@ -5,7 +5,7 @@
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
-<main class="container mz-page" style="max-width: 820px">
+<main class="container mz-page mz-w-page">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mz-page-title mb-0">Notifications</h1>
         <a th:if="${me != null and !me.admin}" th:href="@{/notifications/settings}" class="btn btn-sm btn-outline-primary">

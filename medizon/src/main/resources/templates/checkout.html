@@ -97,15 +97,70 @@
                 </div>
 
                 <h2 class="h5 mb-3">Payment</h2>
-                <div class="form-check mb-2" th:each="pm, s : ${paymentMethods}">
-                    <input class="form-check-input" type="radio" name="paymentMethod" th:id="'pm' + ${s.index}"
-                           th:value="${pm}" th:checked="${s.first}">
-                    <label class="form-check-label" th:for="'pm' + ${s.index}" th:text="${pm.label}">COD</label>
+                <!-- MediZon Money pays as much as it can; the method below pays the rest -->
+                <label class="mz-addr-pick mb-3" th:classappend="${walletBalance.signum() == 0} ? 'is-off'">
+                    <input type="checkbox" name="useWallet" value="true" data-mz-use-wallet
+                           th:checked="${walletBalance.signum() > 0}" th:disabled="${walletBalance.signum() == 0}">
+                    <span class="mz-addr-pick-body">
+                        <strong><i class="bi bi-wallet2 me-1" aria-hidden="true"></i>MediZon Money</strong>
+                        <span class="d-block small" th:text="'Balance ₹' + ${#numbers.formatDecimal(walletBalance, 1, 'COMMA', 2, 'POINT')}"></span>
+                        <span class="d-block small text-muted" th:if="${walletBalance.signum() == 0}">Refunds you take as MediZon Money show up here.</span>
+                    </span>
+                </label>
+                <p class="small text-success mb-2" data-mz-wallet-covers hidden><i class="bi bi-check-circle me-1"></i>MediZon Money covers the whole order.</p>
+                <div data-mz-pay-rest>
+                    <p class="small text-muted mb-2" data-mz-pay-rest-label hidden></p>
+                    <div class="form-check mb-2" th:each="pm, s : ${paymentMethods}">
+                        <input class="form-check-input" type="radio" name="paymentMethod" th:id="'pm' + ${s.index}"
+                               th:value="${pm}" th:checked="${s.first}">
+                        <label class="form-check-label" th:for="'pm' + ${s.index}" th:text="${pm.label}">COD</label>
+                    </div>
                 </div>
             </form>
         </div>
 
         <div class="col-lg-5">
+            <!-- Promo codes: typed in or picked from the cards; one use of each code a day -->
+            <section class="mz-panel mb-4">
+                <h2 class="h5 mb-3"><i class="bi bi-ticket-perforated me-1 text-success" aria-hidden="true"></i>Apply coupon</h2>
+                <div th:if="${cart.discounted}" class="mz-promo-applied mb-3">
+                    <div>
+                        <strong th:text="${cart.couponCode}">FIRST50</strong> applied
+                        <div class="small" th:text="'You save ₹' + ${cart.discount}"></div>
+                    </div>
+                    <form th:action="@{/checkout/coupon/remove}" method="post">
+                        <input type="hidden" name="address" th:value="${selectedAddress}">
+                        <button class="btn btn-sm btn-link text-danger" type="submit">Remove</button>
+                    </form>
+                </div>
+                <div th:if="${cart.coupon != null and !cart.coupon.isOk()}" class="alert alert-warning small py-2" th:text="${cart.coupon.problem()}"></div>
+                <form th:unless="${cart.discounted}" th:action="@{/checkout/coupon}" method="post" class="d-flex gap-2 mb-3">
+                    <input type="hidden" name="address" th:value="${selectedAddress}">
+                    <input class="form-control text-uppercase" name="code" maxlength="20" placeholder="Enter promo code" aria-label="Promo code" required>
+                    <button class="btn btn-outline-primary" type="submit">Apply</button>
+                </form>
+                <div class="d-grid gap-2">
+                    <div th:each="c : ${promos}" class="mz-promo-card"
+                         th:with="used=${promosUsedToday.contains(c.code)}, below=${cart.subtotal.compareTo(c.minOrder) < 0}, on=${c.code == cart.couponCode}"
+                         th:classappend="${used or below} ? 'is-off' : (${on} ? 'is-on' : '')">
+                        <div class="mz-promo-code" th:text="${c.code}">FIRST50</div>
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold small" th:text="${c.title}"></div>
+                            <div class="small text-muted" th:text="${c.description}"></div>
+                            <div class="small text-danger" th:if="${used}">Used today. Try again tomorrow.</div>
+                            <div class="small text-muted" th:if="${!used and below}"
+                                 th:text="'Add ₹' + ${c.minOrder.subtract(cart.subtotal)} + ' more to use this'"></div>
+                        </div>
+                        <span th:if="${on}" class="small fw-semibold text-success">Applied</span>
+                        <form th:unless="${on or used or below}" th:action="@{/checkout/coupon}" method="post">
+                            <input type="hidden" name="address" th:value="${selectedAddress}">
+                            <input type="hidden" name="code" th:value="${c.code}">
+                            <button class="btn btn-sm btn-outline-primary" type="submit">Apply</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
             <div class="mz-panel">
                 <h2 class="h5 mb-3">Order summary</h2>
                 <!-- One order per store; each store's part arrives on its own -->
@@ -134,12 +189,23 @@
                 <a th:href="@{/cart}" class="small">Change who medicines are for</a>
                 <hr>
                 <div class="d-flex justify-content-between mb-1"><span>Subtotal</span><span th:text="'₹' + ${cart.subtotal}"></span></div>
+                <div class="d-flex justify-content-between mb-1 text-success" th:if="${cart.discounted}">
+                    <span th:text="'Promo (' + ${cart.couponCode} + ')'">Promo</span><span th:text="'− ₹' + ${cart.discount}"></span></div>
                 <div class="d-flex justify-content-between mb-3"><span>Delivery</span>
                     <span th:text="${cart.deliveryFee.signum() == 0} ? 'Free' : ('₹' + ${cart.deliveryFee})"></span></div>
                 <div class="d-flex justify-content-between mb-3 text-muted small" th:if="${cart.roundOff.signum() != 0}">
                     <span>Round off</span><span th:text="${cart.roundOffLabel}"></span></div>
-                <div class="d-flex justify-content-between fw-bold fs-5 mb-3"><span>Total</span>
+                <div class="d-flex justify-content-between fw-bold fs-5 mb-2"><span>Total</span>
                     <span th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
+                <!-- Filled in by the page script as MediZon Money is ticked -->
+                <div data-mz-checkout-pay th:attr="data-total=${cart.total}, data-balance=${walletBalance}">
+                    <div class="d-flex justify-content-between mb-1 text-success" data-mz-wallet-line hidden>
+                        <span>MediZon Money</span><span data-mz-wallet-amount></span></div>
+                    <div class="d-flex justify-content-between fw-semibold mb-3" data-mz-to-pay-line hidden>
+                        <span>To pay</span><span data-mz-to-pay></span></div>
+                </div>
+                <p class="small text-success mb-3" th:if="${cart.discounted}"
+                   th:text="'You save ₹' + ${cart.discount} + ' on this order with ' + ${cart.couponCode} + '.'"></p>
                 <button form="placeOrder" class="btn btn-primary w-100" type="submit"
                         th:disabled="${selectedAddress == null or (cart.prescriptionRequired and !rxCoverage.complete)}">Place order</button>
             </div>

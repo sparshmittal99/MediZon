@@ -29,6 +29,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     long countByStoreAndStatus(Store store, OrderStatus status);
     List<Order> findTop8ByStoreOrderByCreatedAtDesc(Store store);
     List<Order> findByCheckoutRefOrderByIdAsc(String checkoutRef);
+
+    /** Has the customer used this promo on an order (not cancelled) since {@code since}? */
+    boolean existsByUserAndCouponCodeIgnoreCaseAndCreatedAtAfterAndStatusNot(User user, String couponCode, LocalDateTime since, OrderStatus status);
     List<Order> findByUser(User user);
     long countBySource(OrderSource source);
     long countByCreatedAtAfter(LocalDateTime since);

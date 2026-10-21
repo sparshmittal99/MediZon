@@ -36,8 +36,14 @@ public class Invoice {
     /** What the customer pays: the invoice value plus the round off. */
     BigDecimal grandTotal;
     String amountInWords;
+    /** Promo discount across the lines, already out of the taxable values; zero without a promo. */
+    BigDecimal discountTotal;
+    /** The promo code used, or null. */
+    String couponCode;
 
     public boolean isRounded() { return roundOff.signum() != 0; }
+
+    public boolean isDiscounted() { return discountTotal.signum() > 0; }
 
     public String getRoundOffLabel() { return RoundOff.label(roundOff); }
 
@@ -85,6 +91,8 @@ public class Invoice {
         int quantity;
         /** Price per pack, GST included. */
         BigDecimal unitPrice;
+        /** The line's share of the promo, taken off before tax is worked out. */
+        BigDecimal discount;
         BigDecimal gstRate;
         BigDecimal taxableValue;
         BigDecimal cgst;

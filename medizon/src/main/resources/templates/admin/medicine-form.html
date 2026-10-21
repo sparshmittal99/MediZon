@@ -6,7 +6,7 @@
 <div th:replace="~{fragments/layout :: adminNav}"></div>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
-<main class="container mz-page" style="max-width: 900px">
+<main class="container mz-page mz-w-wide">
     <a th:href="${listIn != null} ? @{/admin/medicines(store=${listIn.id})} : @{/admin/medicines}" class="small"><i class="bi bi-arrow-left"></i> Catalogue</a>
     <h1 class="mz-page-title mt-2 mb-1" th:text="${medicine.id == null} ? 'Add a product' : ('Edit ' + ${medicine.name})">Product</h1>
     <p class="small text-muted mb-4" th:text="${medicine.id == null and listIn != null}

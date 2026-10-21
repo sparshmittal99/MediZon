@@ -61,10 +61,17 @@
                     </tr>
                     </tbody>
                     <tfoot>
+                    <tr th:if="${o.discounted}" class="text-success"><td colspan="3" class="text-end" th:text="'Promo (' + ${o.couponCode} + ')'">Promo</td>
+                        <td class="text-end" th:text="'− ₹' + ${o.discount}"></td></tr>
                     <tr><td colspan="3" class="text-end text-muted">Delivery</td><td class="text-end" th:text="'₹' + ${o.deliveryFee}"></td></tr>
                     <tr th:if="${o.rounded}"><td colspan="3" class="text-end text-muted">Round off</td><td class="text-end" th:text="${o.roundOffLabel}"></td></tr>
                     <tr><td colspan="3" class="text-end fw-bold">Total</td>
                         <td class="text-end fw-bold" th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                    <th:block th:if="${o.paidWithWallet and o.paymentMethod.name() != 'WALLET'}">
+                        <tr class="small"><td colspan="3" class="text-end text-muted">Paid with MediZon Money</td><td class="text-end" th:text="'₹' + ${o.walletUsed}"></td></tr>
+                        <tr class="small"><td colspan="3" class="text-end text-muted" th:text="${o.paymentMethod.name() == 'COD'} ? 'Cash on delivery' : ('Paid by ' + ${o.paymentMethod.label})"></td>
+                            <td class="text-end" th:text="'₹' + ${o.amountDue}"></td></tr>
+                    </th:block>
                     </tfoot>
                 </table>
             </div>
@@ -90,7 +97,16 @@
                 </ul>
                 <p class="small mb-1" th:if="${r.details}" th:text="${r.details}"></p>
                 <p class="small mb-1" th:if="${r.adminNote}"><strong>Pharmacist:</strong> <span th:text="${r.adminNote}"></span></p>
-                <p class="small mb-0 fw-semibold" th:text="(${r.status.name() == 'REFUNDED'} ? 'Refunded ' : 'Refund ') + '₹' + ${r.refundAmount}"></p>
+                <p class="small mb-1" th:if="${r.pickupAddress != null and (r.status.name() == 'REQUESTED' or r.status.name() == 'APPROVED')}">
+                    <strong>Pickup</strong> <span th:text="${#temporals.format(r.pickupDate, 'EEE, d MMM')} + ' from ' + ${r.pickupAddress}"></span></p>
+                <p class="small mb-0 fw-semibold" th:text="(${r.status.name() == 'REFUNDED'} ? 'Refunded ' : 'Refund ') + '₹' + ${r.refundAmount}
+                        + (${r.refundTo} != null ? ' to ' + ${r.refundTo} : '')"></p>
+                <p class="small text-muted mb-0" th:if="${r.walletRefund.signum() > 0 and r.payoutAmount.signum() > 0}"
+                   th:text="'₹' + ${r.walletRefund} + ' went back to MediZon Money; ₹' + ${r.payoutAmount} + ' to ' + ${r.refundTo} + '.'"></p>
+                <p class="small text-muted mb-0" th:if="${r.status.name() == 'PICKED_UP' and r.refundDueOn != null}"
+                   th:text="'Expected by ' + ${#temporals.format(r.refundDueOn, 'EEE, d MMM')}"></p>
+                <p class="small text-muted mb-0" th:if="${(r.status.name() == 'REQUESTED' or r.status.name() == 'APPROVED') and r.refundTiming != null}"
+                   th:text="'Refund timing: ' + ${#strings.toLowerCase(r.refundTiming)}"></p>
             </section>
 
             <div th:if="${!adminView and hasReturnable and o.status.name() == 'DELIVERED'}" class="mz-panel mt-4 d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -166,7 +182,8 @@
                 <p class="small text-muted mb-1" th:text="${o.shippingAddress}"></p>
                 <p class="small text-muted mb-3" th:if="${o.contactPhone}"><i class="bi bi-telephone me-1"></i><span th:text="${o.contactPhone}"></span></p>
                 <h2 class="h6">Payment</h2>
-                <p class="small mb-0" th:text="${o.paymentMethod.label} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></p>
+                <p class="small mb-0" th:text="${o.paymentLabel} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></p>
+                <p class="small text-success mb-0" th:if="${o.discounted}" th:text="'You saved ₹' + ${o.discount} + ' with ' + ${o.couponCode}"></p>
                 <p th:each="rx : ${o.prescriptionsUsed}" sec:authorize="hasAnyRole('CUSTOMER','ADMIN','PHARMACIST')" class="small mt-3 mb-0">
                     <i class="bi bi-file-earmark-medical"></i>
                     <a th:href="@{/prescriptions/{id}/file(id=${rx.id})}" target="_blank" rel="noopener"

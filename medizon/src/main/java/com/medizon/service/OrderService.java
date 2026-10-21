@@ -22,7 +22,8 @@ import java.util.stream.Collectors;
 /**
  * Orders. Each order comes from one store: at checkout every line goes to the nearest store delivering to the address
  * that has it in stock, so a cart can become several orders, placed and paid for together (they share a checkout
- * reference). The delivery fee is worked out on the whole cart and charged once.
+ * reference). The delivery fee is worked out on the whole cart and charged once. A promo is spread over the lines;
+ * MediZon Money pays each order as far as it goes, and the chosen method pays the rest.
  */
 @Service
 @RequiredArgsConstructor
@@ -42,6 +43,8 @@ public class OrderService {
     private final AddressService addressService;
     private final ApplicationEventPublisher events;
     private final PrescriptionService prescriptionService;
+    private final CouponService coupons;
+    private final WalletService wallet;
 
     /** One order line: packs of a medicine and how many packs each person gets. */
     /** @param othersPatient who the "Others" share is for, when known (from a prescription) */
@@ -51,13 +54,16 @@ public class OrderService {
 
     // ------------------------------------------------------------------ customer checkout
 
-    /** Places the cart as one order per store; returns them, the biggest first. */
+    /**
+     * Places the cart as one order per store; returns them, the biggest first. {@code couponCode} may be null;
+     * {@code paymentMethod} may be null when MediZon Money covers everything.
+     */
     @Transactional
-    public List<Order> checkout(User user, PaymentMethod paymentMethod, Long addressId) {
+    public List<Order> checkout(User user, PaymentMethod paymentMethod, Long addressId, String couponCode, boolean useWallet) {
         if (user.isStaff()) throw new BusinessException("Staff accounts can't place orders.");
         if (addressId == null) throw new BusinessException("Choose a delivery address.");
         Address ship = addressService.get(addressId, user);
-        CartSummary cart = cartService.summary(user, ship.getPincode());
+        CartSummary cart = cartService.summary(user, ship.getPincode(), couponCode);
         if (cart.isEmpty()) throw new BusinessException("Your cart is empty.");
         if (!cart.getUnavailable().isEmpty()) {
             throw new BusinessException(cart.getUnavailable().stream().map(i -> i.getMedicine().getName()).collect(Collectors.joining(", "))
@@ -70,13 +76,41 @@ public class OrderService {
         PrescriptionService.Coverage coverage = prescriptionService.cover(user, rxLines(cart));
         coverage.require();
 
+        CouponService.Applied promo = coupons.require(user, couponCode, cart.getSubtotal());
+        BigDecimal balance = useWallet ? wallet.balance(user) : BigDecimal.ZERO;
+        if (balance.compareTo(cart.getTotal()) < 0 && (paymentMethod == null || paymentMethod == PaymentMethod.WALLET)) {
+            throw new BusinessException(balance.signum() > 0
+                    ? "MediZon Money covers ₹" + balance + ". Choose how to pay the remaining ₹" + cart.getTotal().subtract(balance) + "."
+                    : "Choose how you'd like to pay.");
+        }
+
         List<Line> lines = new ArrayList<>();
         for (CartItem i : cart.getItems()) {
             if (i.getMembers().isEmpty()) throw new BusinessException("Choose who " + i.getMedicine().getName() + " is for.");
             lines.add(new Line(i.getMedicine().getId(), i.getQuantity(), i.getAllocation(), i.getOthersPatientName()));
         }
 
-        List<Order> placed = createOrders(user, lines, paymentMethod, coverage, OrderSource.CUSTOMER, ship);
+        List<Order> placed = createOrders(user, lines, paymentMethod == null ? PaymentMethod.UPI : paymentMethod,
+                coverage, OrderSource.CUSTOMER, ship, promo);
+        if (useWallet) {
+            for (Order o : placed) {
+                BigDecimal used = wallet.spend(user, o.getTotal(), "Paid for order " + o.getOrderNumber(), "/orders/" + o.getId());
+                o.setWalletUsed(used);
+                if (used.signum() > 0 && used.compareTo(o.getTotal()) >= 0) {
+                    o.setPaymentMethod(PaymentMethod.WALLET);
+                    o.setPaymentStatus(PaymentStatus.PAID);
+                }
+            }
+            BigDecimal paid = placed.stream().map(Order::getWalletUsed).reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (paid.signum() > 0) {
+                Order first = placed.get(0);
+                notifications.notify(user, NotificationType.ORDER_UPDATE, "Paid with MediZon Money",
+                        "₹" + paid + " paid with MediZon Money for " + (placed.size() == 1 ? "order " + first.getOrderNumber()
+                                : "orders " + placed.stream().map(Order::getOrderNumber).collect(Collectors.joining(", ")))
+                                + ". Balance left: ₹" + wallet.balance(user) + ".",
+                        placed.size() == 1 ? "/orders/" + first.getId() : "/wallet");
+            }
+        }
         prescriptionService.finishUse(coverage.prescriptions());
         Cart from = cartService.checkOut(user);
         placed.forEach(o -> o.setCart(from));
@@ -168,7 +202,7 @@ public class OrderService {
         coverage.require();
         Map<Member, Integer> forWhom = plan.getMember() == null ? Map.of() : Map.of(plan.getMember(), packs);
         Order o = createOrders(user, List.of(new Line(m.getId(), packs, forWhom)),
-                PaymentMethod.COD, coverage, OrderSource.AUTO_REORDER, refillAddress(plan)).get(0);
+                PaymentMethod.COD, coverage, OrderSource.AUTO_REORDER, refillAddress(plan), null).get(0);
         prescriptionService.finishUse(coverage.prescriptions());
         alertStore(o);
         return o;
@@ -187,7 +221,8 @@ public class OrderService {
      * has enough in stock. {@code ship} is the saved address to deliver to; without one, the account's address.
      */
     private List<Order> createOrders(User user, List<Line> lines, PaymentMethod paymentMethod,
-                                     PrescriptionService.Coverage coverage, OrderSource source, Address ship) {
+                                     PrescriptionService.Coverage coverage, OrderSource source, Address ship,
+                                     CouponService.Applied promo) {
         if (ship == null && !user.hasAddress()) throw new BusinessException("Add a delivery address first.");
         String pincode = ship != null ? ship.getPincode() : user.getPincode();
         deliveryAreas.requireServiceable(pincode);
@@ -206,6 +241,14 @@ public class OrderService {
             byId.put(m.getId(), m);
         }
         Map<Long, Offer> offers = catalog.offers(wanted, pincode);
+
+        // The promo spread over the lines in cart order, as the cart showed it
+        Map<Line, BigDecimal> lineDiscount = new IdentityHashMap<>();
+        if (promo != null && promo.isOk()) {
+            List<BigDecimal> shares = Discounts.split(promo.discount(), lines.stream()
+                    .map(l -> offers.get(l.medicineId()).price().multiply(BigDecimal.valueOf(l.quantity()))).toList());
+            for (int k = 0; k < lines.size(); k++) lineDiscount.put(lines.get(k), shares.get(k));
+        }
 
         // Which store supplies each line, nearest first
         Map<Long, List<Line>> byStore = new LinkedHashMap<>();
@@ -246,6 +289,7 @@ public class OrderService {
                 item.setUnitPrice(si.getSellingPrice());
                 item.setQuantity(qty);
                 item.setLineTotal(si.getSellingPrice().multiply(BigDecimal.valueOf(qty)));
+                item.setDiscount(lineDiscount.getOrDefault(line, BigDecimal.ZERO).min(item.getLineTotal()));
                 item.setHsnCode(m.getHsnCode());
                 item.setGstRate(m.getGstRate());
                 item.setExpiryDate(si.getExpiryDate());
@@ -267,6 +311,8 @@ public class OrderService {
                 order.setPrescriptionDate(rx.getPrescribedOn());
             });
             order.setSubtotal(subtotal);
+            order.setDiscount(order.getItems().stream().map(OrderItem::getDiscount).reduce(BigDecimal.ZERO, BigDecimal::add));
+            if (order.isDiscounted()) order.setCouponCode(promo.coupon().getCode());
             placed.add(order);
         }
 
@@ -277,7 +323,7 @@ public class OrderService {
         for (int k = 0; k < placed.size(); k++) {
             Order o = placed.get(k);
             o.setDeliveryFee(k == 0 ? fee : BigDecimal.ZERO);
-            BigDecimal exact = o.getSubtotal().add(o.getDeliveryFee());
+            BigDecimal exact = o.getSubtotal().subtract(o.getDiscount()).add(o.getDeliveryFee());
             o.setRoundOff(RoundOff.of(exact));
             o.setTotal(exact.add(o.getRoundOff()));
         }
@@ -349,10 +395,18 @@ public class OrderService {
             prescriptionService.releaseUse(o);      // the packs can be ordered again on its prescription
             if (o.getPaymentStatus() == PaymentStatus.PAID) o.setPaymentStatus(PaymentStatus.REFUNDED);
         }
+        // MediZon Money spent on a cancelled order goes straight back
+        BigDecimal walletBack = next != OrderStatus.CANCELLED || o.getWalletUsed() == null ? BigDecimal.ZERO
+                : o.getWalletUsed().subtract(o.getWalletRefunded());
+        if (walletBack.signum() > 0) {
+            wallet.credit(o.getUser(), walletBack, "Order " + o.getOrderNumber() + " cancelled", "/orders/" + o.getId());
+            o.setWalletRefunded(o.getWalletRefunded().add(walletBack));
+        }
 
         notifications.notify(o.getUser(), NotificationType.ORDER_UPDATE,
                 "Order " + next.getLabel().toLowerCase(),
                 "Order " + o.getOrderNumber() + " is now " + next.getLabel().toLowerCase() + "."
+                        + (walletBack.signum() > 0 ? " ₹" + walletBack + " is back in your MediZon Money." : "")
                         + (next == OrderStatus.SHIPPED ? " Your tax invoice " + o.getInvoiceNumber() + " is ready on the order page." : "")
                         + (next == OrderStatus.DELIVERED ? " Tell us how it went with a quick review." : ""),
                 "/orders/" + o.getId());

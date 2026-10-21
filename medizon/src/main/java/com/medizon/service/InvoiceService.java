@@ -20,7 +20,8 @@ import java.util.*;
 /**
  * GST tax invoices. Prices on MediZon include GST, so each line's taxable value is worked back out of the price paid:
  * taxable = price x 100 / (100 + rate). Delivery charges are part of a composite supply and are taxed at the rate of
- * the order's principal supply (its highest-rated medicine).
+ * the order's principal supply (its highest-rated medicine). A promo discount is given on the invoice itself, so it
+ * comes off each line's value before tax is worked back out.
  */
 @Service
 @RequiredArgsConstructor
@@ -79,10 +80,11 @@ public class InvoiceService {
             BigDecimal rate = i.getGstRate() != null ? i.getGstRate() : DEFAULT_RATE;
             topRate = topRate.max(rate);
             String hsn = i.getHsnCode() != null ? i.getHsnCode() : i.getMedicine().getHsnCode();
-            lines.add(line(n++, i.getMedicineName(), hsn, i.getExpiryDate(), i.getPatientName(), i.getPrescribedBy(), i.getQuantity(), i.getUnitPrice(), rate, i.getLineTotal(), interState));
+            BigDecimal off = i.getDiscount() == null ? BigDecimal.ZERO : i.getDiscount();
+            lines.add(line(n++, i.getMedicineName(), hsn, i.getExpiryDate(), i.getPatientName(), i.getPrescribedBy(), i.getQuantity(), i.getUnitPrice(), rate, off, i.getNetTotal(), interState));
         }
         if (o.getDeliveryFee() != null && o.getDeliveryFee().signum() > 0) {
-            lines.add(line(n, "Delivery charges", "", null, null, null, 1, o.getDeliveryFee(), topRate, o.getDeliveryFee(), interState));
+            lines.add(line(n, "Delivery charges", "", null, null, null, 1, o.getDeliveryFee(), topRate, BigDecimal.ZERO, o.getDeliveryFee(), interState));
         }
 
         Map<BigDecimal, BigDecimal[]> byRate = new TreeMap<>();
@@ -109,13 +111,18 @@ public class InvoiceService {
         // Rounding is decided when the order is placed, so the invoice shows exactly what the customer paid
         BigDecimal roundOff = (o.getRoundOff() == null ? BigDecimal.ZERO : o.getRoundOff()).setScale(2, RoundingMode.HALF_UP);
         BigDecimal grand = total.add(roundOff);
+        BigDecimal discount = lines.stream().map(Invoice.Line::getDiscount).reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
         return new Invoice(o, seller, buyerState, buyerCode, place, interState, lines, summary,
-                taxable, cgst, sgst, igst, cgst.add(sgst).add(igst), total, roundOff, grand, RupeesInWords.of(grand));
+                taxable, cgst, sgst, igst, cgst.add(sgst).add(igst), total, roundOff, grand, RupeesInWords.of(grand),
+                discount, o.getCouponCode());
     }
 
-    /** Splits a GST-inclusive amount into taxable value and tax; the parts always add back up to the amount paid. */
+    /**
+     * Splits a GST-inclusive amount into taxable value and tax; the parts always add back up to the amount paid.
+     * {@code gross} is after the {@code discount}.
+     */
     private static Invoice.Line line(int n, String description, String hsn, LocalDate expiry, String patient, String prescribedBy, int qty, BigDecimal unitPrice, BigDecimal rate,
-                                     BigDecimal gross, boolean interState) {
+                                     BigDecimal discount, BigDecimal gross, boolean interState) {
         BigDecimal taxable = gross.multiply(HUNDRED).divide(HUNDRED.add(rate), 2, RoundingMode.HALF_UP);
         BigDecimal tax = gross.subtract(taxable);
         BigDecimal zero = BigDecimal.ZERO.setScale(2);
@@ -126,8 +133,8 @@ public class InvoiceService {
             cgst = tax.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
             sgst = tax.subtract(cgst);
         }
-        return new Invoice.Line(n, description, hsn, expiry, patient, prescribedBy, qty, unitPrice, rate.stripTrailingZeros(), taxable, cgst, sgst, igst,
-                gross.setScale(2, RoundingMode.HALF_UP));
+        return new Invoice.Line(n, description, hsn, expiry, patient, prescribedBy, qty, unitPrice, discount.setScale(2, RoundingMode.HALF_UP),
+                rate.stripTrailingZeros(), taxable, cgst, sgst, igst, gross.setScale(2, RoundingMode.HALF_UP));
     }
 
     /** MediZon's own details from configuration: the site footer and reports. */

@@ -1,10 +1,12 @@
 package com.medizon.config;
 
+import com.medizon.domain.Coupon;
 import com.medizon.domain.Medicine;
 import com.medizon.domain.Role;
 import com.medizon.domain.Store;
 import com.medizon.domain.StoreItem;
 import com.medizon.domain.User;
+import com.medizon.repository.CouponRepository;
 import com.medizon.repository.MedicineRepository;
 import com.medizon.repository.StoreItemRepository;
 import com.medizon.repository.StoreRepository;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -34,6 +37,7 @@ public class DataSeeder implements CommandLineRunner {
     private final MedicineRepository medicines;
     private final StoreRepository stores;
     private final StoreItemRepository storeItems;
+    private final CouponRepository coupons;
     private final PasswordEncoder encoder;
     private final JdbcTemplate jdbc;
 
@@ -60,7 +64,19 @@ public class DataSeeder implements CommandLineRunner {
             if (medicines.count() > 0) moveIntoStore(main);
         }
         if (medicines.count() == 0) seedCatalog(stores.findAllByOrderByNameAsc().get(0));
+        if (coupons.count() == 0) seedCoupons();
         syncAdmin();
+    }
+
+    /** Sample promos until the admin can manage their own. */
+    private void seedCoupons() {
+        coupons.saveAll(List.of(
+                new Coupon("FIRST50", "₹50 off your order", "On medicines worth ₹199 or more.", Coupon.Kind.FLAT, "50", null, "199"),
+                new Coupon("HEALTH10", "10% off up to ₹100", "On medicines worth ₹299 or more.", Coupon.Kind.PERCENT, "10", "100", "299"),
+                new Coupon("CARE15", "15% off up to ₹150", "On medicines worth ₹599 or more.", Coupon.Kind.PERCENT, "15", "150", "599"),
+                new Coupon("MEDI100", "Flat ₹100 off", "On medicines worth ₹999 or more.", Coupon.Kind.FLAT, "100", null, "999"),
+                new Coupon("WELLNESS20", "20% off up to ₹300", "On medicines worth ₹1,499 or more.", Coupon.Kind.PERCENT, "20", "300", "1499")));
+        log.info("Added sample promo codes");
     }
 
     /**
@@ -97,6 +113,8 @@ public class DataSeeder implements CommandLineRunner {
         jdbc.execute("alter table if exists users drop constraint if exists users_role_check");
         jdbc.execute("alter table if exists app_errors drop constraint if exists app_errors_severity_check");
         jdbc.execute("alter table if exists prescription drop constraint if exists prescription_status_check");
+        jdbc.execute("alter table if exists orders drop constraint if exists orders_payment_method_check");
+        jdbc.execute("alter table if exists return_requests drop constraint if exists return_requests_refund_mode_check");
     }
 
     /**

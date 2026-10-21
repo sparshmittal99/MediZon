@@ -6,7 +6,7 @@
 <div th:replace="~{fragments/layout :: adminNav}"></div>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
-<main class="container mz-page" style="max-width: 980px">
+<main class="container mz-page mz-w-wide">
     <a th:href="@{/admin/stores}" class="small"><i class="bi bi-arrow-left"></i> Stores</a>
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2 mb-4">
         <h1 class="mz-page-title mb-0" th:text="${storeForm.id == null} ? 'Add a store' : ${storeForm.name}">Store</h1>

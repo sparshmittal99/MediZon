@@ -34,6 +34,10 @@ public class OrderItem {
     @Column(precision = 10, scale = 2)
     private BigDecimal lineTotal;
 
+    /** This line's share of the order's promo discount; zero without one. */
+    @Column(precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 0")
+    private BigDecimal discount = BigDecimal.ZERO;
+
     /** Snapshot of the tax details at order time, for the invoice. Null on orders placed before invoices existed. */
     @Column(length = 8)
     private String hsnCode;
@@ -94,5 +98,10 @@ public class OrderItem {
         List<Member> who = getSortedMembers();
         if (who.size() < 2 || packs.isEmpty()) return who.stream().map(Member::getLabel).collect(Collectors.joining(", "));
         return who.stream().map(m -> m.getLabel() + " (" + packs.getOrDefault(m.getId(), 0) + ")").collect(Collectors.joining(", "));
+    }
+
+    /** What the customer paid for the line: the line total less its share of the promo. */
+    public BigDecimal getNetTotal() {
+        return discount == null ? lineTotal : lineTotal.subtract(discount);
     }
 }

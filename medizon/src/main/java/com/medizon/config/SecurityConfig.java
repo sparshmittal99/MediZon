@@ -141,7 +141,7 @@ public class SecurityConfig {
                 .requestMatchers("/support/attachments/**").authenticated()   // the customer or the staff on the ticket (SupportService)
                 // Shopping and dose reminders are for customers; admin accounts only run the store.
                 // The assistant API is open to both roles; each role gets its own actions in AssistantTools.
-                .requestMatchers("/cart/**", "/api/cart/**", "/api/orders/**", "/checkout", "/orders/**", "/plans/**",
+                .requestMatchers("/cart/**", "/api/cart/**", "/api/orders/**", "/checkout", "/checkout/**", "/wallet", "/orders/**", "/plans/**",
                         "/prescriptions/**", "/support", "/support/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**",
                         "/stock-alerts/**", "/api/stock-alerts/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())

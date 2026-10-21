@@ -1,9 +1,12 @@
 package com.medizon.web;
 
 import com.medizon.domain.*;
+import com.medizon.dto.AddressForm;
 import com.medizon.dto.CartSummary;
+import com.medizon.dto.ReturnPickupForm;
 import com.medizon.service.*;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -34,13 +37,18 @@ public class OrderController {
     private final DeliveryLocations deliveryLocations;
     private final CurrentUser currentUser;
     private final SupportService supportService;
+    private final CouponService couponService;
+    private final WalletService walletService;
+
+    /** The promo code applied at checkout, kept in the session until the order is placed or it's removed. */
+    static final String COUPON = "mzCoupon";
 
     /**
      * Checkout starts on the address asked for (just added), else the one picked in the header, else the default,
      * skipping any we don't deliver to.
      */
     @GetMapping("/checkout")
-    public String checkout(@RequestParam(required = false) Long address, HttpServletRequest request, Model model) {
+    public String checkout(@RequestParam(required = false) Long address, HttpServletRequest request, HttpSession session, Model model) {
         User user = currentUser.get();
         List<Address> addresses = addressService.list(user);
         Map<Long, Boolean> serviceable = new HashMap<>();
@@ -52,10 +60,15 @@ public class OrderController {
         // Priced and split by store for the address it's going to
         String pin = addresses.stream().filter(a -> a.getId().equals(selected)).map(Address::getPincode).findFirst()
                 .orElse(deliveryLocations.pincode(request));
-        CartSummary cart = cartService.summary(user, pin);
+        CartSummary cart = cartService.summary(user, pin, (String) session.getAttribute(COUPON));
         if (cart.isEmpty()) return "redirect:/cart";
         model.addAttribute("cart", cart);
-        model.addAttribute("paymentMethods", PaymentMethod.values());
+        model.addAttribute("paymentMethods", PaymentMethod.payable());
+        List<Coupon> promos = couponService.available();
+        model.addAttribute("promos", promos);
+        model.addAttribute("promosUsedToday", promos.stream().map(Coupon::getCode)
+                .filter(c -> couponService.usedToday(user, c)).collect(java.util.stream.Collectors.toSet()));
+        model.addAttribute("walletBalance", walletService.balance(user));
         model.addAttribute("prescriptions", prescriptionService.validForUser(user));
         // Which prescription(s) each prescription medicine comes from, and anything none of them covers
         model.addAttribute("rxCoverage", prescriptionService.cover(user, OrderService.rxLines(cart)));
@@ -65,11 +78,38 @@ public class OrderController {
         return "checkout";
     }
 
+    /** Applies a promo typed in or picked from the cards, if it gives a discount on this cart. */
+    @PostMapping("/checkout/coupon")
+    public String applyCoupon(@RequestParam(required = false) String code, @RequestParam(required = false) Long address,
+                              HttpServletRequest request, HttpSession session, RedirectAttributes ra) {
+        User user = currentUser.get();
+        String pin = addressService.find(address, user).map(Address::getPincode).orElse(deliveryLocations.pincode(request));
+        CartSummary cart = cartService.summary(user, pin, code);
+        CouponService.Applied applied = cart.getCoupon();
+        if (applied == null) {
+            ra.addFlashAttribute("error", "Enter a promo code.");
+        } else if (!applied.isOk()) {
+            ra.addFlashAttribute("error", applied.problem());
+        } else {
+            session.setAttribute(COUPON, applied.coupon().getCode());
+            ra.addFlashAttribute("success", applied.coupon().getCode() + " applied. You save ₹" + applied.discount() + ".");
+        }
+        return "redirect:/checkout" + (address == null ? "" : "?address=" + address);
+    }
+
+    @PostMapping("/checkout/coupon/remove")
+    public String removeCoupon(@RequestParam(required = false) Long address, HttpSession session) {
+        session.removeAttribute(COUPON);
+        return "redirect:/checkout" + (address == null ? "" : "?address=" + address);
+    }
+
     @PostMapping("/checkout")
-    public String placeOrder(@RequestParam PaymentMethod paymentMethod,
+    public String placeOrder(@RequestParam(required = false) PaymentMethod paymentMethod,
                              @RequestParam(required = false) Long addressId,
-                             RedirectAttributes ra) {
-        List<Order> placed = orderService.checkout(currentUser.get(), paymentMethod, addressId);
+                             @RequestParam(defaultValue = "false") boolean useWallet,
+                             HttpSession session, RedirectAttributes ra) {
+        List<Order> placed = orderService.checkout(currentUser.get(), paymentMethod, addressId, (String) session.getAttribute(COUPON), useWallet);
+        session.removeAttribute(COUPON);
         if (placed.size() == 1) {
             ra.addFlashAttribute("success", "Order " + placed.get(0).getOrderNumber() + " placed. We'll notify you as it moves.");
             return "redirect:/orders/" + placed.get(0).getId();
@@ -176,6 +216,26 @@ public class OrderController {
         model.addAttribute("returnBy", returnService.returnBy(o));
         model.addAttribute("reasons", ReturnReason.values());
         model.addAttribute("maxImages", ReturnService.MAX_IMAGES);
+        // Step 2: pickup from where it was delivered (or another address we serve), and where cash orders are refunded
+        List<Address> addresses = addressService.list(currentUser.get());
+        Map<Long, Boolean> serviceable = new HashMap<>();
+        addresses.forEach(a -> serviceable.put(a.getId(), deliveryAreas.isServiceable(a.getPincode())));
+        boolean orderAddressOk = returnService.canPickUpFromOrderAddress(o);
+        ReturnPickupForm pickup = new ReturnPickupForm();
+        pickup.setNewAddress(AddressForm.blank(currentUser.get()));
+        pickup.setPickupDate(returnService.pickupDate());
+        if (!orderAddressOk) {
+            pickup.setPickupFrom(addresses.stream().filter(a -> serviceable.get(a.getId())).map(a -> String.valueOf(a.getId()))
+                    .findFirst().orElse(ReturnPickupForm.NEW_ADDRESS));
+        }
+        model.addAttribute("pickup", pickup);
+        model.addAttribute("addresses", addresses);
+        model.addAttribute("serviceable", serviceable);
+        model.addAttribute("orderAddressOk", orderAddressOk);
+        model.addAttribute("addressTypes", AddressType.values());
+        Map<String, String> timings = new HashMap<>();
+        for (RefundMode m : RefundMode.values()) timings.put(m.name(), m.timing(o.getPaymentMethod()));
+        model.addAttribute("refundTimings", timings);
         return "orders/return";
     }
 
@@ -186,9 +246,12 @@ public class OrderController {
                                 @RequestParam(required = false) ReturnReason reason,
                                 @RequestParam(required = false) String details,
                                 @RequestParam(required = false) List<MultipartFile> images,
+                                @ModelAttribute ReturnPickupForm pickup,
                                 RedirectAttributes ra) {
-        ReturnRequest r = returnService.request(currentUser.get(), id, itemId, qty, reason, details, images);
-        ra.addFlashAttribute("success", "Return " + r.getReturnNumber() + " requested. We'll let you know once it's reviewed.");
+        ReturnRequest r = returnService.request(currentUser.get(), id, itemId, qty, reason, details, images, pickup);
+        ra.addFlashAttribute("success", "Return " + r.getReturnNumber() + " requested. Pickup is planned for "
+                + r.getPickupDate().format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH))
+                + "; we'll let you know once it's reviewed.");
         return "redirect:/orders/" + id;
     }
 

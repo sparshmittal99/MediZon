@@ -48,6 +48,7 @@ public class CartService {
     private final MedicineRepository medicines;
     private final MemberService memberService;
     private final CatalogService catalog;
+    private final CouponService coupons;
 
     public static BigDecimal deliveryFeeFor(BigDecimal subtotal) {
         if (subtotal.signum() == 0 || subtotal.compareTo(FREE_DELIVERY_ABOVE) >= 0) return BigDecimal.ZERO;
@@ -206,11 +207,17 @@ public class CartService {
     /** The cart priced for delivery to {@code pincode}: each line by the store that would deliver it. */
     @Transactional(readOnly = true)
     public CartSummary summary(User user, String pincode) {
-        return price(cart.findByUserOrderByIdAsc(user), pincode);
+        return price(cart.findByUserOrderByIdAsc(user), pincode, null, null);
+    }
+
+    /** As {@link #summary(User, String)}, with the promo {@code couponCode} checked and taken off when it applies. */
+    @Transactional(readOnly = true)
+    public CartSummary summary(User user, String pincode, String couponCode) {
+        return price(cart.findByUserOrderByIdAsc(user), pincode, user, couponCode);
     }
 
     /** Works out each line's store and price; lines nobody here can supply don't count towards the totals. */
-    private CartSummary price(List<CartItem> items, String pincode) {
+    private CartSummary price(List<CartItem> items, String pincode, User user, String couponCode) {
         Map<Medicine, Integer> wanted = new LinkedHashMap<>();
         items.forEach(i -> wanted.put(i.getMedicine(), i.getQuantity()));
         Map<Long, Offer> offers = catalog.offers(wanted, pincode);
@@ -219,7 +226,7 @@ public class CartService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal fee = deliveryFeeFor(subtotal);
         boolean rx = items.stream().anyMatch(i -> i.getMedicine().isPrescriptionRequired());
-        return new CartSummary(items, subtotal, fee, rx);
+        return new CartSummary(items, subtotal, fee, rx, couponCode == null ? null : coupons.evaluate(user, couponCode, subtotal));
     }
 
     public long count(User user) { return cart.countByUser(user); }
@@ -286,7 +293,7 @@ public class CartService {
             c.setQuantity(qty);
             items.add(c);
         }));
-        return price(items, pincode);
+        return price(items, pincode, null, null);
     }
 
     /**

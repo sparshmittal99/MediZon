@@ -82,6 +82,7 @@ public class AccountDeletionService {
         jdbc.update("delete from ticket_messages where ticket_id in (select id from support_tickets where user_id = ?)", id);
         jdbc.update("delete from support_tickets where user_id = ?", id);
 
+        jdbc.update("delete from wallet_transactions where user_id = ?", id);   // an unspent balance goes with the account
         jdbc.update("delete from reviews where user_id = ?", id);
         jdbc.update("delete from stock_alerts where user_id = ?", id);
         jdbc.update("delete from feedback where user_id = ?", id);

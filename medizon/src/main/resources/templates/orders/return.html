@@ -5,64 +5,256 @@
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
-<main class="container mz-page" style="max-width: 820px">
+<main class="container mz-page mz-w-page">
     <a th:href="@{/orders/{id}(id=${o.id})}" class="small"><i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
     <h1 class="mz-page-title mt-2">Return items</h1>
-    <p class="text-muted mb-4" th:text="'Return by ' + ${#temporals.format(returnBy, 'd MMMM yyyy')}"></p>
+    <p class="text-muted mb-3" th:text="'Return by ' + ${#temporals.format(returnBy, 'd MMMM yyyy')}"></p>
 
-    <form th:action="@{/orders/{id}/return(id=${o.id})}" method="post" enctype="multipart/form-data" novalidate>
-        <section class="mz-panel-flush mb-4">
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead><tr><th>Medicine</th><th>Price paid</th><th style="width: 9rem">Packs to return</th></tr></thead>
-                    <tbody>
-                    <tr th:each="i : ${o.items}" th:if="${i.returnable}" th:with="left=${returnable.get(i.id)}">
-                        <td>
-                            <span class="fw-semibold" th:text="${i.medicineName}"></span>
-                            <div class="small text-muted" th:if="${!#lists.isEmpty(i.sortedMembers)}" th:text="'For ' + ${i.membersLabel}"></div>
-                            <div class="small text-muted" th:text="${left} + ' of ' + ${i.quantity} + ' pack(s) can be returned'"></div>
-                        </td>
-                        <td th:text="'₹' + ${i.unitPrice} + ' / pack'"></td>
-                        <td>
-                            <!-- itemId and qty are posted as matching lists, so both are left out together -->
-                            <th:block th:if="${left > 0}">
-                                <input type="hidden" name="itemId" th:value="${i.id}">
-                                <input class="form-control" type="number" name="qty" min="0" th:max="${left}" value="0"
-                                       th:aria-label="'Packs of ' + ${i.medicineName} + ' to return'">
-                            </th:block>
-                            <span th:if="${left == 0}" class="small text-muted">Already returned</span>
-                        </td>
-                    </tr>
-                    </tbody>
-                </table>
+    <!-- Two steps on one form, so the photos chosen in step 1 are still there when it's sent. Without script both show. -->
+    <form th:action="@{/orders/{id}/return(id=${o.id})}" method="post" enctype="multipart/form-data" novalidate data-mz-return-form>
+        <ol class="mz-track mz-track-sm mb-4" data-mz-return-steps hidden>
+            <li class="done">Items &amp; reason</li>
+            <li data-mz-step-mark="2">Pickup &amp; refund</li>
+        </ol>
+
+        <div data-mz-return-step="1">
+            <section class="mz-panel-flush mb-4">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead><tr><th>Medicine</th><th>Price paid</th><th style="width: 9rem">Packs to return</th></tr></thead>
+                        <tbody>
+                        <tr th:each="i : ${o.items}" th:if="${i.returnable}" th:with="left=${returnable.get(i.id)}">
+                            <td>
+                                <span class="fw-semibold" th:text="${i.medicineName}"></span>
+                                <div class="small text-muted" th:if="${!#lists.isEmpty(i.sortedMembers)}" th:text="'For ' + ${i.membersLabel}"></div>
+                                <div class="small text-muted" th:text="${left} + ' of ' + ${i.quantity} + ' pack(s) can be returned'"></div>
+                            </td>
+                            <td th:text="'₹' + ${i.unitPrice} + ' / pack'"></td>
+                            <td>
+                                <!-- itemId and qty are posted as matching lists, so both are left out together -->
+                                <th:block th:if="${left > 0}">
+                                    <input type="hidden" name="itemId" th:value="${i.id}">
+                                    <input class="form-control" type="number" name="qty" min="0" th:max="${left}" value="0"
+                                           th:attr="data-net=${i.netTotal}, data-of=${i.quantity}"
+                                           th:aria-label="'Packs of ' + ${i.medicineName} + ' to return'">
+                                </th:block>
+                                <span th:if="${left == 0}" class="small text-muted">Already returned</span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="small text-muted px-3 py-2 mb-0 border-top" th:with="fixed=${o.items.?[!returnable]}" th:unless="${#lists.isEmpty(fixed)}"
+                   th:text="'Not returnable: ' + ${#strings.listJoin(fixed.![medicineName], ', ')}"></p>
+            </section>
+
+            <section class="mz-panel mb-4">
+                <h2 class="h5 mb-3">What's wrong?</h2>
+                <div class="form-check mb-2" th:each="r, s : ${reasons}">
+                    <input class="form-check-input" type="radio" name="reason" th:id="'reason' + ${s.index}" th:value="${r}" required>
+                    <label class="form-check-label" th:for="'reason' + ${s.index}" th:text="${r.label}">Damaged</label>
+                </div>
+                <label class="form-label mt-3" for="details">Details <span class="text-muted fw-normal">(required for "Something else")</span></label>
+                <textarea class="form-control" id="details" name="details" rows="3" maxlength="1000"
+                          placeholder="Batch number, what you noticed, anything that helps the pharmacist"></textarea>
+            </section>
+
+            <section class="mz-panel mb-4">
+                <h2 class="h5 mb-1">Photos</h2>
+                <p class="small text-muted" th:text="'Add 1 to ' + ${maxImages} + ' clear photos of the medicine, its strip or bottle, and the batch / expiry label. JPG, PNG or WebP, up to 5 MB each.'"></p>
+                <input class="form-control" type="file" name="images" accept="image/jpeg,image/png,image/webp,image/gif" multiple required
+                       data-mz-return-photos th:attr="data-max=${maxImages}">
+                <div class="mz-photo-previews mt-3" data-mz-photo-previews></div>
+                <div class="mz-qty-error small" data-mz-photo-error role="alert" hidden></div>
+            </section>
+
+            <div class="alert alert-danger small" data-mz-step-error role="alert" hidden></div>
+            <div class="d-flex gap-2" data-mz-step-nav hidden>
+                <button class="btn btn-primary" type="button" data-mz-step-next>Continue<i class="bi bi-arrow-right ms-1"></i></button>
+                <a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-outline-secondary">Cancel</a>
             </div>
-            <p class="small text-muted px-3 py-2 mb-0 border-top" th:with="fixed=${o.items.?[!returnable]}" th:unless="${#lists.isEmpty(fixed)}"
-               th:text="'Not returnable: ' + ${#strings.listJoin(fixed.![medicineName], ', ')}"></p>
-        </section>
+        </div>
 
-        <section class="mz-panel mb-4">
-            <h2 class="h5 mb-3">What's wrong?</h2>
-            <div class="form-check mb-2" th:each="r, s : ${reasons}">
-                <input class="form-check-input" type="radio" name="reason" th:id="'reason' + ${s.index}" th:value="${r}" required>
-                <label class="form-check-label" th:for="'reason' + ${s.index}" th:text="${r.label}">Damaged</label>
+        <div data-mz-return-step="2">
+            <section class="mz-panel mb-4">
+                <div class="d-flex justify-content-between align-items-baseline mb-3">
+                    <h2 class="h5 mb-0">Pickup address</h2>
+                    <a th:href="@{/addresses}" class="small" target="_blank" rel="noopener">Manage addresses</a>
+                </div>
+                <div class="d-grid gap-2" role="radiogroup" aria-label="Pickup address">
+                    <label class="mz-addr-pick" th:classappend="${!orderAddressOk} ? 'is-off'">
+                        <input type="radio" name="pickupFrom" value="order" data-mz-pickup-from
+                               th:checked="${pickup.pickupFrom == 'order'}" th:disabled="${!orderAddressOk}">
+                        <span class="mz-addr-pick-body">
+                            <span class="d-flex flex-wrap align-items-center gap-2 mb-1" th:if="${o.addressLabel != null or !orderAddressOk}">
+                                <strong th:if="${o.addressLabel}" th:text="${o.addressLabel}">Home</strong>
+                                <span th:unless="${orderAddressOk}" class="badge text-bg-danger">We don't pick up here yet</span>
+                            </span>
+                            <span class="d-block small fw-semibold" th:text="${o.deliverTo} + (${o.contactPhone} != null ? ' · ' + ${o.contactPhone} : '')"></span>
+                            <span class="d-block small text-muted" th:text="${o.shippingAddress}"></span>
+                        </span>
+                    </label>
+                    <label th:each="a : ${addresses}" class="mz-addr-pick" th:classappend="${!serviceable.get(a.id)} ? 'is-off'">
+                        <input type="radio" name="pickupFrom" th:value="${a.id}" data-mz-pickup-from
+                               th:checked="${pickup.pickupFrom == '' + a.id}" th:disabled="${!serviceable.get(a.id)}">
+                        <span class="mz-addr-pick-body">
+                            <span class="d-flex flex-wrap align-items-center gap-2">
+                                <i class="bi" th:classappend="${a.type.icon}" aria-hidden="true"></i>
+                                <strong th:text="${a.label}">Home</strong>
+                                <span th:if="${a.defaultAddress}" class="badge text-bg-light">Default</span>
+                                <span th:unless="${serviceable.get(a.id)}" class="badge text-bg-danger">We don't pick up here yet</span>
+                            </span>
+                            <span class="d-block small fw-semibold mt-1" th:text="${a.receiverName} + ' · ' + ${a.receiverPhone}"></span>
+                            <span class="d-block small text-muted" th:text="${a.formatted}"></span>
+                        </span>
+                    </label>
+                    <label class="mz-addr-pick">
+                        <input type="radio" name="pickupFrom" value="new" data-mz-pickup-from th:checked="${pickup.pickupFrom == 'new'}">
+                        <span class="mz-addr-pick-body">
+                            <span class="d-flex align-items-center gap-2"><i class="bi bi-plus-lg" aria-hidden="true"></i><strong>A different address</strong></span>
+                        </span>
+                    </label>
+                </div>
+
+                <!-- A typed address: checked against the PIN codes we serve as it's entered -->
+                <div class="row g-2 mt-2" data-mz-pickup-new th:with="n=${pickup.newAddress}">
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="pickupName">Hand over by</label>
+                        <input class="form-control" id="pickupName" name="newAddress.receiverName" maxlength="80" th:value="${n.receiverName}" required>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="pickupPhone">Phone</label>
+                        <input class="form-control" id="pickupPhone" name="newAddress.receiverPhone" inputmode="tel" maxlength="15" th:value="${n.receiverPhone}"
+                               pattern="^\+?[0-9 ]{10,15}$" required>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small" for="pickupLine">Flat, house number, building</label>
+                        <input class="form-control" id="pickupLine" name="newAddress.addressLine" maxlength="200" required>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="pickupArea">Street, area <span class="text-muted">(optional)</span></label>
+                        <input class="form-control" id="pickupArea" name="newAddress.area" maxlength="200">
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label small" for="pickupLandmark">Landmark <span class="text-muted">(optional)</span></label>
+                        <input class="form-control" id="pickupLandmark" name="newAddress.landmark" maxlength="120">
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small" for="pickupCity">City</label>
+                        <input class="form-control" id="pickupCity" name="newAddress.city" maxlength="80" required>
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small" for="pickupState">State <span class="text-muted">(optional)</span></label>
+                        <input class="form-control" id="pickupState" name="newAddress.state" maxlength="60">
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small" for="pickupPin">PIN code</label>
+                        <input class="form-control" id="pickupPin" name="newAddress.pincode" inputmode="numeric" maxlength="7" required
+                               data-mz-pickup-pin>
+                        <div class="small mt-1" data-mz-pickup-pin-status role="status"></div>
+                    </div>
+                    <div class="col-12 d-flex flex-wrap align-items-center gap-3 mt-2">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" id="saveAddress" name="saveAddress" value="true">
+                            <label class="form-check-label small" for="saveAddress">Save to my addresses as</label>
+                        </div>
+                        <select class="form-select form-select-sm w-auto" name="newAddress.type" aria-label="Save address as">
+                            <option th:each="t : ${addressTypes}" th:value="${t}" th:text="${t.label}">Home</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <section class="mz-panel mb-4">
+                <h2 class="h5 mb-1">Pickup date</h2>
+                <input type="hidden" name="pickupDate" th:value="${pickup.pickupDate}">
+                <p class="mb-1 fw-semibold"><i class="bi bi-calendar-event me-1 text-success" aria-hidden="true"></i>
+                    <span th:text="${#temporals.format(pickup.pickupDate, 'EEEE, d MMMM')}"></span></p>
+                <p class="small text-muted mb-0">Once a pharmacist approves the return, our delivery partner collects the packs on this day.
+                    Keep them in their original strip or bottle.</p>
+            </section>
+
+            <section class="mz-panel mb-4">
+                <h2 class="h5 mb-1">Refund</h2>
+                <p class="small text-muted mb-3">Refund amount: <strong class="text-body" data-mz-refund-total>₹0</strong>
+                    <span th:if="${o.discounted}">(what you paid after the promo)</span>, paid once the packs are picked up.</p>
+                <p class="small mb-3" th:if="${o.paidWithWallet and o.paymentMethod.name() != 'WALLET'}"
+                   th:text="'Up to ₹' + ${o.walletUsed.subtract(o.walletRefunded)} + ' you paid with MediZon Money goes straight back to it; the rest goes where you choose.'"></p>
+
+                <!-- Paid all in MediZon Money: back to it, nothing to choose -->
+                <th:block th:if="${o.paymentMethod.name() == 'WALLET'}">
+                    <input type="hidden" name="refundMode" value="WALLET">
+                    <div class="d-flex gap-2 align-items-start">
+                        <i class="bi bi-wallet2 text-success" aria-hidden="true"></i>
+                        <p class="mb-0">The refund goes back to your MediZon Money instantly after pickup.</p>
+                    </div>
+                </th:block>
+
+                <th:block th:unless="${o.paymentMethod.name() == 'WALLET'}">
+                    <p class="small mb-2" th:if="${o.paymentMethod.name() == 'COD'}">You paid cash on delivery, so tell us where to send the money.</p>
+                    <div class="d-grid gap-2 mb-3" role="radiogroup" aria-label="Refund to">
+                        <label class="mz-addr-pick" th:if="${o.paymentMethod.name() != 'COD'}">
+                            <input type="radio" name="refundMode" value="ORIGINAL" data-mz-refund-mode checked>
+                            <span class="mz-addr-pick-body"><strong><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Original payment method</strong>
+                                <span class="d-block small" th:text="'Back to your ' + ${o.paymentMethod.label}"></span>
+                                <span class="d-block small text-muted" th:text="${refundTimings.get('ORIGINAL')}"></span></span>
+                        </label>
+                        <label class="mz-addr-pick">
+                            <input type="radio" name="refundMode" value="WALLET" data-mz-refund-mode>
+                            <span class="mz-addr-pick-body"><strong><i class="bi bi-wallet2 me-1" aria-hidden="true"></i>MediZon Money</strong>
+                                <span class="d-block small">Use it on your next order</span>
+                                <span class="d-block small text-success" th:text="${refundTimings.get('WALLET')}"></span></span>
+                        </label>
+                        <th:block th:if="${o.paymentMethod.name() == 'COD'}">
+                            <label class="mz-addr-pick">
+                                <input type="radio" name="refundMode" value="UPI" data-mz-refund-mode>
+                                <span class="mz-addr-pick-body"><strong><i class="bi bi-phone me-1" aria-hidden="true"></i>UPI</strong>
+                                    <span class="d-block small text-muted" th:text="${refundTimings.get('UPI')}"></span></span>
+                            </label>
+                            <label class="mz-addr-pick">
+                                <input type="radio" name="refundMode" value="BANK" data-mz-refund-mode>
+                                <span class="mz-addr-pick-body"><strong><i class="bi bi-bank me-1" aria-hidden="true"></i>Bank account</strong>
+                                    <span class="d-block small text-muted" th:text="${refundTimings.get('BANK')}"></span></span>
+                            </label>
+                        </th:block>
+                    </div>
+                    <th:block th:if="${o.paymentMethod.name() == 'COD'}">
+                        <div data-mz-refund-for="UPI">
+                            <label class="form-label small" for="upiId">UPI ID</label>
+                            <input class="form-control" id="upiId" name="upiId" maxlength="60" placeholder="name@okbank" autocomplete="off"
+                                   pattern="^[a-zA-Z0-9._\-]{2,256}@[a-zA-Z]{2,64}$" required>
+                        </div>
+                        <div class="row g-2" data-mz-refund-for="BANK">
+                            <div class="col-12">
+                                <label class="form-label small" for="accountName">Account holder's name</label>
+                                <input class="form-control" id="accountName" name="accountName" maxlength="80" autocomplete="off" required>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label small" for="accountNumber">Account number</label>
+                                <input class="form-control" id="accountNumber" name="accountNumber" inputmode="numeric" maxlength="18" autocomplete="off"
+                                       pattern="^[0-9]{9,18}$" required>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label small" for="confirmAccountNumber">Re-enter account number</label>
+                                <input class="form-control" id="confirmAccountNumber" name="confirmAccountNumber" inputmode="numeric" maxlength="18"
+                                       autocomplete="off" required data-mz-same-as="accountNumber">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label small" for="ifsc">IFSC</label>
+                                <input class="form-control text-uppercase" id="ifsc" name="ifsc" maxlength="11" placeholder="HDFC0001234" autocomplete="off"
+                                       pattern="^[A-Za-z]{4}0[A-Za-z0-9]{6}$" required>
+                            </div>
+                        </div>
+                    </th:block>
+                </th:block>
+            </section>
+
+            <div class="alert alert-danger small" data-mz-submit-error role="alert" hidden></div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" type="button" data-mz-step-back hidden><i class="bi bi-arrow-left me-1"></i>Back</button>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Request return</button>
+                <a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-outline-secondary" data-mz-step-cancel>Cancel</a>
             </div>
-            <label class="form-label mt-3" for="details">Details <span class="text-muted fw-normal">(required for "Something else")</span></label>
-            <textarea class="form-control" id="details" name="details" rows="3" maxlength="1000"
-                      placeholder="Batch number, what you noticed, anything that helps the pharmacist"></textarea>
-        </section>
-
-        <section class="mz-panel mb-4">
-            <h2 class="h5 mb-1">Photos</h2>
-            <p class="small text-muted" th:text="'Add 1 to ' + ${maxImages} + ' clear photos of the medicine, its strip or bottle, and the batch / expiry label. JPG, PNG or WebP, up to 5 MB each.'"></p>
-            <input class="form-control" type="file" name="images" accept="image/jpeg,image/png,image/webp,image/gif" multiple required
-                   data-mz-return-photos th:attr="data-max=${maxImages}">
-            <div class="mz-photo-previews mt-3" data-mz-photo-previews></div>
-            <div class="mz-qty-error small" data-mz-photo-error role="alert" hidden></div>
-        </section>
-
-        <div class="d-flex gap-2">
-            <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Request return</button>
-            <a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-outline-secondary">Cancel</a>
         </div>
     </form>
 </main>

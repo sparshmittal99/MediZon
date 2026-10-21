@@ -5,7 +5,7 @@
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
-<main class="container mz-page" style="max-width: 760px">
+<main class="container mz-page mz-w-form">
     <h1 class="mz-page-title mb-4">Profile and addresses</h1>
 
     <form th:action="@{/profile}" th:object="${form}" method="post" class="mz-panel" novalidate>
