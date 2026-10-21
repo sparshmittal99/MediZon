@@ -27,10 +27,15 @@ The web app can also use **Google Gemini** for reading prescriptions, and **Groq
 - **Family members:** add up to 12 people (mother, son ...), each with a **patient name** (their full name as doctors write it on prescriptions). Each has their own medicines, reminders, supply and refill settings. There is also a **Common (OTC)** shelf for household medicines.
 - **Who it's for:** in the cart, say how many packs each person gets (for example 2 for you and 1 for your mother), or put them on the common shelf. **Others** is for someone outside the family: it's delivered but not added to My medicines, and can share a line with family members. Prescription medicines must be for a named person. The cart and checkout show each line's patient.
 - **Payments:** cash on delivery, or simulated UPI and card payments. Delivery is free above ₹499, otherwise ₹40.
+- **MediZon Money:** a wallet that refunds can be paid into instantly. At checkout it shows the balance and pays as much of the order as it can; the rest is paid by cash, UPI or card. A notification says how much was paid with it. Spending on a cancelled order goes straight back. The balance and every movement are under **MediZon Money** in the account menu.
+- **Promo codes:** an **Apply coupon** box at checkout, with cards for the promos on offer (greyed out when the cart is below the minimum or the code is used up for the day). A promo comes off the medicines, not delivery, and shows in the order summary, on the order and on the invoice with its code.
 - **Several stores, one checkout:** each product comes from the nearest store delivering to you that has it. A cart that ships from several stores becomes one order per store, paid for once.
 - **Orders:** track status (Placed → Confirmed → Shipped → Delivered), cancel before shipping, buy again, and review delivered orders.
 - **GST tax invoices:** available once an order ships, with the patient for each medicine and, for prescription medicines, the prescribing doctor and the prescription date. Print it or save it as PDF from the browser.
-- **Returns:** return part or all of a delivered order within 7 days, with a reason and 1 to 3 photos. Track it through approval, pickup and refund.
+- **Returns:** return part or all of a delivered order within the return window (7 days unless the admin changes it), in two steps:
+  - **Items and reason:** the packs, a reason and 1 to 3 photos.
+  - **Pickup and refund:** where to collect the packs (where the order was delivered, another saved address or a new one, if MediZon serves that PIN code), the pickup date, and where the refund goes: the original payment method or MediZon Money for prepaid orders; MediZon Money, a UPI ID or a bank account for cash on delivery.
+  - **Refund timing:** MediZon Money instantly at pickup, UPI 2 days and bank accounts or cards 7 days after pickup (admin-set). The refund is what was paid for the packs, after any promo. Track it through approval, pickup and refund, with the expected refund date.
 - **Prescriptions** (see [How prescriptions work](#how-prescriptions-work)):
   - **Upload** up to 5 at once (one file per prescription, e.g. one per family member) from the category bar, the Prescriptions page or checkout.
   - **Check before sending:** each upload shows the medicines, patient and doctor the AI read, and which family member it goes to. Remove a wrong file, add the doctor's name, then send it to the pharmacist.
@@ -60,7 +65,7 @@ There is exactly **one admin**, whose sign-in comes from `MEDIZON_ADMIN_EMAIL` /
 
 | Role | Can do |
 |---|---|
-| Admin | Everything: all stores, master catalogue, delivery areas, users, reports, monitoring |
+| Admin | Everything: all stores, master catalogue, delivery areas, promos, return settings, users, reports, monitoring |
 | Pharmacist | Review prescriptions |
 | Store | One store: its catalogue (stock, expiry, OTC prices), its orders, deliveries and returns |
 | Support | Support tickets, reviews and feedback; looks up orders and invoices |
@@ -72,7 +77,9 @@ Staff accounts run the shop only; they can't shop, order or set reminders.
 - **Roles:** the header shows each staff member's role (Admin, Pharmacist, Store, Support, Finance). Customers' private address tags (Home, Office ...) aren't shown to stores.
 - **Order pipeline:** confirm, ship, deliver or cancel orders. Shipping issues the GST invoice number.
 - **GST invoices:** CGST + SGST for customers in the seller's state, IGST otherwise; HSN code and GST rate per medicine; consecutive numbers per financial year (`MZ/2026-27/00001`).
-- **Returns:** review the photos, approve or reject with a note, mark picked up (choose whether the packs go back into stock), then refund.
+- **Returns:** review the photos, approve or reject with a note, see the pickup address and where the refund goes, move the pickup to another day (the customer is told), mark picked up (choose whether the packs go back into stock). MediZon Money refunds are paid at pickup; others are paid automatically on their day, or sooner with **Mark refunded now**.
+- **Promos (admin):** add and edit promo codes (percent or flat, optional cap, minimum order, uses per customer each day, optional last day), switch them on or off, and see how often each was used and how much it gave away. A code that has been used can't be renamed; switch it off and add a new one.
+- **Return settings (admin):** the return window, the pickup range (days after the request) and how many days UPI, bank and card refunds take after pickup. New returns use them; returns already requested keep what they were shown.
 - **Sales and returns report:** a date range, a month or a financial year, shown day-wise or month-wise. Export to **Excel** (summary with GST totals, plus optional month-wise, day-wise, orders, medicines sold, HSN summary and returns sheets) or **CSV**.
 - **Prescription review:** each prescription arrives with an **AI score** out of 100 built from checks a pharmacist makes anyway (legible, doctor, registration number, signature, date, patient, medicines read, in the catalogue) and any concerns the AI noticed. Clear ones are **fast-tracked** to the top of the queue. The list of medicines and packs is **pre-filled** from the AI reading and the customer's cart (tagged *AI read*, *In cart*, *Check on file*), so the pharmacist checks it against the file, confirms doctor, patient and date, and approves. The pharmacist always decides; the score never approves anything. Uploads the customer hasn't sent are never shown to staff.
 - **Stores and catalogues:** the admin keeps the master catalogue (medicines, images, HSN code, GST rate, MRP, prescription-only or not) and the stores. Each store lists products from it with its own stock, batch expiry and, for OTC medicines, its own price (never above MRP); prescription medicines sell at the master price everywhere. Low stock (under 50 packs) is listed, soon-to-expire stock is highlighted and expired stock can't be sold.
@@ -238,7 +245,8 @@ This starts PostgreSQL, the assistant and the web app together. Put the `MEDIZON
 ### Run the tests
 ```bash
 # Web app: schedule maths, sharing packs between people, GST invoice maths, report periods, expiry sweep,
-# prescription coverage, drafts, patient-name matching, AI score, AI outages (JUnit 5 + Mockito)
+# prescription coverage, drafts, patient-name matching, AI score, AI outages, returns (pickup, refund modes),
+# promos and MediZon Money, admin promo and return settings (JUnit 5 + Mockito)
 cd medizon
 mvn test
 
@@ -359,11 +367,14 @@ After a failure each is skipped for a while (Gemini 2 minutes, 15 if the quota r
 - **Visitor cart:** kept in the browser session until sign-in, then added to the account's cart (up to the stock available; items that can no longer be sold are skipped).
 - **Packs per person:** each cart line records how many packs each person gets. On delivery, the tablets are shared in the same proportion, so they always add up.
 - **Addresses at checkout:** the order keeps a copy of the receiver, phone and address it ships to, plus the billing name, address and GSTIN. Later edits to the address book don't change past orders or invoices.
+- **Promo codes:** the applied code is kept for the checkout session and checked again when the order is placed. Its discount is spread over the cart's lines in proportion to their price, so a cart split across stores gives each order its share, and the cart's total is what the orders add up to. Each code works a set number of checkouts a day per customer (a split cart counts once); cancelled orders give the use back.
+- **MediZon Money:** a ledger of every credit (refunds, cancellations) and debit (orders); the balance is its sum. Paying locks the account's row so two checkouts can't spend the same balance. It pays each order of a split cart in turn; an order it covers fully is marked paid with MediZon Money, otherwise the chosen method pays the rest.
 
 ## How invoices and returns work
 
 - **Invoices:** prices include GST. When an order ships it gets the next invoice number of the financial year. Each line's taxable value is worked back out of the price (`taxable = price × 100 / (100 + rate)`), split into CGST + SGST or IGST by the delivery state. Delivery is taxed at the main item's rate. The invoice prints **Bill to** (the billing address and GSTIN, or you) and **Ship to** (the receiver and delivery address).
-- **Returns:** Requested → Approved (or Rejected, with a note) → Picked up → Refunded. Pickup takes the packs out of the family member's supply and can put them back into stock. The refund is the price paid per pack × packs returned.
+- **Promos on invoices:** a promo is a discount given on the invoice, so each line's share comes off its value before GST is worked out. The invoice shows a Discount column, the amount before the promo, the promo discount with its code, and how the order was paid (e.g. MediZon Money ₹120 + UPI ₹80).
+- **Returns:** Requested → Approved (or Rejected, with a note) → Picked up → Refunded. Pickup takes the packs out of the family member's supply and can put them back into stock. The refund is what was paid for the packs returned, after the promo. Whatever was paid with MediZon Money goes back to MediZon Money at pickup; the rest goes to the chosen method on its refund day, paid by an hourly job (payments are simulated, as at checkout). Approving after the planned pickup day books the next one.
 - **Sales report:** sales count on the day an order was placed, refunds on the day they were paid out, and net revenue = sales − refunds.
 
 ---
@@ -398,7 +409,7 @@ MediZon/
 │       │   │   ├── domain/           JPA entities and enums (members, plans, orders, addresses, returns, invoices ...)
 │       │   │   ├── repository/       Spring Data repositories
 │       │   │   ├── service/          Business logic, scheduler, notifications, addresses, delivery areas, invoices,
-│       │   │   │                     returns, sales report, Excel
+│       │   │   │                     returns and refund payouts, promos, MediZon Money, sales report, Excel
 │       │   │   ├── ai/               Assistant client and the actions it may run; Gemini client, prescription
 │       │   │   │                     reader and chat fallback
 │       │   │   ├── web/              MVC controllers (customer and admin pages), "Delivers to" location cookies
@@ -409,10 +420,11 @@ MediZon/
 │       │   └── resources/
 │       │       ├── application.properties
 │       │       ├── templates/        Thymeleaf pages (incl. addresses, billing, account, invoice, returns,
-│       │       │                     family members, delivery areas, sales report)
+│       │       │                     MediZon Money, family members, delivery areas, promos, settings, sales report)
 │       │       └── static/           CSS and JS (chat widget, notifications, location picker, forms)
 │       └── test/java/com/medizon/    JUnit tests: schedules, pack shares, invoice maths, report periods, expiry sweep,
-│                                     prescriptions (coverage, drafts, AI score, patient names), AI outages
+│                                     prescriptions (coverage, drafts, AI score, patient names), AI outages,
+│                                     returns, promos, MediZon Money, admin settings
 └── medizon-assistant/                Python assistant service
     ├── Dockerfile
     ├── requirements.txt

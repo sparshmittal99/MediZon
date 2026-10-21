@@ -66,13 +66,15 @@ All settings are in `application.properties` and can be overridden with environm
 
 ## Features
 
-**Customers**: search and browse by category, cart, checkout (COD, simulated UPI/card), order tracking,
+**Customers**: search and browse by category, cart, checkout (COD, simulated UPI/card, MediZon Money for all or
+part of an order, promo codes), order tracking,
 cancel before shipping, buy again, prescriptions (upload up to 5 at once, AI-read, checked by the customer before
 sending, medicines into the cart on approval; see Prescriptions below), "Notify me" back-in-stock alerts on
 out-of-stock products (the home page shows only what's in stock), profile and address, notification centre,
 desktop notifications, chat assistant, family members (each with their own medicines, reminders and supply),
 per-device alert settings (everyone, or only some members), choosing who each cart item is for (or the household's
-common OTC shelf), GST tax invoices, and returns with a reason and photos. A "Delivers to" location in the header
+common OTC shelf), GST tax invoices, and returns in two steps (items, reason and photos; then pickup address,
+pickup date and where the refund goes: original method, MediZon Money, UPI or bank account). A "Delivers to" location in the header
 (device location, a pin on the map, an address search or a PIN code, geocoded with OpenStreetMap) says whether
 MediZon delivers there. Visitors can fill a cart before signing in; it moves into their account when they sign in
 and "Sign in to checkout" brings them back to checkout. Saved addresses (home, office or a named other place,
@@ -87,13 +89,14 @@ Account settings: change password (current password first, then the new one twic
 **Back office**: dashboard (with sales by store for any day), customer order pipeline (Placed → Confirmed → Shipped → Delivered / Cancelled),
 prescription review (AI score and fast-track, medicines and packs pre-filled from the AI reading and the customer's
 cart, doctor, patient and date confirmed, validity date), GST tax invoices, return review (approve or reject, pickup with optional
-restock, refund), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, store-wise, medicines sold, HSN summary and returns sheets; CSV), the master catalogue and each store's catalogue, low-stock list, stores and delivery areas, user accounts by role, customer feedback, monitoring, and a chat assistant for the admin. Staff accounts are for running the shop only; they can't shop, order or set reminders.
+restock, moving a pickup to another day, refund), promo codes (admin), return settings (admin: return window,
+pickup range, refund days), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, store-wise, medicines sold, HSN summary and returns sheets; CSV), the master catalogue and each store's catalogue, low-stock list, stores and delivery areas, user accounts by role, customer feedback, monitoring, and a chat assistant for the admin. Staff accounts are for running the shop only; they can't shop, order or set reminders.
 
 ## Roles and stores
 
 | Role | Can do |
 |---|---|
-| Admin (one, from `MEDIZON_ADMIN_*`) | Everything: all stores, master catalogue, delivery areas, users, reports, monitoring |
+| Admin (one, from `MEDIZON_ADMIN_*`) | Everything: all stores, master catalogue, delivery areas, promos, return settings, users, reports, monitoring |
 | Pharmacist | Read, approve and reject prescriptions |
 | Support | Read feedback and reviews; look up orders and invoices to help customers |
 | Finance | Sales, GST and Excel/CSV reports; look up orders and invoices |
@@ -218,9 +221,29 @@ performance, with no outside service needed:
   Orders placed before rounding keep their paise.
 - Every order, including automatic refills, must go to a PIN code listed and active under **Admin > Delivery areas**;
   `OrderService.createOrder` checks it, so checkout and refills follow the same rule.
-- Customers can ask to return delivered items for 7 days, with a reason and 1 to 3 photos. An admin approves or
-  rejects it with a note; approved returns are marked picked up (the packs leave the member's supply count, and can go
-  back into stock) and then refunded.
+- Customers can ask to return delivered items within the return window (**Admin > Settings**, 7 days by default),
+  with a reason and 1 to 3 photos, then choose the pickup address (where the order went, a saved address or a new one
+  in a served PIN code) and where the refund goes. Prepaid orders: the original method or MediZon Money. Cash on
+  delivery: MediZon Money, a UPI ID or a bank account (bank numbers are masked to the customer). Orders paid fully with
+  MediZon Money are refunded to it.
+- The pickup day is picked in the admin's range (1 to 3 days by default) and shown before the request is sent;
+  staff can move it on the return. An admin approves or rejects it with a note; approved returns are marked picked up
+  (the packs leave the member's supply count, and can go back into stock).
+- Refunds are what was paid for the packs, after any promo. The MediZon Money part is paid at pickup; the rest lands
+  on its day (UPI 2, bank and card 7 days after pickup by default), paid by `RefundScheduler` every hour, or sooner
+  from the return page. Each return keeps the refund timing it was promised when it was requested.
+
+## Promos and MediZon Money
+
+- **Promos** (`coupons` table, managed under **Admin > Promos**): percent (optionally capped) or flat, a minimum
+  order of medicines, uses per customer each day, an optional last day, live or off. Five sample codes are added on a
+  fresh database. Checkout lists the live ones; the applied code sits in the session and is checked again when the
+  order is placed. `Discounts.split` spreads the discount over the lines by price, so cart, orders and invoices agree to
+  the paisa; GST is worked out on the price after the discount. A code that has been used keeps its code.
+- **MediZon Money** (`wallet_transactions` ledger, `WalletService`): refunds and cancellations pay in, orders pay out,
+  and the balance is the sum. Each movement locks the account's row. At checkout it pays each order of a split cart as
+  far as it goes and the chosen method pays the rest (`Order.walletUsed`); cancelled orders get it back at once.
+  Deleting an account deletes its unspent balance.
 
 ## Help & support
 
@@ -316,7 +339,8 @@ src/main/java/com/medizon
 │                invoice counters ...) and Shares (splits packs between people)
 ├── repository/  Spring Data repositories
 ├── service/     Business logic, scheduler, notifications, email, file storage, addresses, delivery areas,
-│                visitor cart, GST invoices, returns, sales report (SQL aggregation) and Excel export
+│                visitor cart, GST invoices, returns and refund payouts, promos, MediZon Money, return settings,
+│                sales report (SQL aggregation) and Excel export
 ├── ai/          Assistant client, actions it may run, request loop; Gemini and Groq clients, prescription reader, chat fallback
 ├── web/         MVC controllers (Thymeleaf pages), customer and admin; DeliveryLocations ("Delivers to" cookies)
 ├── api/         JSON endpoints: notification polling, cart quantities and packs per person, location check,
@@ -328,7 +352,8 @@ src/main/resources
 src/test/java/com/medizon
 ├── domain/      MedicationPlanScheduleTest (days left for daily, weekly and custom-date schedules), SharesTest
 ├── service/     InvoiceMathTest, ReportPeriodTest, ExpirySweepTest, PrescriptionCoverageTest, PrescriptionDraftTest,
-│                PatientNamesTest, SharedMedicineTest, CartOthersTest (Mockito)
+│                PatientNamesTest, SharedMedicineTest, CartOthersTest, ReturnableItemsTest (pickup, refund modes),
+│                PromoAndWalletTest, AdminSettingsTest (Mockito)
 ├── dto/         PrescriptionScoreTest
 └── ai/          AiOutageTest (assistant, Groq and Gemini down, slow or all)
 ```
@@ -338,7 +363,8 @@ Run the tests with `mvn test` (they are plain unit tests and need no database).
 ## Before production
 
 - Replace `ddl-auto=update` with Flyway migrations.
-- Connect a real payment gateway (Razorpay or similar) in `OrderService.createOrder`.
+- Connect a real payment gateway (Razorpay or similar) in `OrderService.createOrder`, and real payouts for
+  UPI, bank and card refunds in `ReturnService.refundDue` (they're marked paid on their day, but no money moves yet).
 - Move prescription files to object storage (S3) and keep them encrypted. On hosts with a wiped disk (e.g. Render
   without a persistent disk) uploads are lost on every deploy.
 - Use a paid Gemini key: the free tier may use what's sent to improve Google's models.
