@@ -32,6 +32,7 @@ public class NotificationController {
     @GetMapping
     public String list(Model model) {
         User user = currentUser.get();
+        notificationService.trim(user);   // older notifications from before customers kept only 20
         List<Notification> list = notificationService.recent(user);
         model.addAttribute("notifications", list);
         model.addAttribute("fresh", list.stream().filter(n -> !n.isRead()).map(Notification::getId).collect(Collectors.toSet()));

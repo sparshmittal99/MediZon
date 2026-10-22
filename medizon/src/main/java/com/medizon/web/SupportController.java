@@ -37,11 +37,15 @@ public class SupportController {
     private final OrderService orderService;
     private final CurrentUser currentUser;
 
-    /** With {@code order} (from an order's "Get help"), a ticket raised from here is about that order. */
+    /**
+     * With {@code order} (from an order's "Get help"), a ticket raised from here is about that order. With {@code q},
+     * only the tickets whose number matches.
+     */
     @GetMapping
-    public String index(@RequestParam(required = false) Long order, Model model) {
+    public String index(@RequestParam(required = false) Long order, @RequestParam(required = false) String q, Model model) {
         if (order != null) model.addAttribute("order", orderService.getForUser(order, currentUser.get()));
-        List<SupportTicket> all = support.forCustomer(currentUser.get());
+        List<SupportTicket> all = support.forCustomer(currentUser.get()).stream().filter(t -> SupportService.numberMatches(t, q)).toList();
+        model.addAttribute("q", q == null || q.isBlank() ? null : q.trim());
         model.addAttribute("openTickets", all.stream().filter(t -> !t.getStatus().isClosed()).toList());
         model.addAttribute("closedTickets", all.stream().filter(t -> t.getStatus().isClosed()).toList());
         return "support/index";

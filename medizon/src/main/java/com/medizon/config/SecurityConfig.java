@@ -129,6 +129,7 @@ public class SecurityConfig {
                 .requestMatchers("/admin/prescriptions/**").hasAnyRole("ADMIN", "PHARMACIST")
                 .requestMatchers("/admin/reviews/**").hasAnyRole("ADMIN", "SUPPORT")
                 .requestMatchers("/admin/sales", "/admin/sales.csv", "/admin/sales.xlsx").hasAnyRole("ADMIN", "FINANCE")
+                .requestMatchers("/admin/returns/settings").hasRole("ADMIN")
                 .requestMatchers("/admin/medicines/**", "/admin/returns/**").hasAnyRole("ADMIN", "STORE")
                 // Support and finance can look orders up and open invoices; only the store (and admin) move them along
                 .requestMatchers(HttpMethod.POST, "/admin/orders/**").hasAnyRole("ADMIN", "STORE")

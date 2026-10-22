@@ -61,8 +61,10 @@ public class CartService {
     }
 
     /**
-     * Adds packs, tagging them with who they're for. With no members given, a new line is for the account holder and
-     * an existing line gives the packs to its first person; given members share the new packs evenly.
+     * Adds packs, tagging them with who they're for. With no members given, a new line goes to the common (OTC) shelf
+     * for a medicine sold without a prescription and to the account holder for a prescription one (the customer can
+     * change either in the cart), and an existing line gives the packs to its first person; given members share the
+     * new packs evenly.
      */
     @Transactional
     public void add(User user, Long medicineId, int quantity, Collection<Member> forMembers, String pincode) {
@@ -75,7 +77,7 @@ public class CartService {
 
         Map<Member, Integer> alloc = new LinkedHashMap<>(item.getAllocation());
         List<Member> to = forMembers.isEmpty()
-                ? List.of(alloc.isEmpty() ? memberService.self(user) : alloc.keySet().iterator().next())
+                ? List.of(alloc.isEmpty() ? defaultFor(user, m) : alloc.keySet().iterator().next())
                 : forMembers.stream().distinct().toList();
         int[] share = Shares.split(qty, new int[to.size()]);
         // "Others" can share a line with family members (two prescriptions, one medicine): each keeps their own packs
@@ -101,7 +103,7 @@ public class CartService {
         checkSellable(m, withinLimit(m, quantity), pincode);
         CartItem item = lineFor(user, m);
         Map<Member, Integer> alloc = new LinkedHashMap<>(item.getAllocation());
-        if (alloc.isEmpty()) alloc.put(memberService.self(user), 0);
+        if (alloc.isEmpty()) alloc.put(defaultFor(user, m), 0);
         int diff = quantity - item.getQuantity();
         if (diff > 0) {
             alloc.merge(alloc.keySet().iterator().next(), diff, Integer::sum);
@@ -144,6 +146,11 @@ public class CartService {
         checkSellable(m, withinLimit(m, alloc.values().stream().mapToLong(Integer::longValue).sum()), pincode);
         item.allocate(alloc);
         return cart.save(item);
+    }
+
+    /** Who a new cart line is for until the customer says: OTC medicines the common shelf, prescription ones the account holder. */
+    private Member defaultFor(User user, Medicine m) {
+        return m.isPrescriptionRequired() ? memberService.self(user) : memberService.common(user);
     }
 
     private CartItem lineFor(User user, Medicine m) {
@@ -313,7 +320,7 @@ public class CartService {
             int add = Math.min(qty, MAX_PACKS_PER_LINE - item.getQuantity());     // the account cart may already be full
             if (add <= 0) return;
             Map<Member, Integer> alloc = new LinkedHashMap<>(item.getAllocation());
-            if (alloc.isEmpty()) alloc.put(memberService.self(user), 0);
+            if (alloc.isEmpty()) alloc.put(defaultFor(user, m), 0);
             alloc.merge(alloc.keySet().iterator().next(), add, Integer::sum);
             item.allocate(alloc);
             cart.save(item);

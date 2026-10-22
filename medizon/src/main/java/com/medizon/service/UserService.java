@@ -168,6 +168,22 @@ public class UserService {
         return users.save(u);
     }
 
+    /**
+     * The admin sets a new password for any other account, without its current one (a forgotten password), and the
+     * account is signed out everywhere. The admin's own password comes from MEDIZON_ADMIN_PASSWORD.
+     */
+    @Transactional
+    public User setPasswordByAdmin(Long id, String next, String confirm, User actingAdmin) {
+        User u = guardedTarget(id, actingAdmin);
+        if (u.isAdmin()) throw new BusinessException("The admin password is set with MEDIZON_ADMIN_PASSWORD on the server.");
+        if (next == null || next.length() < 8) throw new BusinessException("Use at least 8 characters for the password.");
+        if (!next.equals(confirm)) throw new BusinessException("The passwords don't match.");
+        u.setPassword(passwordEncoder.encode(next));
+        users.save(u);
+        signOutEverywhere(u);
+        return u;
+    }
+
     /** Ends every session of this user; their next click lands on the sign-in page. */
     public int signOutEverywhere(User u) {
         List<SessionInformation> sessions = sessionsOf(u.getEmail());

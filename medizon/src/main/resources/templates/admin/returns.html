@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head th:replace="~{fragments/layout :: head('Returns')}"></head>
 <body>
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
@@ -7,13 +8,27 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <h1 class="mz-page-title mb-3">Returns</h1>
-    <div class="mz-chip-scroll mb-4">
-        <a class="mz-chip" th:classappend="${selected == null} ? 'active'" th:href="@{/admin/returns}">All</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+        <h1 class="mz-page-title mb-0">Returns</h1>
+        <div class="mz-list-tools">
+            <div th:replace="~{fragments/layout :: numberSearch(@{/admin/returns}, 'Search return number', ${ {} })}"></div>
+            <th:block th:unless="${q != null}"><div th:replace="~{fragments/layout :: periodFilter(@{/admin/returns}, ${ {'status': selected} })}"></div></th:block>
+            <a sec:authorize="hasRole('ADMIN')" th:href="@{/admin/returns/settings}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-gear me-1" aria-hidden="true"></i>Settings</a>
+        </div>
+    </div>
+    <div class="mz-chip-scroll mb-2">
+        <a class="mz-chip" th:classappend="${selected == null} ? 'active'"
+           th:href="@{/admin/returns(q=${q}, year=${period.yearParams}, month=${period.monthParams}, date=${period.dateParams})}">All</a>
         <a th:each="s : ${statuses}" class="mz-chip" th:classappend="${s == selected} ? 'active'"
-           th:href="@{/admin/returns(status=${s})}">
+           th:href="@{/admin/returns(status=${s}, q=${q}, year=${period.yearParams}, month=${period.monthParams}, date=${period.dateParams})}">
             <span th:text="${s.label}"></span> <span class="opacity-75" th:text="'(' + ${counts.get(s)} + ')'"></span></a>
     </div>
+    <p class="small text-muted mb-4">
+        <th:block th:if="${q != null}">Returns numbered like <strong th:text="${q}"></strong>, requested at any time.
+            <a th:href="@{/admin/returns}">Clear search</a></th:block>
+        <th:block th:unless="${q != null}" th:text="'The newest ' + ${limit} + ' returns requested in ' + ${period.label} + '. Use the filter for other dates.'"></th:block>
+    </p>
 
     <div th:if="${#lists.isEmpty(returns)}" class="mz-panel mz-empty"><i class="bi bi-arrow-return-left"></i><p class="mb-0">No returns here.</p></div>
     <div th:unless="${#lists.isEmpty(returns)}" class="mz-panel-flush">

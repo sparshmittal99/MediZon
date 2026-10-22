@@ -157,6 +157,9 @@ ADMIN = {
         "what do people complain about", "what are people unhappy about", "how are the reviews looking",
         "what do customers like", "top complaints", "review summary", "feedback report",
         "give me suggestions from reviews", "what should we fix",
+        "read the reviews", "analyse the reviews", "analyze customer reviews", "show me the reviews", "check reviews",
+        "latest reviews", "recent reviews", "bad reviews", "negative reviews", "review analysis", "analyse ratings",
+        "what are the reviews saying", "go through the reviews", "how are customers rating us",
     ],
     "store_tasks": [
         "what needs my attention", "pending tasks", "what should i do today", "today's tasks", "to do",

@@ -43,27 +43,24 @@
     <!-- Health checks -->
     <h2 class="mz-section-title">Health</h2>
     <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-3 mb-4">
+        <!-- Every card the same size: a long problem is cut short, with "View more" for the full text -->
         <div class="col" th:each="c : ${checks}">
-            <div class="mz-panel h-100 py-3">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <strong th:text="${c.name == 'db'} ? 'Database' : (${c.name == 'diskSpace'} ? 'Disk space' : (${c.name == 'assistant'} ? 'Assistant service' : ${#strings.capitalize(c.name)}))">db</strong>
-                    <span class="badge" th:classappend="${c.up} ? 'text-bg-success' : (${c.down} ? 'text-bg-danger' : 'text-bg-warning')" th:text="${c.status}">UP</span>
+            <div class="mz-panel mz-health-card" th:classappend="${c.up} ? '' : (${c.down} ? 'is-down' : 'is-degraded')">
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+                    <strong class="text-truncate" th:text="${c.label}">Database</strong>
+                    <span class="badge flex-none" th:classappend="${c.up} ? 'text-bg-success' : (${c.down} ? 'text-bg-danger' : 'text-bg-warning')" th:text="${c.status}">UP</span>
                 </div>
-                <div class="small text-muted text-break">
-                    <th:block th:if="${c.name == 'diskSpace' and c.details['free'] != null}"
-                              th:text="${#numbers.formatDecimal(c.details['free'] / 1073741824.0, 1, 1)} + ' GB free of ' + ${#numbers.formatDecimal(c.details['total'] / 1073741824.0, 1, 1)} + ' GB'"></th:block>
-                    <th:block th:if="${c.name == 'db'}" th:text="${c.details['database']}"></th:block>
-                    <th:block th:if="${c.name == 'assistant'}"
-                              th:text="${c.details['responseMs'] != null} ? 'Answered in ' + ${c.details['responseMs']} + ' ms' : 'Not answering: ' + ${c.details['error']}"></th:block>
-                </div>
+                <div class="small text-muted text-break mz-health-text" th:text="${c.summary}"></div>
+                <a th:if="${c.more}" th:href="@{/admin/monitoring/health/{name}(name=${c.name})}" class="small mz-health-more">View more
+                    <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
             </div>
         </div>
         <div class="col">
-            <div class="mz-panel h-100 py-3">
+            <div class="mz-panel mz-health-card" th:classappend="${system.dbPending > 0} ? 'is-degraded'">
                 <div class="d-flex justify-content-between align-items-center mb-1"><strong>Database pool</strong>
                     <span class="badge" th:classappend="${system.dbPending > 0} ? 'text-bg-warning' : 'text-bg-success'"
                           th:text="${system.dbPending > 0} ? 'BUSY' : 'OK'">OK</span></div>
-                <div class="small text-muted"
+                <div class="small text-muted mz-health-text"
                      th:text="${#numbers.formatInteger(system.dbActive, 1)} + ' in use, ' + ${#numbers.formatInteger(system.dbIdle, 1)} + ' idle of ' + ${#numbers.formatInteger(system.dbMax, 1)} + ' · ' + ${#numbers.formatInteger(system.dbPending, 1)} + ' waiting · ' + ${#numbers.formatDecimal(system.dbAcquireMs, 1, 1)} + ' ms to get one'"></div>
             </div>
         </div>

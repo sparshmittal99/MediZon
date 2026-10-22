@@ -2,6 +2,7 @@ package com.medizon.repository;
 
 import com.medizon.domain.Notification;
 import com.medizon.domain.User;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +15,10 @@ import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
     List<Notification> findTop50ByUserOrderByCreatedAtDesc(User user);
+
+    /** Ids of the account's notifications, newest first; a page past the ones kept finds those to delete. */
+    @Query("select n.id from Notification n where n.user = :user order by n.id desc")
+    List<Long> idsNewestFirst(@Param("user") User user, Pageable page);
     Optional<Notification> findByIdAndUser(Long id, User user);
     long countByUserAndReadFalse(User user);
 

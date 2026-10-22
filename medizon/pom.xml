@@ -61,11 +61,17 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
-        <!-- Excel (.xlsx) export of the sales report -->
+        <!-- Excel: the sales report export and catalogue imports -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
             <version>5.3.0</version>
+        </dependency>
+        <!-- Reading product tables out of PDFs for catalogue imports -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.8</version>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>

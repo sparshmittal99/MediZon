@@ -8,6 +8,7 @@ import com.medizon.domain.User;
 import com.medizon.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,9 @@ public class NotificationService {
 
     private static final Duration ALERT_WINDOW = Duration.ofMinutes(15);
 
+    /** Customers keep their newest 20 notifications; older ones are deleted as new ones arrive. */
+    public static final int CUSTOMER_KEEP = 20;
+
     private final NotificationRepository notifications;
     private final EmailService email;
     private final NotificationPush push;
@@ -56,6 +60,7 @@ public class NotificationService {
         n.setMessage(message);
         n.setLink(link);
         notifications.save(n);
+        trim(user);
         push.signal(user.getId());
 
         if (EMAILED.contains(type)) {
@@ -67,8 +72,23 @@ public class NotificationService {
         return n;
     }
 
+    /** The notification centre: a customer's newest 20 (all they keep), staff's newest 50. */
     @Transactional(readOnly = true)
-    public List<Notification> recent(User user) { return notifications.findTop50ByUserOrderByCreatedAtDesc(user); }
+    public List<Notification> recent(User user) {
+        List<Notification> list = notifications.findTop50ByUserOrderByCreatedAtDesc(user);
+        return user.isStaff() ? list : list.stream().limit(CUSTOMER_KEEP).toList();
+    }
+
+    /** Deletes a customer's notifications past the newest {@link #CUSTOMER_KEEP}. */
+    @Transactional
+    public void trim(User user) {
+        if (user.isStaff()) return;
+        List<Long> old = notifications.idsNewestFirst(user, PageRequest.of(1, CUSTOMER_KEEP));
+        while (!old.isEmpty()) {
+            notifications.deleteAllByIdInBatch(old);
+            old = notifications.idsNewestFirst(user, PageRequest.of(1, CUSTOMER_KEEP));
+        }
+    }
 
     public long unreadCount(User user) { return notifications.countByUserAndReadFalse(user); }
 

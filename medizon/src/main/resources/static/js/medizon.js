@@ -18,6 +18,24 @@
         sync();
     });
 
+    // ---- Admin > Users: "Change password" fills the dialog for the chosen account; the two entries must match ----
+    document.getElementById('mzSetPassword')?.addEventListener('show.bs.modal', (e) => {
+        const from = e.relatedTarget;
+        const form = e.target.querySelector('form[data-mz-set-password]');
+        if (!from || !form) return;
+        form.action = from.dataset.mzPasswordUrl;
+        form.querySelector('[data-mz-password-for]').textContent = from.dataset.mzPasswordName;
+        form.reset();
+    });
+    document.querySelector('form[data-mz-set-password]')?.addEventListener('submit', (e) => {
+        const again = e.target.elements.confirmPassword;
+        again.setCustomValidity(again.value === e.target.elements.newPassword.value ? '' : "The passwords don't match.");
+        if (!e.target.reportValidity()) e.preventDefault();
+    });
+    document.querySelector('form[data-mz-set-password]')?.addEventListener('input', (e) => {
+        if (e.target.name === 'confirmPassword') e.target.setCustomValidity('');
+    });
+
     // ---- no inline handlers (the Content-Security-Policy blocks them): filters that apply on change, print buttons ----
     document.addEventListener('change', (e) => {
         if (e.target.matches && e.target.matches('select[data-mz-autosubmit]')) e.target.form.submit();
@@ -30,6 +48,152 @@
         if (e.target.matches && e.target.matches('img[data-mz-hide-broken]')) e.target.remove();
     }, true);
     document.querySelectorAll('img[data-mz-hide-broken]').forEach(img => { if (img.complete && img.naturalWidth === 0) img.remove(); });
+
+    // ---- Orders and Returns "Filter": a year's months on demand, single days as removable chips, Clear ----
+    document.querySelectorAll('form[data-mz-period]').forEach((form) => {
+        const yearPick = form.querySelector('[data-mz-period-year]');
+        yearPick?.addEventListener('change', () => {
+            form.querySelectorAll('.mz-period-months').forEach(g => { g.hidden = g.dataset.year !== yearPick.value; });
+        });
+        const day = form.querySelector('[data-mz-period-date]');
+        const days = form.querySelector('[data-mz-period-dates]');
+        const addDay = () => {
+            const v = day.value;
+            if (!v || days.querySelector(`input[value="${v}"]`)) { day.value = ''; return; }
+            const tag = document.createElement('span');
+            tag.className = 'mz-period-tag';
+            const input = Object.assign(document.createElement('input'), { type: 'hidden', name: 'date', value: v });
+            const label = Object.assign(document.createElement('span'), {
+                textContent: new Date(v + 'T00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) });
+            const remove = Object.assign(document.createElement('button'), { type: 'button', className: 'btn-close' });
+            remove.setAttribute('data-mz-period-remove', '');
+            remove.setAttribute('aria-label', 'Remove date');
+            tag.append(input, label, remove);
+            days.append(tag);
+            day.value = '';
+        };
+        form.querySelector('[data-mz-period-add]')?.addEventListener('click', addDay);
+        day?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addDay(); } });
+        form.addEventListener('click', (e) => {
+            if (e.target.closest('[data-mz-period-remove]')) e.target.closest('.mz-period-tag').remove();
+            if (e.target.closest('[data-mz-period-clear]')) {
+                form.querySelectorAll('input[type="checkbox"]').forEach(c => { c.checked = false; });
+                days.replaceChildren();
+                form.submit();
+            }
+        });
+        // A day picked but not added yet still counts on Apply
+        form.addEventListener('submit', () => { if (day?.value) addDay(); });
+    });
+
+    // ---- card rows that scroll sideways: arrows, the left one only once scrolled, the right one until the end ----
+    document.querySelectorAll('.mz-rail').forEach((rail) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'mz-rail-wrap';
+        rail.before(wrap);
+        wrap.append(rail);
+        const arrow = (dir) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'mz-rail-arrow mz-rail-' + dir;
+            b.setAttribute('aria-label', dir === 'prev' ? 'Scroll back' : 'Scroll for more');
+            b.innerHTML = `<i class="bi bi-chevron-${dir === 'prev' ? 'left' : 'right'}" aria-hidden="true"></i>`;
+            b.addEventListener('click', () => rail.scrollBy({ left: (dir === 'prev' ? -1 : 1) * rail.clientWidth * 0.85, behavior: 'smooth' }));
+            wrap.append(b);
+            return b;
+        };
+        const prev = arrow('prev'), next = arrow('next');
+        const sync = () => {
+            const max = rail.scrollWidth - rail.clientWidth;
+            prev.hidden = rail.scrollLeft <= 4;
+            next.hidden = rail.scrollLeft >= max - 4;
+        };
+        rail.addEventListener('scroll', sync, { passive: true });
+        window.addEventListener('resize', sync);
+        rail.querySelectorAll('img').forEach(img => img.addEventListener('load', sync));
+        sync();
+    });
+
+    // ---- store catalogue "Add products": find products by code or name, collect them, add them together ----
+    document.querySelectorAll('[data-mz-add-products]').forEach((box) => {
+        const input = box.querySelector('[data-mz-pick-input]');
+        const results = box.querySelector('[data-mz-pick-results]');
+        const rows = box.querySelector('[data-mz-pick-rows]');
+        const table = box.querySelector('[data-mz-pick-table]');
+        const empty = box.querySelector('[data-mz-pick-empty]');
+        const submit = box.querySelector('[data-mz-pick-submit]');
+        const chosen = () => new Set([...rows.querySelectorAll('input[name="medicineId"]')].map(i => i.value));
+        const sync = () => {
+            const n = rows.children.length;
+            table.hidden = n === 0;
+            empty.hidden = n > 0;
+            submit.disabled = n === 0;
+            submit.textContent = n > 1 ? `Add ${n} products` : 'Add product';
+        };
+        const cell = (text, cls) => Object.assign(document.createElement('td'), { textContent: text, className: cls || '' });
+        const pick = (p) => {
+            if (chosen().has(String(p.id))) return;
+            const tr = document.createElement('tr');
+            const name = cell(p.name);
+            if (p.rx) name.insertAdjacentHTML('beforeend', ' <span class="mz-rx position-static ms-1">Rx</span>');
+            if (p.manufacturer) name.append(Object.assign(document.createElement('div'), { className: 'small text-muted', textContent: p.manufacturer }));
+            const stock = document.createElement('td');
+            stock.append(Object.assign(document.createElement('input'), { type: 'number', name: 'stock', min: 0, value: 0,
+                className: 'form-control form-control-sm', ariaLabel: 'Stock of ' + p.name }));
+            const expiry = document.createElement('td');
+            expiry.append(Object.assign(document.createElement('input'), { type: 'date', name: 'expiryDate',
+                className: 'form-control form-control-sm', ariaLabel: 'Batch expiry of ' + p.name }));
+            const remove = document.createElement('td');
+            remove.className = 'text-end';
+            const btn = Object.assign(document.createElement('button'), { type: 'button', className: 'btn btn-sm btn-link text-danger', textContent: 'Remove' });
+            btn.setAttribute('aria-label', 'Remove ' + p.name);
+            btn.addEventListener('click', () => { tr.remove(); sync(); input.focus(); });
+            remove.append(btn, Object.assign(document.createElement('input'), { type: 'hidden', name: 'medicineId', value: p.id }));
+            tr.append(cell(p.code || '–', 'mz-code text-nowrap'), name, stock, expiry, remove);
+            rows.append(tr);
+            sync();
+        };
+        let timer, last = '';
+        const show = (list, q) => {
+            results.replaceChildren();
+            const taken = chosen();
+            const fresh = list.filter(p => !taken.has(String(p.id)));
+            if (fresh.length === 0) {
+                results.append(Object.assign(document.createElement('div'), { className: 'mz-pick-none',
+                    textContent: list.length ? 'Already chosen.' : `Nothing this store doesn't already sell matches "${q}".` }));
+            }
+            fresh.forEach((p) => {
+                const b = Object.assign(document.createElement('button'), { type: 'button', className: 'mz-pick-item' });
+                b.setAttribute('role', 'option');
+                b.append(Object.assign(document.createElement('span'), { className: 'mz-code', textContent: p.code || '–' }),
+                    Object.assign(document.createElement('span'), { className: 'flex-grow-1', textContent: p.name + (p.rx ? ' (Rx)' : '') }),
+                    Object.assign(document.createElement('span'), { className: 'small text-muted', textContent: '₹' + Number(p.price).toFixed(2) }));
+                b.addEventListener('click', () => { pick(p); b.remove(); if (!results.querySelector('.mz-pick-item')) results.hidden = true; });
+                results.append(b);
+            });
+            results.hidden = false;
+        };
+        const search = async () => {
+            const q = input.value.trim();
+            if (q === last) return;
+            last = q;
+            if (!q) { results.hidden = true; return; }
+            try {
+                const res = await fetch(box.dataset.mzLookup + '&q=' + encodeURIComponent(q), { credentials: 'same-origin' });
+                if (!res.ok || input.value.trim() !== q) return;
+                show(await res.json(), q);
+            } catch (ignored) { /* offline: try again on the next key */ last = ''; }
+        };
+        input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 200); });
+        // Enter picks the first match instead of posting the form
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); results.querySelector('.mz-pick-item')?.click(); }
+            if (e.key === 'Escape') results.hidden = true;
+        });
+        document.addEventListener('click', (e) => { if (!box.querySelector('.mz-product-pick').contains(e.target)) results.hidden = true; });
+        input.addEventListener('focus', () => { if (results.children.length) results.hidden = false; });
+        sync();
+    });
 
     // ---- checkout: prices, stores and delivery times depend on the address, so changing it reloads the summary ----
     document.addEventListener('change', (e) => {

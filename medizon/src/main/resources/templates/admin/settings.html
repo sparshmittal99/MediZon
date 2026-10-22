@@ -7,13 +7,14 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-page">
-    <h1 class="mz-page-title">Return settings</h1>
+    <a th:href="@{/admin/returns}" class="small"><i class="bi bi-arrow-left"></i> Returns</a>
+    <h1 class="mz-page-title mt-2">Return settings</h1>
     <p class="small text-muted mb-4">Changes apply to returns requested from now on. Returns already requested keep the pickup day and
         refund timing they were shown. Staff can still move one return's pickup on its page.
         <span th:if="${settings.updatedAt != null}"
               th:text="'Last changed ' + ${#temporals.format(settings.updatedAt, 'd MMM yyyy, h:mm a')} + ' by ' + ${settings.updatedBy} + '.'"></span></p>
 
-    <form th:action="@{/admin/settings}" th:object="${settings}" method="post" class="row g-4">
+    <form th:action="@{/admin/returns/settings}" th:object="${settings}" method="post" class="row g-4">
         <div class="col-lg-6">
             <section class="mz-panel h-100">
                 <h2 class="h6 mb-3"><i class="bi bi-arrow-return-left me-1 text-success"></i>Returns and pickup</h2>

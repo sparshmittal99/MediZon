@@ -2,6 +2,7 @@ package com.medizon.service;
 
 import com.medizon.domain.*;
 import com.medizon.dto.AddressForm;
+import com.medizon.dto.PeriodFilter;
 import com.medizon.dto.ReturnPickupForm;
 import com.medizon.repository.ReturnRequestRepository;
 import com.medizon.repository.UserRepository;
@@ -9,6 +10,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -315,20 +317,48 @@ public class ReturnService {
         return returns.findById(id).orElseThrow(() -> new NotFoundException("Return not found."));
     }
 
-    /** Returns for the back office: one store's, or every store's when {@code store} is null. */
-    public List<ReturnRequest> adminList(ReturnStatus status, Store store) {
-        if (store != null) {
-            return status == null ? returns.findByOrderStoreOrderByCreatedAtDesc(store) : returns.findByOrderStoreAndStatusOrderByCreatedAtAsc(store, status);
-        }
-        return status == null ? returns.findAllByOrderByCreatedAtDesc() : returns.findByStatusOrderByCreatedAtAsc(status);
+    /**
+     * Up to {@link PeriodFilter#LIMIT} returns for the back office, newest first: one store's or all, in a status or
+     * all, requested in the filter's period, or with a return number containing {@code search} (any date).
+     */
+    @Transactional(readOnly = true)
+    public List<ReturnRequest> adminList(ReturnStatus status, Store store, PeriodFilter period, String search) {
+        return returns.findAll(adminScope(store, period, search).and(statusIs(status)), PeriodFilter.newest()).getContent();
     }
 
-    public Map<ReturnStatus, Long> adminCounts(Store store) {
+    public Map<ReturnStatus, Long> adminCounts(Store store, PeriodFilter period, String search) {
+        Specification<ReturnRequest> scope = adminScope(store, period, search);
         Map<ReturnStatus, Long> counts = new EnumMap<>(ReturnStatus.class);
-        for (ReturnStatus s : ReturnStatus.values()) {
-            counts.put(s, store != null ? returns.countByOrderStoreAndStatus(store, s) : returns.countByStatus(s));
-        }
+        for (ReturnStatus s : ReturnStatus.values()) counts.put(s, returns.count(scope.and(statusIs(s))));
         return counts;
+    }
+
+    /** A customer's returns requested in the period, newest {@link PeriodFilter#LIMIT}. */
+    @Transactional(readOnly = true)
+    public List<ReturnRequest> forUser(User user, PeriodFilter period) {
+        return returns.findAll(mine(user, period), PeriodFilter.newest()).getContent();
+    }
+
+    public long countForUser(User user, PeriodFilter period) { return returns.count(mine(user, period)); }
+
+    /** The first year the Returns filter offers. */
+    public Integer firstReturnYear() {
+        LocalDateTime first = returns.firstCreatedAt();
+        return first == null ? null : first.getYear();
+    }
+
+    private static Specification<ReturnRequest> adminScope(Store store, PeriodFilter period, String search) {
+        Specification<ReturnRequest> where = period.matching("createdAt", "returnNumber", search);
+        return store == null ? where : where.and((r, q, cb) -> cb.equal(r.get("order").get("store"), store));
+    }
+
+    private static Specification<ReturnRequest> mine(User user, PeriodFilter period) {
+        Specification<ReturnRequest> mine = (r, q, cb) -> cb.equal(r.get("user"), user);
+        return mine.and(period.matching("createdAt", "returnNumber", null));
+    }
+
+    private static Specification<ReturnRequest> statusIs(ReturnStatus status) {
+        return (r, q, cb) -> status == null ? cb.conjunction() : cb.equal(r.get("status"), status);
     }
 
     public long countAwaitingReview(Store store) {

@@ -9,7 +9,8 @@
 <main class="container mz-page">
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
         <h1 class="mz-page-title mb-0">Master catalogue</h1>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="mz-list-tools">
+            <div th:replace="~{fragments/layout :: numberSearch(@{/admin/medicines}, 'Search name or product code', ${ {} })}"></div>
             <!-- Each store's own catalogue: stock, expiry and OTC prices -->
             <form th:action="@{/admin/medicines}" method="get" class="d-flex gap-2" th:unless="${#lists.isEmpty(stores)}">
                 <select name="store" class="form-select" aria-label="Open a store's catalogue" data-mz-autosubmit>
@@ -18,19 +19,28 @@
                 </select>
                 <noscript><button class="btn btn-outline-primary" type="submit">Open</button></noscript>
             </form>
+            <button type="button" class="btn btn-outline-primary text-nowrap" data-bs-toggle="collapse" data-bs-target="#mzImport"
+                    aria-expanded="false" aria-controls="mzImport"><i class="bi bi-upload me-1"></i>Import</button>
             <a th:href="@{/admin/medicines/new}" class="btn btn-primary text-nowrap"><i class="bi bi-plus-lg me-1"></i>Add product</a>
         </div>
     </div>
     <p class="small text-muted mb-4">Every product, the same for all stores. Prescription medicines sell at this price in every store;
-        stores set their own price for OTC medicines, up to the MRP.</p>
+        stores set their own price for OTC medicines, up to the MRP. Product codes are given automatically and are for staff only.</p>
+    <section th:replace="~{fragments/layout :: catalogImport(@{/admin/medicines/import}, @{/admin/medicines/import/template.xlsx}, null)}"></section>
+    <section th:replace="~{fragments/layout :: importReport}"></section>
+    <p th:if="${q != null}" class="small text-muted">Products whose name or code contains <strong th:text="${q}"></strong>.
+        <a th:href="@{/admin/medicines}">Show all</a></p>
+    <div th:if="${#lists.isEmpty(medicines)}" class="mz-panel mz-empty"><i class="bi bi-capsule"></i>
+        <p class="mb-0" th:text="${q != null} ? 'No product matches that name or code.' : 'No products yet.'">No products yet.</p></div>
 
-    <div class="mz-panel-flush">
+    <div class="mz-panel-flush" th:unless="${#lists.isEmpty(medicines)}">
         <div class="table-responsive">
             <table class="table align-middle mb-0">
-                <thead><tr><th>Product</th><th>Category</th><th class="text-end">Price</th><th class="text-end">MRP</th><th>Rx</th>
+                <thead><tr><th>Code</th><th>Product</th><th>Category</th><th class="text-end">Price</th><th class="text-end">MRP</th><th>Rx</th>
                     <th class="text-end">Stores</th><th class="text-end">Stock (all stores)</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                 <tr th:each="m : ${medicines}" th:classappend="${!m.active} ? 'text-muted'" th:with="c=${coverage.get(m.id)}">
+                    <td class="mz-code text-nowrap" th:text="${m.productCode} ?: '–'">MZP00001</td>
                     <td><span class="fw-semibold" th:text="${m.name}"></span>
                         <span th:unless="${m.returnable}" class="badge text-bg-light border ms-1">Non-returnable</span>
                         <div class="small text-muted" th:text="${m.manufacturer}"></div></td>

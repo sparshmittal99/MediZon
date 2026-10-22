@@ -6,7 +6,10 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <h1 class="mz-page-title mb-4">Your orders</h1>
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+        <h1 class="mz-page-title mb-0">Your orders</h1>
+        <th:block th:if="${hasOrders}"><div th:replace="~{fragments/layout :: periodFilter(@{/orders}, ${ {'tab': tab} })}"></div></th:block>
+    </div>
 
     <div th:unless="${hasOrders}" class="mz-panel mz-empty">
         <i class="bi bi-box-seam"></i>
@@ -16,7 +19,8 @@
 
     <th:block th:if="${hasOrders}">
         <nav class="mz-order-tabs mb-4" aria-label="Order sections">
-            <a th:each="t : ${ {'pending', 'completed', 'cancelled', 'returns'} }" th:href="@{/orders(tab=${t})}"
+            <a th:each="t : ${ {'pending', 'completed', 'cancelled', 'returns'} }"
+               th:href="@{/orders(tab=${t}, year=${period.yearParams}, month=${period.monthParams}, date=${period.dateParams})}"
                class="mz-order-tab" th:classappend="${tab == t} ? 'active'" th:attr="aria-current=${tab == t} ? 'page'">
                 <i class="bi" th:classappend="${t == 'pending'} ? 'bi-truck' : (${t == 'completed'} ? 'bi-check2-circle' : (${t == 'cancelled'} ? 'bi-x-circle' : 'bi-arrow-return-left'))"
                    aria-hidden="true"></i>
@@ -24,6 +28,7 @@
                 <span class="mz-order-tab-count" th:text="${counts.get(t)}">0</span>
             </a>
         </nav>
+        <p class="small text-muted mt-n2 mb-3" th:text="'Your newest ' + ${limit} + (${tab == 'returns'} ? ' returns requested' : ' orders placed') + ' in ' + ${period.label} + '.'"></p>
 
         <!-- Pending, completed, cancelled -->
         <th:block th:unless="${tab == 'returns'}">
@@ -59,7 +64,7 @@
                             <td data-label="Total" th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td>
                             <td data-label="Status">
                                 <span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
-                                <a th:if="${ret != null}" th:href="@{/orders(tab='returns')}" class="d-block small mt-1"
+                                <a th:if="${ret != null}" th:href="@{/orders(tab='returns', year=${ret.createdAt.year})}" class="d-block small mt-1"
                                    th:text="${ret.status.name() == 'REFUNDED'} ? 'Returned, refunded' : (${ret.open} ? 'Return in progress' : 'Return ' + ${#strings.toLowerCase(ret.status.label)})"></a>
                             </td>
                             <td class="text-end text-nowrap mz-td-actions">

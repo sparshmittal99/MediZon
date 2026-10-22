@@ -10,6 +10,9 @@ import com.medizon.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -20,6 +23,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * Catalogues. The admin keeps the master catalogue (every product, its MRP, tax details and the price prescription
@@ -37,26 +42,38 @@ public class CatalogAdminController {
     private final StoreService storeService;
     private final CurrentUser currentUser;
     private final StaffAlerts staffAlerts;
+    private final CatalogImportService catalogImport;
 
-    /** The image is chosen through upload / link fields, never posted directly. */
+    /** The image is chosen through upload / link fields, never posted directly; the product code is given automatically. */
     @InitBinder("medicine")
-    void medicineBinder(WebDataBinder binder) { binder.setDisallowedFields("imageUrl"); }
+    void medicineBinder(WebDataBinder binder) { binder.setDisallowedFields("imageUrl", "productCode"); }
 
-    /** A store account sees its own catalogue; the admin the master catalogue, or one store's with {@code store}. */
+    /** Most products the "Add products" search suggests at a time. */
+    private static final int LOOKUP_LIMIT = 15;
+
+    /**
+     * A store account sees its own catalogue; the admin the master catalogue, or one store's with {@code store}.
+     * {@code q} narrows either to products whose name or product code contains it.
+     */
     @GetMapping
-    public String list(@RequestParam(required = false) Long store, Model model) {
+    public String list(@RequestParam(required = false) Long store, @RequestParam(required = false) String q, Model model) {
         User me = currentUser.get();
         Store s = storeService.scopeOf(me).orElse(store == null ? null : storeService.get(store));
+        String term = q == null || q.isBlank() ? null : q.trim();
         model.addAttribute("active", "medicines");
-        model.addAttribute("stores", me.isAdmin() ? storeService.all() : java.util.List.of());
+        model.addAttribute("stores", me.isAdmin() ? storeService.all() : List.of());
+        model.addAttribute("q", term);
         if (s == null) {
-            model.addAttribute("medicines", medicineService.all());
+            model.addAttribute("medicines", medicineService.all().stream().filter(m -> MedicineService.matches(m, term)).toList());
             model.addAttribute("coverage", storeCatalog.coverage());
+            model.addAttribute("importColumns", CatalogImportService.MASTER);
             return "admin/medicines";
         }
+        List<StoreItem> items = storeCatalog.items(s);
         model.addAttribute("store", s);
-        model.addAttribute("items", storeCatalog.items(s));
-        model.addAttribute("notListed", storeCatalog.notListed(s));
+        model.addAttribute("items", items.stream().filter(i -> MedicineService.matches(i.getMedicine(), term)).toList());
+        model.addAttribute("itemCount", items.size());
+        model.addAttribute("importColumns", CatalogImportService.STORE);
         model.addAttribute("lowBelow", StoreCatalogService.LOW_STOCK_BELOW);
         return "admin/store-catalog";
     }
@@ -146,7 +163,106 @@ public class CatalogAdminController {
         return "redirect:/admin/medicines";
     }
 
+    // ---------------------------------------------------------------- imports from Excel, CSV or PDF
+
+    /** The admin imports products into the master catalogue from a sheet. */
+    @PostMapping("/import")
+    public String importMaster(@RequestParam(required = false) MultipartFile file, RedirectAttributes ra) {
+        if (!currentUser.get().isAdmin()) throw new BusinessException("Only the admin imports into the master catalogue.");
+        return reported(catalogImport.importMaster(file), ra, "redirect:/admin/medicines");
+    }
+
+    /** A store (or the admin, for any store) imports its stock, expiry and prices from a sheet. */
+    @PostMapping("/import/store")
+    public String importStore(@RequestParam Long storeId, @RequestParam(required = false) MultipartFile file, RedirectAttributes ra) {
+        Store s = storeService.get(storeId);
+        storeService.checkAccess(currentUser.get(), s);
+        return reported(catalogImport.importStore(s, file), ra, back(s));
+    }
+
+    private static String reported(CatalogImportService.Report report, RedirectAttributes ra, String to) {
+        ra.addFlashAttribute(report.skipped().isEmpty() ? "success" : "error", report.getSummary()
+                + (report.skipped().isEmpty() ? "" : " The skipped rows are listed below; fix them in the sheet and import it again."));
+        ra.addFlashAttribute("importReport", report);
+        return to;
+    }
+
+    /**
+     * The sheet to fill in for an import, with what's already there: every master product for the admin
+     * ({@code store} empty), or one store's listings.
+     */
+    @GetMapping("/import/template.xlsx")
+    public ResponseEntity<byte[]> importTemplate(@RequestParam(required = false) Long store) {
+        User me = currentUser.get();
+        Store s = storeService.scopeOf(me).orElse(store == null ? null : storeService.get(store));
+        if (s == null && !me.isAdmin()) throw new BusinessException("Only the admin imports into the master catalogue.");
+        if (s != null) storeService.checkAccess(me, s);
+        String name = s == null ? "medizon-master-catalogue.xlsx"
+                : "medizon-" + s.getName().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "") + "-catalogue.xlsx";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + name + "\"")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(catalogImport.template(s));
+    }
+
     // ---------------------------------------------------------------- a store's listings
+
+    /** A product the "Add products" search suggests. */
+    public record Suggestion(Long id, String code, String name, String manufacturer, boolean rx, BigDecimal price) {}
+
+    /** Master products the store doesn't sell yet whose name or product code contains {@code q}, for "Add products". */
+    @GetMapping("/lookup")
+    @ResponseBody
+    public List<Suggestion> lookup(@RequestParam Long storeId, @RequestParam(defaultValue = "") String q) {
+        Store s = storeService.get(storeId);
+        storeService.checkAccess(currentUser.get(), s);
+        if (q.isBlank()) return List.of();
+        return storeCatalog.notListed(s).stream().filter(m -> MedicineService.matches(m, q)).limit(LOOKUP_LIMIT)
+                .map(m -> new Suggestion(m.getId(), m.getProductCode(), m.getName(), m.getManufacturer(), m.isPrescriptionRequired(),
+                        m.getMrp() != null ? m.getMrp() : m.getPrice()))
+                .toList();
+    }
+
+    /**
+     * Starts selling several master products in a store at once, each with its stock and batch expiry (both optional:
+     * they can be set afterwards in the catalogue). Prices start at the catalogue price.
+     */
+    @PostMapping("/listings/bulk")
+    public String listMany(@RequestParam Long storeId, @RequestParam(required = false) List<Long> medicineId,
+                           @RequestParam(required = false) List<String> stock, @RequestParam(required = false) List<String> expiryDate,
+                           RedirectAttributes ra) {
+        Store s = storeService.get(storeId);
+        storeService.checkAccess(currentUser.get(), s);
+        if (medicineId == null || medicineId.isEmpty()) throw new BusinessException("Search for a product and choose it to add.");
+        List<StoreCatalogService.NewListing> listings = new java.util.ArrayList<>();
+        for (int k = 0; k < medicineId.size(); k++) {
+            listings.add(new StoreCatalogService.NewListing(medicineId.get(k), parseStock(at(stock, k)), parseDate(at(expiryDate, k))));
+        }
+        int added = storeCatalog.listAll(s, listings);
+        ra.addFlashAttribute("success", (added == 1 ? "1 product" : added + " products") + " added to " + s.getName()
+                + "'s catalogue. Set the stock and expiry of any you left empty below.");
+        return back(s);
+    }
+
+    private static String at(List<String> values, int k) { return values != null && k < values.size() ? values.get(k) : null; }
+
+    private static LocalDate parseDate(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new BusinessException("Enter the batch expiry as a date.");
+        }
+    }
+
+    private static int parseStock(String value) {
+        if (value == null || value.isBlank()) return 0;
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new BusinessException("Enter the stock as a whole number of packs.");
+        }
+    }
 
     /** Starts selling a master product in a store (or updates it if the store already lists it). */
     @PostMapping("/listings")

@@ -5,6 +5,8 @@ import com.medizon.repository.MedicineRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,9 +58,30 @@ public class MedicineService {
         }
         m.setImageUrl(next);
         if (m.exceedsMrp(m.getPrice())) throw new BusinessException("The price can't be above the MRP.");
+        // The code is never posted with the form: an edit keeps the product's code, a new product gets one once it has an id
+        m.setProductCode(m.getId() == null ? null : medicines.findById(m.getId()).map(Medicine::getProductCode).orElse(null));
         Medicine saved = medicines.save(m);
+        if (saved.getProductCode() == null) saved.setProductCode(productCode(saved.getId()));
         if (current != null && !current.equals(next)) fileStorage.deleteMedicineImage(current);
         return saved;
+    }
+
+    /** "MZP00042": the product's id behind a prefix, so it is unique and never reused. */
+    public static String productCode(Long id) { return String.format("MZP%05d", id); }
+
+    /** Gives a code to every product that has none: those from before codes existed, and ones the seeder added. */
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void assignMissingCodes() {
+        medicines.findByProductCodeIsNull().forEach(m -> m.setProductCode(productCode(m.getId())));
+    }
+
+    /** Products whose name or code contains {@code q} (any case); all of them when it's empty. */
+    public static boolean matches(Medicine m, String q) {
+        if (q == null || q.isBlank()) return true;
+        String t = q.trim().toLowerCase(java.util.Locale.ROOT);
+        return m.getName().toLowerCase(java.util.Locale.ROOT).contains(t)
+                || (m.getProductCode() != null && m.getProductCode().toLowerCase(java.util.Locale.ROOT).contains(t));
     }
 
     /** The image stored for this medicine, or null for a new one. */

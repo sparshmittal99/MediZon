@@ -22,6 +22,13 @@ public class Medicine {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Internal product code for the admin and stores ("MZP00042"), unique and given automatically when the product is
+     * added. Customers never see it.
+     */
+    @Column(unique = true, length = 16)
+    private String productCode;
+
     @NotBlank(message = "Enter the medicine name")
     @Column(nullable = false)
     private String name;

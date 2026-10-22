@@ -7,6 +7,7 @@ import com.medizon.domain.ReturnStatus;
 import com.medizon.domain.Store;
 import com.medizon.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -16,7 +17,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Long> {
+public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Long>, JpaSpecificationExecutor<ReturnRequest> {
     List<ReturnRequest> findByOrderOrderByCreatedAtDesc(Order order);
     List<ReturnRequest> findByUserOrderByCreatedAtDesc(User user);
     Optional<ReturnRequest> findByIdAndUser(Long id, User user);
@@ -27,6 +28,10 @@ public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Lo
     List<ReturnRequest> findByOrderStoreAndStatusOrderByCreatedAtAsc(Store store, ReturnStatus status);
     long countByOrderStoreAndStatus(Store store, ReturnStatus status);
     List<ReturnRequest> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(LocalDateTime from, LocalDateTime to);
+
+    /** When the first return was requested, for the years the Returns filter offers. */
+    @Query("select min(r.createdAt) from ReturnRequest r")
+    LocalDateTime firstCreatedAt();
 
     /** Packs of an order line already returned or on their way back (anything not rejected). */
     @Query("select coalesce(sum(i.quantity), 0) from ReturnItem i where i.orderItem = :item and i.request.status <> :rejected")

@@ -31,11 +31,15 @@ public class AssistantTools {
     private static final Set<String> CUSTOMER = Set.of("search_medicines", "medicine_details", "add_to_cart",
             "cart_summary", "my_orders", "my_returns", "my_plans", "todays_doses", "create_plan", "mark_dose", "refill_plan",
             "submit_feedback", "create_reminder", "list_reminders", "complete_reminder");
-    private static final Set<String> ADMIN = Set.of("search_medicines", "store_tasks", "review_data",
+    private static final Set<String> ADMIN = Set.of("search_medicines", "store_tasks", "review_data", "review_digest",
             "create_reminder", "list_reminders", "complete_reminder");
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM");
     private static final int MAX_RESULTS = 8;
+    /** The review digest for the LLM: the last 90 days by default, and this many of the newest comments, each cut short. */
+    static final int DIGEST_DAYS = 90;
+    private static final int DIGEST_COMMENTS = 25;
+    private static final int DIGEST_CHARS = 140;
 
     private final MedicineService medicineService;
     private final CatalogService catalog;
@@ -97,6 +101,8 @@ public class AssistantTools {
             }
             case "store_tasks" -> storeTasks();
             case "review_data" -> reviewData();
+            case "review_digest" -> reviewDigest(args.hasNonNull("rating") ? args.get("rating").asInt() : null,
+                    args.path("days").asInt(DIGEST_DAYS));
             default -> Map.of("error", "Unknown action " + name);
         };
     }
@@ -297,6 +303,48 @@ public class AssistantTools {
         out.put("orders_today", orderRepository.countByCreatedAtAfter(today.atStartOfDay()));
         out.put("revenue_today", orderRepository.revenueSince(today.atStartOfDay(), OrderStatus.CANCELLED));
         return out;
+    }
+
+    /**
+     * Reviews and feedback, small enough for an LLM request: the star figures (overall, in the period, and the last
+     * 30 days against the 30 before) and the newest comments with text. {@code rating} keeps only that star rating.
+     */
+    public Map<String, Object> reviewDigest(Integer rating, int days) {
+        int span = Math.max(1, Math.min(days, 730));
+        LocalDateTime since = LocalDateTime.now().minusDays(span);
+        LocalDateTime month = LocalDateTime.now().minusDays(30), prevMonth = month.minusDays(30);
+        List<Review> all = reviewService.list(null);
+        List<Review> inPeriod = all.stream().filter(r -> r.getCreatedAt().isAfter(since)).toList();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("period_days", span);
+        out.put("reviews_all_time", all.size());
+        out.put("average_all_time", round1(all.stream().mapToInt(Review::getRating).average()));
+        out.put("reviews_in_period", inPeriod.size());
+        out.put("average_in_period", round1(inPeriod.stream().mapToInt(Review::getRating).average()));
+        Map<Integer, Long> stars = new LinkedHashMap<>();
+        for (int st = 5; st >= 1; st--) { int k = st; stars.put(st, inPeriod.stream().filter(r -> r.getRating() == k).count()); }
+        out.put("stars_in_period", stars);
+        out.put("average_last_30_days", round1(all.stream().filter(r -> r.getCreatedAt().isAfter(month)).mapToInt(Review::getRating).average()));
+        out.put("average_previous_30_days", round1(all.stream()
+                .filter(r -> r.getCreatedAt().isAfter(prevMonth) && !r.getCreatedAt().isAfter(month)).mapToInt(Review::getRating).average()));
+        out.put("review_comments", inPeriod.stream()
+                .filter(r -> rating == null || r.getRating() == rating)
+                .filter(r -> r.getComment() != null && !r.getComment().isBlank()).limit(DIGEST_COMMENTS)
+                .map(r -> r.getRating() + "★ " + r.getCreatedAt().format(DAY) + ": " + cut(r.getComment())).toList());
+        List<Feedback> feedback = feedbackService.all().stream().filter(f -> f.getCreatedAt().isAfter(since))
+                .filter(f -> rating == null || f.getRating() == null || f.getRating().equals(rating)).toList();
+        out.put("feedback_in_period", feedback.size());
+        out.put("feedback_messages", feedback.stream().limit(DIGEST_COMMENTS / 2)
+                .map(f -> (f.getRating() != null ? f.getRating() + "★ " : "") + (f.getCategory() != null && !f.getCategory().isBlank()
+                        ? "[" + f.getCategory() + "] " : "") + cut(f.getMessage())).toList());
+        return out;
+    }
+
+    private static Double round1(OptionalDouble d) { return d.isPresent() ? Math.round(d.getAsDouble() * 10) / 10.0 : null; }
+
+    private static String cut(String text) {
+        String t = text.strip().replaceAll("[\\s]+", " ");
+        return t.length() > DIGEST_CHARS ? t.substring(0, DIGEST_CHARS) + "…" : t;
     }
 
     private Object reviewData() {

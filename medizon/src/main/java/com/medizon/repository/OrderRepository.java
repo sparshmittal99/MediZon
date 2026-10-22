@@ -7,6 +7,7 @@ import com.medizon.domain.Role;
 import com.medizon.domain.Store;
 import com.medizon.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,7 +16,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface OrderRepository extends JpaRepository<Order, Long> {
+public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
     List<Order> findByUserOrderByCreatedAtDesc(User user);
     List<Order> findTop5ByUserOrderByCreatedAtDesc(User user);
     Optional<Order> findByIdAndUser(Long id, User user);
@@ -29,6 +30,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     long countByStoreAndStatus(Store store, OrderStatus status);
     List<Order> findTop8ByStoreOrderByCreatedAtDesc(Store store);
     List<Order> findByCheckoutRefOrderByIdAsc(String checkoutRef);
+
+    /** When the first order was placed, for the years the Orders filter offers. */
+    @Query("select min(o.createdAt) from CustomerOrder o")
+    LocalDateTime firstCreatedAt();
+
+    @Query("select min(o.createdAt) from CustomerOrder o where o.user = :user")
+    LocalDateTime firstCreatedAt(@Param("user") User user);
 
     /** Checkouts (a split cart counts once) on which the customer used this promo since {@code since}, cancelled ones left out. */
     @Query("""

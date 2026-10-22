@@ -3,12 +3,14 @@ package com.medizon.service;
 import com.medizon.domain.*;
 import com.medizon.dto.CartSummary;
 import com.medizon.dto.Offer;
+import com.medizon.dto.PeriodFilter;
 import com.medizon.repository.MedicineRepository;
 import com.medizon.repository.OrderRepository;
 import com.medizon.repository.PrescriptionRepository;
 import com.medizon.repository.StoreItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -472,22 +474,52 @@ public class OrderService {
         return orders.findByCheckoutRefOrderByIdAsc(o.getCheckoutRef()).stream().filter(x -> !x.getId().equals(o.getId())).toList();
     }
 
-    /** Customer orders for the back office, optionally one store's and one status. */
-    public List<Order> adminList(OrderStatus status, Store store) {
-        if (store != null) {
-            return status == null ? orders.findByStoreOrderByCreatedAtDesc(store)
-                    : orders.findByStoreAndStatusOrderByCreatedAtDesc(store, status);
-        }
-        return status == null ? orders.findByUserRoleOrderByCreatedAtDesc(Role.CUSTOMER)
-                : orders.findByUserRoleAndStatusOrderByCreatedAtDesc(Role.CUSTOMER, status);
+        /**
+     * Up to {@link PeriodFilter#LIMIT} orders for the back office, newest first: one store's or every customer's, in
+     * a status or all, placed in the filter's period, or with an order number containing {@code search} (any date).
+     */
+    @Transactional(readOnly = true)
+    public List<Order> adminList(OrderStatus status, Store store, PeriodFilter period, String search) {
+        return orders.findAll(adminScope(store, period, search).and(statusIn(status == null ? null : EnumSet.of(status))),
+                PeriodFilter.newest()).getContent();
     }
 
-    /** Number of orders in each status, in pipeline order, for one store or all. */
-    public Map<OrderStatus, Long> adminCounts(Store store) {
+    /** Number of orders in each status, in pipeline order, for the same store, period or search. */
+    public Map<OrderStatus, Long> adminCounts(Store store, PeriodFilter period, String search) {
+        Specification<Order> scope = adminScope(store, period, search);
         Map<OrderStatus, Long> counts = new EnumMap<>(OrderStatus.class);
-        for (OrderStatus s : OrderStatus.values()) {
-            counts.put(s, store != null ? orders.countByStoreAndStatus(store, s) : orders.countByUserRoleAndStatus(Role.CUSTOMER, s));
-        }
+        for (OrderStatus s : OrderStatus.values()) counts.put(s, orders.count(scope.and(statusIn(EnumSet.of(s)))));
         return counts;
+    }
+
+    /** A customer's orders in these statuses placed in the period, newest {@link PeriodFilter#LIMIT}. */
+    @Transactional(readOnly = true)
+    public List<Order> forUser(User user, Set<OrderStatus> statuses, PeriodFilter period) {
+        return orders.findAll(userScope(user, period).and(statusIn(statuses)), PeriodFilter.newest()).getContent();
+    }
+
+    public long countForUser(User user, Set<OrderStatus> statuses, PeriodFilter period) {
+        return orders.count(userScope(user, period).and(statusIn(statuses)));
+    }
+
+    /** The first year the Orders filter offers: when this customer (or, for staff, anyone) first ordered. */
+    public Integer firstOrderYear(User customer) {
+        LocalDateTime first = customer == null ? orders.firstCreatedAt() : orders.firstCreatedAt(customer);
+        return first == null ? null : first.getYear();
+    }
+
+    private static Specification<Order> adminScope(Store store, PeriodFilter period, String search) {
+        Specification<Order> who = store != null ? (r, q, cb) -> cb.equal(r.get("store"), store)
+                : (r, q, cb) -> cb.equal(r.get("user").get("role"), Role.CUSTOMER);
+        return who.and(period.matching("createdAt", "orderNumber", search));
+    }
+
+    private static Specification<Order> userScope(User user, PeriodFilter period) {
+        Specification<Order> mine = (r, q, cb) -> cb.equal(r.get("user"), user);
+        return mine.and(period.matching("createdAt", "orderNumber", null));
+    }
+
+    private static Specification<Order> statusIn(Set<OrderStatus> statuses) {
+        return (r, q, cb) -> statuses == null ? cb.conjunction() : r.get("status").in(statuses);
     }
 }

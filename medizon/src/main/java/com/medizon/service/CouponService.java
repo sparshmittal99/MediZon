@@ -12,11 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
@@ -40,6 +43,19 @@ public class CouponService {
     /** Promos on offer, smallest minimum order first, for the cards at checkout. */
     public List<Coupon> available() {
         return coupons.findByActiveTrueOrderByMinOrderAscIdAsc().stream().filter(Coupon::isLive).toList();
+    }
+
+    /**
+     * The promos on offer ordered for a cart of medicines worth {@code subtotal}: those that work on it first, the
+     * biggest saving at the top; then those it doesn't qualify for yet or that are used up today, nearest to working first.
+     */
+    public static List<Coupon> bestFirst(List<Coupon> promos, BigDecimal subtotal, Set<String> usedToday) {
+        Predicate<Coupon> works = c -> !usedToday.contains(c.getCode()) && subtotal.compareTo(c.getMinOrder()) >= 0;
+        return promos.stream().sorted(Comparator.comparing((Coupon c) -> !works.test(c))
+                        .thenComparing(c -> works.test(c) ? c.discountOn(subtotal).negate() : BigDecimal.ZERO)
+                        .thenComparing(c -> usedToday.contains(c.getCode()))
+                        .thenComparing(Coupon::getMinOrder))
+                .toList();
     }
 
     public Optional<Coupon> find(String code) {

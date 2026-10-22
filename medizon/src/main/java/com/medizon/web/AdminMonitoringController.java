@@ -28,10 +28,41 @@ import java.util.*;
 @RequiredArgsConstructor
 public class AdminMonitoringController {
 
-    /** One line of the health panel. */
+    /** One card of the health panel. */
     public record Check(String name, String status, Map<String, Object> details) {
+        /** Summaries longer than this are cut short on the card, with "View more" for the rest. */
+        static final int CARD_CHARS = 110;
+
         public boolean isUp() { return "UP".equals(status); }
         public boolean isDown() { return "DOWN".equals(status) || "OUT_OF_SERVICE".equals(status); }
+
+        public String getLabel() {
+            return switch (name) {
+                case "db" -> "Database";
+                case "diskSpace" -> "Disk space";
+                case "assistant" -> "Assistant service";
+                case "gemini" -> "Gemini (prescriptions)";
+                case "groq" -> "Groq (chat)";
+                default -> name.isEmpty() ? name : Character.toUpperCase(name.charAt(0)) + name.substring(1);
+            };
+        }
+
+        /** What the card says: the key figure when it's fine, what's wrong and its effect when it isn't. */
+        public String getSummary() {
+            Object free = details.get("free"), total = details.get("total");
+            if ("diskSpace".equals(name) && free instanceof Number f && total instanceof Number t) {
+                return String.format(Locale.ENGLISH, "%.1f GB free of %.1f GB", f.doubleValue() / 1073741824.0, t.doubleValue() / 1073741824.0);
+            }
+            if ("db".equals(name) && details.get("database") != null) return String.valueOf(details.get("database"));
+            if (details.get("responseMs") != null) return "Answered in " + details.get("responseMs") + " ms";
+            Object why = details.containsKey("error") ? details.get("error") : details.get("reason");
+            if (why == null) return isUp() ? "Working normally" : "";
+            return (details.containsKey("error") ? "Not answering: " : "") + why
+                    + (details.get("effect") != null ? ". Meanwhile " + details.get("effect") + "." : "");
+        }
+
+        /** Whether the card has more to show than fits: anything not up, or a summary that's cut short. */
+        public boolean isMore() { return !isUp() && !details.isEmpty() || getSummary().length() > CARD_CHARS; }
     }
 
     private final HealthEndpoint health;
@@ -46,11 +77,7 @@ public class AdminMonitoringController {
         boolean resolved = "resolved".equals(errorsView);
 
         HealthComponent h = health.health();
-        List<Check> checks = new ArrayList<>();
-        if (h instanceof CompositeHealth c) {
-            c.getComponents().forEach((name, part) -> checks.add(new Check(name, part.getStatus().getCode(),
-                    part instanceof Health ph ? ph.getDetails() : Map.of())));
-        }
+        List<Check> checks = checks(h);
 
         model.addAttribute("active", "monitoring");
         model.addAttribute("overall", h.getStatus().getCode());
@@ -78,6 +105,26 @@ public class AdminMonitoringController {
         model.addAttribute("errorsToday", errors.countByResolvedFalseAndLastSeenAfter(LocalDateTime.now().minusHours(24)));
         model.addAttribute("assistant", assistantMetrics());
         return "admin/monitoring";
+    }
+
+    private static List<Check> checks(HealthComponent h) {
+        List<Check> checks = new ArrayList<>();
+        if (h instanceof CompositeHealth c) {
+            c.getComponents().forEach((name, part) -> checks.add(new Check(name, part.getStatus().getCode(),
+                    part instanceof Health ph ? ph.getDetails() : Map.of())));
+        }
+        return checks;
+    }
+
+    /** "View more" on a health card: everything the check reported, in full. */
+    @GetMapping("/health/{name}")
+    public String healthDetail(@PathVariable String name, Model model) {
+        Check check = checks(health.health()).stream().filter(c -> c.name().equals(name)).findFirst()
+                .orElseThrow(() -> new BusinessException("There's no health check called " + name + "."));
+        model.addAttribute("check", check);
+        model.addAttribute("checkedAt", LocalDateTime.now());
+        model.addAttribute("active", "monitoring");
+        return "admin/monitoring-health";
     }
 
     /** "3 d 4 h", "2 h 5 min", "40 s". */

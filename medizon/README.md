@@ -73,7 +73,7 @@ sending, medicines into the cart on approval; see Prescriptions below), "Notify 
 out-of-stock products (the home page shows only what's in stock), profile and address, notification centre,
 desktop notifications, chat assistant, family members (each with their own medicines, reminders and supply),
 per-device alert settings (everyone, or only some members), choosing who each cart item is for (or the household's
-common OTC shelf), GST tax invoices, and returns in two steps (items, reason and photos; then pickup address,
+common OTC shelf, where medicines sold without a prescription start), GST tax invoices, and returns in two steps (items, reason and photos; then pickup address,
 pickup date and where the refund goes: original method, MediZon Money, UPI or bank account). A "Delivers to" location in the header
 (device location, a pin on the map, an address search or a PIN code, geocoded with OpenStreetMap) says whether
 MediZon delivers there. Visitors can fill a cart before signing in; it moves into their account when they sign in
@@ -90,7 +90,7 @@ Account settings: change password (current password first, then the new one twic
 prescription review (AI score and fast-track, medicines and packs pre-filled from the AI reading and the customer's
 cart, doctor, patient and date confirmed, validity date), GST tax invoices, return review (approve or reject, pickup with optional
 restock, moving a pickup to another day, refund), promo codes (admin), return settings (admin: return window,
-pickup range, refund days), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, store-wise, medicines sold, HSN summary and returns sheets; CSV), the master catalogue and each store's catalogue, low-stock list, stores and delivery areas, user accounts by role, customer feedback, monitoring, and a chat assistant for the admin. Staff accounts are for running the shop only; they can't shop, order or set reminders.
+pickup range, refund days), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, store-wise, medicines sold, HSN summary and returns sheets; CSV), the master catalogue and each store's catalogue, low-stock list, stores and delivery areas, user accounts by role, customer feedback, monitoring, and a chat assistant for the admin (it reads and analyses reviews and feedback, through Groq or Gemini too). Orders and Returns show the newest 20 for the chosen years, months or days (this year by default), and staff can find one by its number; tickets are found by number too. Every product gets a unique product code (for the admin and stores only, never shown to customers), and catalogues are searched by name or code; a store adds several master products at once by code or name. Both catalogues also import from Excel (.xlsx, .xls), CSV or a text PDF: the admin's sheet adds or updates master products (name, category, price, MRP, tax ...), a store's sets its stock, batch expiry and OTC prices by product code or name; **Download sheet** gives the headings with what's there now, and rows that can't be imported are listed with the reason. The admin can set a new password for any other account. Customers keep their newest 20 notifications. Staff accounts are for running the shop only; they can't shop, order or set reminders.
 
 ## Roles and stores
 
@@ -221,7 +221,7 @@ performance, with no outside service needed:
   Orders placed before rounding keep their paise.
 - Every order, including automatic refills, must go to a PIN code listed and active under **Admin > Delivery areas**;
   `OrderService.createOrder` checks it, so checkout and refills follow the same rule.
-- Customers can ask to return delivered items within the return window (**Admin > Settings**, 7 days by default),
+- Customers can ask to return delivered items within the return window (**Admin > Returns > Settings**, 7 days by default),
   with a reason and 1 to 3 photos, then choose the pickup address (where the order went, a saved address or a new one
   in a served PIN code) and where the refund goes. Prepaid orders: the original method or MediZon Money. Cash on
   delivery: MediZon Money, a UPI ID or a bank account (bank numbers are masked to the customer). Orders paid fully with

@@ -144,13 +144,14 @@ public class InvoiceService {
     }
 
     /**
-     * Who sells an order: the store that fulfils it, with MediZon's configured details for anything the store hasn't
-     * filled in. The seller's state decides CGST + SGST or IGST, so each store's invoices follow its own state.
+     * Who sells an order: always MediZon by name, with the address, GSTIN, licence and contacts of the store that
+     * fulfils it (MediZon's configured details for anything the store hasn't filled in). The seller's state decides
+     * CGST + SGST or IGST, so each store's invoices follow its own state.
      */
     public Invoice.Seller seller(Store s) {
         if (s == null) return seller();
         String state = or(s.getState(), sellerState);
-        return new Invoice.Seller(s.getName(), or(s.getGstin(), sellerGstin), or(s.getDrugLicense(), sellerDrugLicense),
+        return new Invoice.Seller(sellerName, or(s.getGstin(), sellerGstin), or(s.getDrugLicense(), sellerDrugLicense),
                 or(s.getStreetAddress(), sellerAddress), state, GstStates.code(state), or(s.getPhone(), sellerPhone),
                 or(s.getEmail(), sellerEmail));
     }

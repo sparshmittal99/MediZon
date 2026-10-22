@@ -34,10 +34,14 @@ public class AdminSupportController {
 
     @GetMapping
     public String list(@RequestParam(defaultValue = "queue") String view, @RequestParam(required = false) TicketTopic topic,
-                       Model model) {
+                       @RequestParam(required = false) String q, Model model) {
         User me = currentUser.get();
-        String v = List.of("queue", "teams", "closed", "all").contains(view) ? view : "queue";
-        model.addAttribute("tickets", support.staffList(me, v, topic));
+        String term = q == null || q.isBlank() ? null : q.trim();
+        // A ticket number is looked up among every ticket this account can see
+        String v = term != null ? "all" : List.of("queue", "teams", "closed", "all").contains(view) ? view : "queue";
+        model.addAttribute("tickets", support.staffList(me, v, term != null ? null : topic).stream()
+                .filter(t -> SupportService.numberMatches(t, term)).toList());
+        model.addAttribute("q", term);
         model.addAttribute("counts", support.staffCounts(me));
         model.addAttribute("view", v);
         model.addAttribute("topic", topic);

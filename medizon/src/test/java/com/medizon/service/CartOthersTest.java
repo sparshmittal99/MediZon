@@ -21,7 +21,9 @@ class CartOthersTest {
     private CartItemRepository lines;
     private CartService service;
     private Medicine acitrom;
-    private Member me, others;
+    private Member me, others, common;
+    private MedicineRepository medicines;
+    private CatalogService catalog;
     private CartItem saved;
 
     private static Member member(long id, MemberKind kind) {
@@ -35,9 +37,9 @@ class CartOthersTest {
     @BeforeEach
     void setUp() {
         lines = mock(CartItemRepository.class);
-        MedicineRepository medicines = mock(MedicineRepository.class);
+        medicines = mock(MedicineRepository.class);
         MemberService members = mock(MemberService.class);
-        CatalogService catalog = mock(CatalogService.class);
+        catalog = mock(CatalogService.class);
         service = new CartService(lines, mock(CartRepository.class), medicines, members, catalog, mock(CouponService.class));
 
         acitrom = new Medicine();
@@ -55,7 +57,9 @@ class CartOthersTest {
 
         me = member(1, MemberKind.SELF);
         others = member(3, MemberKind.OTHERS);
+        common = member(2, MemberKind.COMMON);
         when(members.self(user)).thenReturn(me);
+        when(members.common(user)).thenReturn(common);
         // The line, once saved, is what the next add finds
         when(lines.findByUserAndMedicine(user, acitrom)).thenAnswer(i -> Optional.ofNullable(saved));
         when(lines.save(any())).thenAnswer(i -> saved = i.getArgument(0));
@@ -74,5 +78,27 @@ class CartOthersTest {
         assertEquals(4, saved.getQuantity());
         assertEquals(2, saved.packsFor(me.getId()));
         assertEquals(2, saved.packsFor(others.getId()));
+    }
+
+    @Test
+    void newLinesGoToTheCommonShelfForOtcAndTheAccountHolderForPrescriptionMedicines() {
+        Medicine crocin = new Medicine();
+        crocin.setId(5L);
+        crocin.setName("Crocin");
+        crocin.setActive(true);
+        StoreItem listing = new StoreItem();
+        listing.setStore(new Store());
+        listing.setMedicine(crocin);
+        listing.setStock(100);
+        when(catalog.offer(eq(crocin), any(), anyInt())).thenReturn(new Offer(crocin, listing, null, 100));
+        when(medicines.findById(5L)).thenReturn(Optional.of(crocin));
+        when(lines.findByUserAndMedicine(user, crocin)).thenReturn(Optional.empty());
+
+        service.add(user, 5L, 2, null);
+        assertEquals(2, saved.packsFor(common.getId()));
+
+        saved = null;
+        service.add(user, 3L, 1, null);       // Acitrom needs a prescription
+        assertEquals(1, saved.packsFor(me.getId()));
     }
 }

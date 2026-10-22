@@ -881,6 +881,19 @@ body.mz-home { background: #EAF1ED; }
 /* A row of product cards that scrolls sideways */
 .mz-rail { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .4rem; scroll-snap-type: x mandatory; }
 .mz-rail-item { flex: 0 0 13.5rem; scroll-snap-align: start; }
+/* Arrows over the row's edges, shaped like the product cards (white, bordered, same corners): "back" appears once
+   it's scrolled, "more" goes at the end */
+.mz-rail-wrap { position: relative; }
+.mz-rail-arrow { position: absolute; top: calc(50% - .2rem); z-index: 2; display: flex; align-items: center; justify-content: center;
+    width: 2.6rem; height: 6rem; transform: translateY(-50%); border: 1px solid var(--mz-line); border-radius: .9rem;
+    background: #fff; color: var(--mz-ink); font-size: 1.15rem; box-shadow: 0 6px 18px rgba(16, 42, 32, .14);
+    transition: color .15s, border-color .15s, box-shadow .15s; }
+.mz-rail-arrow:hover { color: var(--mz-green); border-color: var(--mz-green); box-shadow: 0 8px 22px rgba(16, 42, 32, .2); }
+.mz-rail-arrow:focus-visible { outline: 2px solid var(--mz-green); outline-offset: 2px; }
+.mz-rail-arrow[hidden] { display: none; }
+.mz-rail-prev { left: -.6rem; }
+.mz-rail-next { right: -.6rem; }
+@media (hover: none) { .mz-rail-arrow { width: 2.2rem; height: 5rem; font-size: 1rem; } }
 .mz-how { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
 /* Each step a tile, so the three fill the card evenly whatever the screen width */
 .mz-how li { display: flex; align-items: center; gap: .9rem; height: 100%; padding: 1rem 1.15rem; border-radius: .8rem;
@@ -1142,3 +1155,60 @@ html.translated-ltr h1, html.translated-ltr h2, html.translated-ltr h3, html.tra
     .mz-raise { flex-direction: column; }
     .mz-ticket-head .badge { font-size: .8rem !important; }
 }
+
+/* ---------- Orders and Returns: search by number, and the date filter ---------- */
+.mz-list-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .5rem; }
+.mz-number-search { position: relative; margin: 0; }
+.mz-number-search i { position: absolute; left: .6rem; top: 50%; transform: translateY(-50%); color: var(--mz-muted); font-size: .85rem; }
+.mz-number-search input { padding-left: 1.85rem; width: 13.5rem; max-width: 100%; }
+.mz-period-menu { width: 21rem; max-width: calc(100vw - 2rem); padding: 1rem; }
+.mz-period-title { font-weight: 700; margin-bottom: .75rem; }
+.mz-period-label { float: none; width: auto; font-size: .8rem; font-weight: 600; color: var(--mz-muted); margin-bottom: .35rem;
+    text-transform: uppercase; letter-spacing: .03em; }
+.mz-period-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.mz-period-months { display: grid; grid-template-columns: repeat(4, 1fr); }
+.mz-period-months[hidden] { display: none; }
+.mz-period-chip { position: relative; margin: 0; cursor: pointer; }
+.mz-period-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.mz-period-chip span { display: block; padding: .3rem .65rem; border: 1px solid var(--mz-line); border-radius: 999px;
+    font-size: .85rem; text-align: center; }
+.mz-period-chip input:checked + span { border-color: var(--mz-green); background: var(--mz-mint); color: var(--mz-green); font-weight: 600; }
+.mz-period-chip input:focus-visible + span { outline: 2px solid var(--mz-green); outline-offset: 1px; }
+.mz-period-tag { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .35rem .2rem .65rem; border-radius: 999px;
+    background: var(--mz-mint); color: var(--mz-green); font-size: .85rem; font-weight: 600; }
+.mz-period-tag .btn-close { width: .55rem; height: .55rem; padding: .25rem; }
+@media (max-width: 575.98px) {
+    .mz-list-tools { width: 100%; justify-content: flex-start; }
+    .mz-number-search { flex: 1 1 12rem; }
+    .mz-number-search input { width: 100%; }
+}
+
+/* ---------- Catalogue: product codes (staff only) and "Add products" ---------- */
+.mz-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .82rem; letter-spacing: .02em; color: var(--mz-muted); }
+.mz-product-pick { position: relative; max-width: 34rem; }
+.mz-product-pick > i { position: absolute; left: .8rem; top: 1.2rem; transform: translateY(-50%); color: var(--mz-muted); }
+.mz-product-pick input { padding-left: 2.2rem; }
+.mz-pick-results { position: absolute; left: 0; right: 0; top: calc(100% + .25rem); z-index: 20; max-height: 18rem; overflow-y: auto;
+    background: #fff; border: 1px solid var(--mz-line); border-radius: .6rem; box-shadow: 0 10px 28px rgba(16, 42, 32, .14); }
+.mz-pick-results[hidden] { display: none; }
+.mz-pick-item { display: flex; align-items: center; gap: .75rem; width: 100%; padding: .55rem .8rem; border: 0; border-bottom: 1px solid var(--mz-line);
+    background: none; text-align: left; }
+.mz-pick-item:last-child { border-bottom: 0; }
+.mz-pick-item:hover, .mz-pick-item:focus-visible { background: var(--mz-mint); }
+.mz-pick-none { padding: .6rem .8rem; color: var(--mz-muted); font-size: .9rem; }
+
+/* ---------- Monitoring: health cards all one size; a long problem is cut short, "View more" has it in full ---------- */
+.mz-health-card { display: flex; flex-direction: column; height: 8.25rem; padding-top: 1rem; padding-bottom: 1rem; overflow: hidden; }
+.mz-health-card.is-degraded { border-color: #E9C46A; }
+.mz-health-card.is-down { border-color: #E5A3A3; }
+.mz-health-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+.mz-health-more { margin-top: auto; padding-top: .25rem; font-weight: 600; }
+.mz-health-log dt { font-size: .8rem; font-weight: 600; color: var(--mz-muted); text-transform: uppercase; letter-spacing: .03em; }
+.mz-health-log dd { margin-bottom: 1rem; }
+.mz-health-log dd:last-child { margin-bottom: 0; }
+.mz-health-log .mz-stack { max-height: none; white-space: pre-wrap; word-break: break-word; }
+
+/* ---------- Catalogue import: the columns the sheet can have ---------- */
+.mz-import-cols { display: flex; flex-wrap: wrap; gap: .35rem; }
+.mz-import-col { padding: .2rem .6rem; border: 1px solid var(--mz-line); border-radius: 999px; font-size: .8rem; cursor: help; }
+.mz-import-col.is-required { border-color: var(--mz-green); background: var(--mz-mint); color: var(--mz-green); font-weight: 600; }

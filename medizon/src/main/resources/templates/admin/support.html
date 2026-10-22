@@ -13,11 +13,16 @@
             <p class="small text-muted mb-0" th:text="${seesAll} ? 'Every customer ticket. Pass a ticket to a team when it needs a specialist.'
                 : 'Tickets support has passed to your team. Reply to the customer, then hand the ticket back to support once it is solved.'"></p>
         </div>
-        <div th:if="${averageRating != null}" class="small text-muted">
-            <i class="bi bi-star-fill text-warning" aria-hidden="true"></i>
-            <span th:text="${#numbers.formatDecimal(averageRating, 1, 1)} + ' average rating'"></span>
+        <div class="mz-list-tools">
+            <div th:if="${averageRating != null}" class="small text-muted">
+                <i class="bi bi-star-fill text-warning" aria-hidden="true"></i>
+                <span th:text="${#numbers.formatDecimal(averageRating, 1, 1)} + ' average rating'"></span>
+            </div>
+            <div th:replace="~{fragments/layout :: numberSearch(@{/admin/support}, 'Search ticket number', ${ {} })}"></div>
         </div>
     </div>
+    <p th:if="${q != null}" class="small text-muted">Tickets numbered like <strong th:text="${q}"></strong>, in every view.
+        <a th:href="@{/admin/support}">Clear search</a></p>
 
     <!-- What's waiting for me / with the teams / closed / everything -->
     <div class="mz-chip-scroll mb-2" role="tablist" aria-label="Ticket views">

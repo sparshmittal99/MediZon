@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${check.label} + ' health')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-w-doc">
+    <a th:href="@{/admin/monitoring}" class="small"><i class="bi bi-arrow-left"></i> Monitoring</a>
+    <div class="d-flex flex-wrap align-items-center gap-2 mt-2 mb-1">
+        <h1 class="mz-page-title mb-0" th:text="${check.label}">Assistant service</h1>
+        <span class="badge" th:classappend="${check.up} ? 'text-bg-success' : (${check.down} ? 'text-bg-danger' : 'text-bg-warning')"
+              th:text="${check.status}">UP</span>
+    </div>
+    <p class="small text-muted mb-4" th:text="'Checked ' + ${#temporals.format(checkedAt, 'd MMM yyyy, HH:mm:ss')} + '. Refresh the page to check again.'"></p>
+
+    <section class="mz-panel mb-3">
+        <h2 class="h6 mb-2">Summary</h2>
+        <p class="mb-0 text-break" th:text="${#strings.isEmpty(check.summary)} ? 'Nothing more was reported.' : ${check.summary}"></p>
+    </section>
+
+    <section class="mz-panel" th:unless="${#maps.isEmpty(check.details)}">
+        <h2 class="h6 mb-3">Everything the check reported</h2>
+        <dl class="mz-health-log mb-0">
+            <th:block th:each="d : ${check.details}">
+                <dt th:text="${d.key}">error</dt>
+                <dd><pre class="mz-stack mb-0" th:text="${d.value}">Connection refused</pre></dd>
+            </th:block>
+        </dl>
+    </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

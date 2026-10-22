@@ -77,4 +77,6 @@ public interface MedicineRepository extends JpaRepository<Medicine, Long> {
     List<Medicine> sold();
 
     List<Medicine> findByActiveTrueOrderByNameAsc();
+
+    List<Medicine> findByProductCodeIsNull();
 }

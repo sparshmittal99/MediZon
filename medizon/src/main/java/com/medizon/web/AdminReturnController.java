@@ -1,11 +1,15 @@
 package com.medizon.web;
 
 import com.medizon.domain.ReturnRequest;
+import com.medizon.domain.ReturnSettings;
 import com.medizon.domain.ReturnStatus;
 import com.medizon.domain.Store;
 import com.medizon.domain.User;
+import com.medizon.dto.PeriodFilter;
+import com.medizon.service.BusinessException;
 import com.medizon.service.CurrentUser;
 import com.medizon.service.ReturnService;
+import com.medizon.service.ReturnSettingsService;
 import com.medizon.service.StoreService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -16,11 +20,12 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 
 /**
  * Return requests: approve or reject, then mark picked up and refunded. A store account handles its own store's
- * returns; the admin handles every store's.
+ * returns; the admin handles every store's, and sets the return window, pickup range and refund timing.
  */
 @Controller
 @RequestMapping("/admin/returns")
@@ -29,17 +34,49 @@ public class AdminReturnController {
 
     private final ReturnService returnService;
     private final StoreService storeService;
+    private final ReturnSettingsService returnSettings;
     private final CurrentUser currentUser;
 
+    /** The newest 20 returns requested in the chosen years, months or days (this year by default), or found by number. */
     @GetMapping
-    public String list(@RequestParam(required = false) ReturnStatus status, Model model) {
+    public String list(@RequestParam(required = false) ReturnStatus status,
+                       @RequestParam(required = false) List<String> year, @RequestParam(required = false) List<String> month,
+                       @RequestParam(required = false) List<String> date, @RequestParam(required = false) String q,
+                       Model model) {
         Store scope = storeService.scopeOf(currentUser.get()).orElse(null);
-        model.addAttribute("returns", returnService.adminList(status, scope));
-        model.addAttribute("counts", returnService.adminCounts(scope));
+        PeriodFilter period = PeriodFilter.of(year, month, date);
+        model.addAttribute("returns", returnService.adminList(status, scope, period, q));
+        model.addAttribute("counts", returnService.adminCounts(scope, period, q));
         model.addAttribute("statuses", ReturnStatus.values());
         model.addAttribute("selected", status);
+        model.addAttribute("period", period);
+        model.addAttribute("periodYears", period.yearsSince(returnService.firstReturnYear()));
+        model.addAttribute("q", PeriodFilter.term(q));
+        model.addAttribute("limit", PeriodFilter.LIMIT);
         model.addAttribute("active", "returns");
         return "admin/returns";
+    }
+
+    // ------------------------------------------------------------------ settings (admin only, see SecurityConfig)
+
+    @GetMapping("/settings")
+    public String settings(Model model) {
+        model.addAttribute("settings", returnSettings.get());
+        model.addAttribute("active", "returns");
+        return "admin/settings";
+    }
+
+    @PostMapping("/settings")
+    public String saveSettings(@ModelAttribute("settings") ReturnSettings form, Model model, RedirectAttributes ra) {
+        try {
+            returnSettings.save(form, currentUser.get().getEmail());
+            ra.addFlashAttribute("success", "Return settings saved. New returns use them; ones already requested keep what they were promised.");
+            return "redirect:/admin/returns/settings";
+        } catch (BusinessException e) {
+            model.addAttribute("error", e.getMessage());
+            model.addAttribute("active", "returns");
+            return "admin/settings";
+        }
     }
 
     @GetMapping("/{id}")

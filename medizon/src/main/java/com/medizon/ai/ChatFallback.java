@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * The LLM half of the hybrid assistant. The Python assistant answers first (free, instant); an LLM only answers what
@@ -36,7 +37,7 @@ public class ChatFallback {
     public record Turn(boolean fromUser, String text) {}
 
     private static final int MAX_MESSAGE = 1000;
-    private static final int MAX_REPLY = 1500;
+    private static final int MAX_REPLY = 2500;
     /** Earlier messages sent along, and how much of each: enough for follow-ups, cheap on quota. */
     private static final int MAX_HISTORY = 10;
     private static final int MAX_TURN = 600;
@@ -44,6 +45,12 @@ public class ChatFallback {
     private static final int MAX_ROUNDS = 4;
     /** Tool results are cut to this many characters, to keep each request well inside Groq's tokens per minute. */
     private static final int MAX_RESULT = 3000;
+    /** The review digest is bigger: the comments are what the admin wants analysed. */
+    private static final int MAX_REVIEW_RESULT = 7000;
+    /** An admin question about reviews or feedback: Gemini, which can't call tools, gets the digest with it. */
+    private static final Pattern ABOUT_REVIEWS = Pattern.compile(
+            "review|feedback|rating|star|complain|complaint|sentiment|unhappy|happy|customers? (say|think|like|want)|improve",
+            Pattern.CASE_INSENSITIVE);
     private static final Set<String> CART_TOOLS = Set.of("add_to_cart", "refill_plan");
     private static final DateTimeFormatter NOW = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm");
 
@@ -83,17 +90,31 @@ public class ChatFallback {
 
     private static final String ADMIN = """
             You are the chat assistant of MediZon, an online pharmacy in India, talking to the store's admin, %s.
-            You can't see store data here. For numbers point them to Admin pages: Orders /admin/orders, Sales
+            You can't see orders, sales or stock here. For numbers point them to Admin pages: Orders /admin/orders, Sales
             /admin/sales, Catalog /admin/medicines, Prescriptions /admin/prescriptions, Reviews /admin/reviews,
             Monitoring /admin/monitoring. Help with general pharmacy operations and how to use MediZon.
             Never make up figures. Plain text, no markdown, at most 120 words.
+            """;
+
+    /** Added to Gemini's admin prompt with the digest when the question is about reviews. */
+    private static final String ADMIN_REVIEWS = """
+            The admin is asking about customer reviews and feedback. Here they are, as JSON: star figures, then the
+            newest comments ("4★ 3 Oct: text") and feedback messages. Analyse them: the overall picture and trend,
+            recurring complaints and what customers like (say how many comments mention each, quote a few words),
+            and two to four concrete things to improve. Use only this data; if there is none, say so. Plain text,
+            no markdown, up to 250 words.
+            REVIEW DATA: %s
             """;
 
     private static final String ADMIN_TOOLS = """
             You are the chat assistant of MediZon, an online pharmacy in India, talking to the store's admin, %s.
             It is now %s (India time).
             Use the tools for today's store figures (orders to confirm or ship, pending prescriptions, low stock,
-            revenue), the catalogue and the admin's own reminders. Never make up figures: look them up. For anything
+            revenue), the catalogue and the admin's own reminders. To read or analyse customer reviews and feedback,
+            call review_digest (rating to see only 1★ or 5★ ones, days for another period) and analyse what it returns:
+            the overall picture and trend, recurring complaints and praise (how many comments mention each, quote a few
+            words), and two to four concrete improvements; up to 250 words for that. Never make up figures or comments:
+            look them up. For anything
             else point them to Admin pages: Orders /admin/orders, Sales /admin/sales, Catalog /admin/medicines,
             Prescriptions /admin/prescriptions, Reviews /admin/reviews, Monitoring /admin/monitoring.
             Plain text, no markdown, at most 120 words.
@@ -113,9 +134,23 @@ public class ChatFallback {
         List<Turn> recent = recent(history);
         boolean[] cartChanged = {false};
         return askGroq(user, recent, text, cartChanged)
-                .or(() -> askGemini((user.isAdmin() ? ADMIN : CUSTOMER).formatted(user.getFirstName()), recent, text))
+                .or(() -> askGemini(geminiPrompt(user, text), recent, text))
                 .map(String::strip)
                 .map(a -> new Answer(a.length() > MAX_REPLY ? a.substring(0, MAX_REPLY) + "…" : a, cartChanged[0]));
+    }
+
+    /** Gemini can't look anything up, so an admin's question about reviews comes with the review digest. */
+    private String geminiPrompt(User user, String message) {
+        if (!user.isAdmin()) return CUSTOMER.formatted(user.getFirstName());
+        String prompt = ADMIN.formatted(user.getFirstName());
+        if (!ABOUT_REVIEWS.matcher(message).find()) return prompt;
+        try {
+            String digest = json.writeValueAsString(tools.reviewDigest(null, AssistantTools.DIGEST_DAYS));
+            return prompt + ADMIN_REVIEWS.formatted(digest.length() > MAX_REVIEW_RESULT ? digest.substring(0, MAX_REVIEW_RESULT) : digest);
+        } catch (Exception e) {
+            log.warn("Couldn't read reviews for the chat: {}", e.toString());
+            return prompt;
+        }
     }
 
     /** Groq with tools: runs what it asks for, sends back the results, until it answers in words. */
@@ -145,8 +180,9 @@ public class ChatFallback {
                     JsonNode result = run(name, call.path("function").path("arguments").asText("{}"), user);
                     if (CART_TOOLS.contains(name) && !result.has("error")) cartChanged[0] = true;
                     String out = result.toString();
+                    int max = "review_digest".equals(name) ? MAX_REVIEW_RESULT : MAX_RESULT;
                     messages.addObject().put("role", "tool").put("tool_call_id", call.path("id").asText())
-                            .put("content", out.length() > MAX_RESULT ? out.substring(0, MAX_RESULT) + "…(cut)" : out);
+                            .put("content", out.length() > max ? out.substring(0, max) + "…(cut)" : out);
                 }
             }
             log.warn("Groq needed more than {} tool rounds for: {}", MAX_ROUNDS, message);
@@ -206,7 +242,10 @@ public class ChatFallback {
 
     // ------------------------------------------------------------------ the actions, as the model sees them
 
-    /** Kept short: every request carries them. Admins' review_data is left out, it's far too big for one request. */
+    /**
+     * Kept short: every request carries them. Admins get review_digest rather than review_data, which is far too big
+     * for one request.
+     */
     private ArrayNode toolsFor(User user) {
         ArrayNode t = json.createArrayNode();
         tool(t, "search_medicines", "Find medicines in the catalogue with price and stock.",
@@ -215,6 +254,10 @@ public class ChatFallback {
         if (user.isAdmin()) {
             tool(t, "store_tasks", "Today's store figures: orders to confirm, ship and in transit, pending "
                     + "prescriptions, low stock, low reviews, feedback, orders and revenue today.");
+            tool(t, "review_digest", "Customer reviews and feedback to read and analyse: star figures, the 30-day trend "
+                            + "and the newest comments.",
+                    "rating", "integer", "Optional: only reviews with this many stars, 1 to 5", false,
+                    "days", "integer", "Optional: how many days back, default 90", false);
         } else {
             tool(t, "medicine_details", "Details of one medicine by id (from search_medicines).",
                     "id", "integer", "Medicine id", true);

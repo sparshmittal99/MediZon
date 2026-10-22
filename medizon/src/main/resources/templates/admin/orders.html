@@ -9,22 +9,35 @@
 <main class="container mz-page">
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
         <h1 class="mz-page-title mb-0" th:text="${store != null} ? 'Orders · ' + ${store.name} : 'Customer orders'">Customer orders</h1>
-        <!-- Store accounts only ever see their own store; everyone else can narrow to one -->
-        <form th:unless="${#lists.isEmpty(stores)}" th:action="@{/admin/orders}" method="get" class="d-flex gap-2">
-            <input type="hidden" name="status" th:value="${selected}">
-            <select name="store" class="form-select form-select-sm" aria-label="Store" data-mz-autosubmit>
-                <option value="">All stores</option>
-                <option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}" th:selected="${store != null and store.id == s.id}"></option>
-            </select>
-            <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Show</button></noscript>
-        </form>
+        <div class="mz-list-tools">
+            <div th:replace="~{fragments/layout :: numberSearch(@{/admin/orders}, 'Search order number', ${ {'store': store?.id} })}"></div>
+            <!-- Store accounts only ever see their own store; everyone else can narrow to one -->
+            <form th:unless="${#lists.isEmpty(stores)}" th:action="@{/admin/orders}" method="get" class="d-flex gap-2">
+                <input type="hidden" name="status" th:value="${selected}">
+                <input type="hidden" name="year" th:each="v : ${period.yearParams}" th:value="${v}">
+                <input type="hidden" name="month" th:each="v : ${period.monthParams}" th:value="${v}">
+                <input type="hidden" name="date" th:each="v : ${period.dateParams}" th:value="${v}">
+                <select name="store" class="form-select form-select-sm" aria-label="Store" data-mz-autosubmit>
+                    <option value="">All stores</option>
+                    <option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}" th:selected="${store != null and store.id == s.id}"></option>
+                </select>
+                <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Show</button></noscript>
+            </form>
+            <th:block th:unless="${q != null}"><div th:replace="~{fragments/layout :: periodFilter(@{/admin/orders}, ${ {'status': selected, 'store': store?.id} })}"></div></th:block>
+        </div>
     </div>
-    <div class="mz-chip-scroll mb-4">
-        <a class="mz-chip" th:classappend="${selected == null} ? 'active'" th:href="@{/admin/orders(store=${store?.id})}">All</a>
+    <div class="mz-chip-scroll mb-2">
+        <a class="mz-chip" th:classappend="${selected == null} ? 'active'"
+           th:href="@{/admin/orders(store=${store?.id}, q=${q}, year=${period.yearParams}, month=${period.monthParams}, date=${period.dateParams})}">All</a>
         <a th:each="s : ${statuses}" class="mz-chip" th:classappend="${s == selected} ? 'active'"
-           th:href="@{/admin/orders(status=${s}, store=${store?.id})}">
+           th:href="@{/admin/orders(status=${s}, store=${store?.id}, q=${q}, year=${period.yearParams}, month=${period.monthParams}, date=${period.dateParams})}">
             <span th:text="${s.label}"></span> <span class="opacity-75" th:text="'(' + ${counts.get(s)} + ')'"></span></a>
     </div>
+    <p class="small text-muted mb-4">
+        <th:block th:if="${q != null}">Orders numbered like <strong th:text="${q}"></strong>, placed at any time.
+            <a th:href="@{/admin/orders(store=${store?.id})}">Clear search</a></th:block>
+        <th:block th:unless="${q != null}" th:text="'The newest ' + ${limit} + ' orders placed in ' + ${period.label} + '. Use the filter for other dates.'"></th:block>
+    </p>
 
     <div th:if="${#lists.isEmpty(orders)}" class="mz-panel mz-empty"><i class="bi bi-box-seam"></i><p class="mb-0">No orders here.</p></div>
     <div th:unless="${#lists.isEmpty(orders)}" class="mz-panel-flush">

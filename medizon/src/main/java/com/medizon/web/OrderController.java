@@ -3,6 +3,7 @@ package com.medizon.web;
 import com.medizon.domain.*;
 import com.medizon.dto.AddressForm;
 import com.medizon.dto.CartSummary;
+import com.medizon.dto.PeriodFilter;
 import com.medizon.dto.ReturnPickupForm;
 import com.medizon.service.*;
 import jakarta.servlet.http.HttpServletRequest;
@@ -66,9 +67,10 @@ public class OrderController {
         model.addAttribute("cart", cart);
         model.addAttribute("paymentMethods", PaymentMethod.payable());
         List<Coupon> promos = couponService.available();
-        model.addAttribute("promos", promos);
-        model.addAttribute("promosUsedToday", promos.stream().filter(c -> couponService.usedToday(user, c))
-                .map(Coupon::getCode).collect(java.util.stream.Collectors.toSet()));
+        Set<String> usedToday = promos.stream().filter(c -> couponService.usedToday(user, c))
+                .map(Coupon::getCode).collect(java.util.stream.Collectors.toSet());
+        model.addAttribute("promos", CouponService.bestFirst(promos, cart.getSubtotal(), usedToday));   // biggest saving first
+        model.addAttribute("promosUsedToday", usedToday);
         model.addAttribute("walletBalance", walletService.balance(user));
         model.addAttribute("prescriptions", prescriptionService.validForUser(user));
         // Which prescription(s) each prescription medicine comes from, and anything none of them covers
@@ -129,30 +131,39 @@ public class OrderController {
 
     /**
      * Orders in four sections: pending (placed, confirmed, shipped), completed (delivered), cancelled, and returns.
-     * Without a tab it opens on pending, or on completed when nothing is on its way.
+     * Each shows the newest 20 placed in the chosen years, months or days (this year by default). Without a tab it
+     * opens on pending, or on completed when nothing is on its way.
      */
     @GetMapping("/orders")
-    public String list(@RequestParam(required = false) String tab, Model model) {
+    public String list(@RequestParam(required = false) String tab,
+                       @RequestParam(required = false) List<String> year, @RequestParam(required = false) List<String> month,
+                       @RequestParam(required = false) List<String> date, Model model) {
         User user = currentUser.get();
-        List<Order> all = orderService.forUser(user);
-        List<ReturnRequest> returns = returnService.forUser(user);
+        PeriodFilter period = PeriodFilter.of(year, month, date);
+        Map<String, Long> counts = new HashMap<>();
+        TABS.forEach((name, statuses) -> counts.put(name, orderService.countForUser(user, statuses, period)));
+        counts.put("returns", returnService.countForUser(user, period));
+        String selected = tab != null && counts.containsKey(tab) ? tab
+                : counts.get("pending") > 0 || counts.get("completed") == 0 ? "pending" : "completed";
 
-        Map<String, List<Order>> byTab = new LinkedHashMap<>();
-        TABS.forEach((name, statuses) -> byTab.put(name, all.stream().filter(o -> statuses.contains(o.getStatus())).toList()));
-        String selected = tab != null && (TABS.containsKey(tab) || tab.equals("returns")) ? tab
-                : !byTab.get("pending").isEmpty() || all.isEmpty() ? "pending" : "completed";
-
+        List<ReturnRequest> returns = selected.equals("returns") ? returnService.forUser(user, period) : List.of();
+        List<Order> orders = selected.equals("returns") ? List.of() : orderService.forUser(user, TABS.get(selected), period);
         // Latest return per order, for the badge on completed orders
         Map<Long, ReturnRequest> latestReturn = new HashMap<>();
-        returns.forEach(r -> latestReturn.putIfAbsent(r.getOrder().getId(), r));   // newest first
+        if (selected.equals("completed")) {
+            returnService.forUser(user).forEach(r -> latestReturn.putIfAbsent(r.getOrder().getId(), r));   // newest first
+        }
 
         model.addAttribute("tab", selected);
-        model.addAttribute("orders", selected.equals("returns") ? List.of() : byTab.get(selected));
-        model.addAttribute("counts", Map.of("pending", byTab.get("pending").size(), "completed", byTab.get("completed").size(),
-                "cancelled", byTab.get("cancelled").size(), "returns", returns.size()));
+        model.addAttribute("orders", orders);
+        model.addAttribute("counts", counts);
         model.addAttribute("returns", returns);
         model.addAttribute("latestReturn", latestReturn);
-        model.addAttribute("hasOrders", !all.isEmpty());
+        Integer firstYear = orderService.firstOrderYear(user);
+        model.addAttribute("hasOrders", firstYear != null);
+        model.addAttribute("period", period);
+        model.addAttribute("periodYears", period.yearsSince(firstYear));
+        model.addAttribute("limit", PeriodFilter.LIMIT);
         return "orders/list";
     }
 

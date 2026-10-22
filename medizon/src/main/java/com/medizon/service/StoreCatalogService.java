@@ -61,6 +61,16 @@ public class StoreCatalogService {
         return i;
     }
 
+    /** A product to start selling, with its stock and batch expiry (null when not known yet). */
+    public record NewListing(Long medicineId, int stock, LocalDate expiry) {}
+
+    /** Adds several master products to the store's catalogue at their catalogue price; all of them or, on a problem, none. */
+    @Transactional
+    public int listAll(Store s, List<NewListing> listings) {
+        listings.forEach(l -> list(s, l.medicineId(), null, l.stock(), l.expiry()));
+        return listings.size();
+    }
+
     @Transactional
     public StoreItem update(Long itemId, BigDecimal price, int stock, LocalDate expiry) {
         StoreItem i = item(itemId);

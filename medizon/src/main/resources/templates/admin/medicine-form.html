@@ -9,6 +9,8 @@
 <main class="container mz-page mz-w-wide">
     <a th:href="${listIn != null} ? @{/admin/medicines(store=${listIn.id})} : @{/admin/medicines}" class="small"><i class="bi bi-arrow-left"></i> Catalogue</a>
     <h1 class="mz-page-title mt-2 mb-1" th:text="${medicine.id == null} ? 'Add a product' : ('Edit ' + ${medicine.name})">Product</h1>
+    <p th:if="${medicine.productCode != null}" class="small mb-1">Product code <span class="mz-code fw-semibold" th:text="${medicine.productCode}"></span>
+        <span class="text-muted">· staff only, never changes</span></p>
     <p class="small text-muted mb-4" th:text="${medicine.id == null and listIn != null}
         ? 'It joins the master catalogue, and ' + ${listIn.name} + ' starts selling it. After this, only the admin changes the product details.'
         : 'Product details are the same in every store. Each store keeps its own stock, expiry and OTC price in its catalogue.'"></p>

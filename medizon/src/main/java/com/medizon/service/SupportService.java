@@ -94,6 +94,18 @@ public class SupportService {
     @Transactional(readOnly = true)
     public List<SupportTicket> forCustomer(User user) { return tickets.findByUserOrderByUpdatedAtDesc(user); }
 
+    /**
+     * Whether a ticket's number matches what was typed in a search box: "TKT-000042", "tkt-42" and "42" all find
+     * ticket 42; a part of the number such as "0004" finds every number containing it.
+     */
+    public static boolean numberMatches(SupportTicket t, String search) {
+        if (search == null || search.isBlank()) return true;
+        String q = search.trim().toUpperCase(java.util.Locale.ROOT).replace(" ", "");
+        if (t.getNumber().contains(q)) return true;
+        String digits = q.replaceFirst("^TKT-?", "");
+        return digits.matches("[0-9]{1,18}") && t.getId() != null && t.getId() == Long.parseLong(digits);
+    }
+
     @Transactional(readOnly = true)
     public List<SupportTicket> forOrder(User user, Order order) { return tickets.findByUserAndOrderOrderByUpdatedAtDesc(user, order); }
 

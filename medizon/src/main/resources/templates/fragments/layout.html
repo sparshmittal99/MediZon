@@ -316,6 +316,119 @@
 </th:block>
 
 <!-- Admin sub navigation -->
+<!--
+  "Filter" on the Orders and Returns pages: any mix of years, months (pick a year, then its months) and single days.
+  Nothing picked means this year. keep: the page's other parameters (status, store, tab) as a map, carried along.
+-->
+<div th:fragment="periodFilter(action, keep)" class="dropdown mz-period"
+     th:with="monthNames=${ {'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'} }">
+    <button class="btn btn-sm btn-outline-secondary dropdown-toggle mz-period-btn" type="button" data-bs-toggle="dropdown"
+            data-bs-auto-close="outside" aria-expanded="false">
+        <i class="bi bi-funnel me-1" aria-hidden="true"></i><span class="visually-hidden">Filter by date: </span><span th:text="${period.label}">2026</span>
+    </button>
+    <form class="dropdown-menu dropdown-menu-end mz-period-menu" th:action="${action}" method="get" data-mz-period>
+        <th:block th:each="e : ${keep}"><input th:if="${e.value != null and e.value != ''}" type="hidden" th:name="${e.key}" th:value="${e.value}"></th:block>
+        <div class="mz-period-title">Filter by</div>
+
+        <fieldset class="mb-3">
+            <legend class="mz-period-label">Year</legend>
+            <div class="mz-period-chips">
+                <label th:each="y : ${periodYears}" class="mz-period-chip">
+                    <input type="checkbox" name="year" th:value="${y}" th:checked="${period.hasYear(y)}"><span th:text="${y}">2026</span></label>
+            </div>
+        </fieldset>
+
+        <fieldset class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <legend class="mz-period-label mb-0">Month</legend>
+                <select class="form-select form-select-sm w-auto" data-mz-period-year aria-label="Year of the months">
+                    <option th:each="y : ${periodYears}" th:value="${y}" th:text="${y}"></option>
+                </select>
+            </div>
+            <!-- One grid per year; only the chosen year's shows, but ticks in the others still count -->
+            <div th:each="y, st : ${periodYears}" class="mz-period-chips mz-period-months" th:attr="data-year=${y}" th:hidden="${!st.first}">
+                <label th:each="m : ${#numbers.sequence(1, 12)}" class="mz-period-chip"
+                       th:with="ym=${y + '-' + (m < 10 ? '0' + m : m)}">
+                    <input type="checkbox" name="month" th:value="${ym}" th:checked="${period.hasMonth(ym)}"
+                           th:attr="aria-label=${monthNames[m - 1]} + ' ' + ${y}"><span th:text="${monthNames[m - 1]}">Jan</span></label>
+            </div>
+        </fieldset>
+
+        <fieldset class="mb-3">
+            <legend class="mz-period-label">Date</legend>
+            <div class="d-flex gap-2">
+                <input type="date" class="form-control form-control-sm" data-mz-period-date aria-label="Date"
+                       th:max="${#temporals.format(#temporals.createToday(), 'yyyy-MM-dd')}">
+                <button type="button" class="btn btn-sm btn-outline-primary" data-mz-period-add>Add</button>
+            </div>
+            <div class="mz-period-chips mt-2" data-mz-period-dates>
+                <span th:each="d : ${period.dates}" class="mz-period-tag">
+                    <input type="hidden" name="date" th:value="${d}"><span th:text="${#temporals.format(d, 'd MMM yyyy')}"></span>
+                    <button type="button" class="btn-close" data-mz-period-remove aria-label="Remove date"></button></span>
+            </div>
+        </fieldset>
+
+        <p class="small text-muted mb-2">Pick any mix. Nothing picked shows this year.</p>
+        <div class="d-flex justify-content-between gap-2">
+            <button type="button" class="btn btn-sm btn-link px-0" data-mz-period-clear>Clear</button>
+            <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+        </div>
+    </form>
+</div>
+
+<!--
+  Catalogue import from Excel, CSV or PDF: action posts the file, template downloads the sheet with the page's own
+  columns (importColumns) and what's already there; storeId is set for a store's catalogue.
+-->
+<section th:fragment="catalogImport(action, template, storeId)" class="mz-panel mb-4 collapse" id="mzImport">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+        <div>
+            <h2 class="h6 mb-1">Import from Excel, CSV or PDF</h2>
+            <p class="small text-muted mb-0" th:text="${storeId == null}
+                ? 'Each row adds a product, or updates one with the same product code or exact name. New products get their code automatically.'
+                : 'Each row is a master catalogue product, by product code or exact name, with the stock, expiry and price at this store. Products already here are updated.'"></p>
+        </div>
+        <a th:href="${template}" class="btn btn-sm btn-outline-secondary text-nowrap"><i class="bi bi-file-earmark-spreadsheet me-1" aria-hidden="true"></i>Download sheet</a>
+    </div>
+    <form th:action="${action}" method="post" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <input th:if="${storeId != null}" type="hidden" name="storeId" th:value="${storeId}">
+        <input type="file" name="file" class="form-control" style="max-width: 26rem" required
+               accept=".xlsx,.xls,.csv,.pdf,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+               aria-label="Excel, CSV or PDF file">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-upload me-1" aria-hidden="true"></i>Import</button>
+    </form>
+    <div class="small text-muted mb-1">Columns (the first row holds the headings; * is needed, empty cells keep what's there):</div>
+    <div class="mz-import-cols">
+        <span th:each="c : ${importColumns}" class="mz-import-col" th:classappend="${c.required} ? 'is-required'" th:title="${c.help}"
+              th:text="${c.label} + (${c.required} ? ' *' : '')">Name *</span>
+    </div>
+    <p class="small text-muted mt-2 mb-0">The downloaded sheet has these headings and what's in the catalogue now: change it and import it back.
+        A PDF needs the table as text (exported from Excel or a billing system), not a scan.</p>
+</section>
+
+<!-- After an import: the rows that weren't imported and why -->
+<section th:fragment="importReport" th:if="${importReport != null and !#lists.isEmpty(importReport.skipped)}" class="mz-panel mb-4 border-warning">
+    <h2 class="h6 mb-2" th:text="'Rows not imported from ' + ${importReport.file}">Rows not imported</h2>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Row</th><th>Product</th><th>Why</th></tr></thead>
+            <tbody>
+            <tr th:each="r : ${importReport.skipped}">
+                <td th:text="${r.row}">2</td><td class="fw-semibold" th:text="${r.product}"></td><td class="small" th:text="${r.reason}"></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- Search by order or return number (staff); keep: the page's other parameters to carry along -->
+<form th:fragment="numberSearch(action, placeholder, keep)" th:action="${action}" method="get" class="mz-number-search" role="search">
+    <th:block th:each="e : ${keep}"><input th:if="${e.value != null and e.value != ''}" type="hidden" th:name="${e.key}" th:value="${e.value}"></th:block>
+    <i class="bi bi-search" aria-hidden="true"></i>
+    <input type="search" name="q" class="form-control form-control-sm" th:value="${q}" th:placeholder="${placeholder}"
+           th:attr="aria-label=${placeholder}" maxlength="40">
+</form>
+
 <div th:fragment="adminNav" class="mz-subnav">
     <div class="container">
         <ul class="nav">
@@ -333,7 +446,6 @@
             <li class="nav-item" sec:authorize="hasRole('STAFF')"><a class="nav-link" th:classappend="${active == 'support'} ? 'active'" th:href="@{/admin/support}">Support</a></li>
             <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','SUPPORT')"><a class="nav-link" th:classappend="${active == 'reviews'} ? 'active'" th:href="@{/admin/reviews}">Reviews</a></li>
             <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'monitoring'} ? 'active'" th:href="@{/admin/monitoring}">Monitoring</a></li>
-            <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'settings'} ? 'active'" th:href="@{/admin/settings}">Settings</a></li>
         </ul>
     </div>
 </div>

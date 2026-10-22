@@ -3,6 +3,7 @@ package com.medizon.web;
 import com.medizon.domain.*;
 import com.medizon.dto.DayTraffic;
 import com.medizon.dto.NewUserForm;
+import com.medizon.dto.PeriodFilter;
 import com.medizon.dto.PrescriptionReading;
 import com.medizon.dto.PrescriptionScore;
 import com.medizon.dto.ReportPeriod;
@@ -312,6 +313,15 @@ public class AdminController {
         return "redirect:/admin/users";
     }
 
+    /** Sets a new password for the account (no current password needed) and signs it out everywhere. */
+    @PostMapping("/users/{id}/password")
+    public String setPassword(@PathVariable Long id, @RequestParam String newPassword, @RequestParam String confirmPassword,
+                              RedirectAttributes ra) {
+        User u = userService.setPasswordByAdmin(id, newPassword, confirmPassword, currentUser.get());
+        ra.addFlashAttribute("success", u.getFullName() + "'s password is changed and they're signed out everywhere. Let them know the new one.");
+        return "redirect:/admin/users";
+    }
+
     @PostMapping("/users/{id}/sign-out")
     public String signOut(@PathVariable Long id, RedirectAttributes ra) {
         User u = userService.get(id);
@@ -397,19 +407,29 @@ public class AdminController {
 
     // ---------------------------------------------------------------- orders
 
-    /** Orders: a store account sees its own store's; everyone else every store's, optionally filtered by store. */
+    /**
+     * Orders: a store account sees its own store's; everyone else every store's, optionally filtered by store. The
+     * newest 20 placed in the chosen years, months or days (this year by default), or found by order number.
+     */
     @GetMapping("/orders")
     public String orders(@RequestParam(required = false) OrderStatus status, @RequestParam(required = false) Long store,
+                         @RequestParam(required = false) List<String> year, @RequestParam(required = false) List<String> month,
+                         @RequestParam(required = false) List<String> date, @RequestParam(required = false) String q,
                          Model model) {
         User me = currentUser.get();
         Store scope = storeService.scopeOf(me).orElse(store == null ? null : storeService.get(store));
-        model.addAttribute("orders", orderService.adminList(status, scope));
-        model.addAttribute("counts", orderService.adminCounts(scope));
+        PeriodFilter period = PeriodFilter.of(year, month, date);
+        model.addAttribute("orders", orderService.adminList(status, scope, period, q));
+        model.addAttribute("counts", orderService.adminCounts(scope, period, q));
         model.addAttribute("statuses", OrderStatus.values());
         model.addAttribute("selected", status);
         model.addAttribute("store", scope);
         model.addAttribute("stores", me.isStoreStaff() ? List.of() : storeService.all());
         model.addAttribute("canManage", me.isAdmin() || me.isStoreStaff());
+        model.addAttribute("period", period);
+        model.addAttribute("periodYears", period.yearsSince(orderService.firstOrderYear(null)));
+        model.addAttribute("q", PeriodFilter.term(q));
+        model.addAttribute("limit", PeriodFilter.LIMIT);
         model.addAttribute("active", "orders");
         return "admin/orders";
     }

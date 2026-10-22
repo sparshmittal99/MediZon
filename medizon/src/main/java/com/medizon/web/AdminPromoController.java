@@ -1,33 +1,31 @@
 package com.medizon.web;
 
 import com.medizon.domain.Coupon;
-import com.medizon.domain.ReturnSettings;
 import com.medizon.dto.PromoForm;
 import com.medizon.service.BusinessException;
 import com.medizon.service.CouponService;
-import com.medizon.service.CurrentUser;
-import com.medizon.service.ReturnSettingsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-/** The admin's promo codes and return settings (admin only, see SecurityConfig). */
+/** The admin's promo codes (admin only, see SecurityConfig). */
 @Controller
 @RequestMapping("/admin")
 @RequiredArgsConstructor
 public class AdminPromoController {
 
     private final CouponService coupons;
-    private final ReturnSettingsService returnSettings;
-    private final CurrentUser currentUser;
 
     // ------------------------------------------------------------------ promos
 
+    /** Every promo, or those whose code contains {@code q}. */
     @GetMapping("/promos")
-    public String promos(Model model) {
-        model.addAttribute("promos", coupons.all());
+    public String promos(@RequestParam(required = false) String q, Model model) {
+        String term = q == null ? "" : q.trim().toUpperCase(java.util.Locale.ROOT);
+        model.addAttribute("promos", coupons.all().stream().filter(c -> c.getCode().toUpperCase(java.util.Locale.ROOT).contains(term)).toList());
+        model.addAttribute("q", term.isEmpty() ? null : term);
         model.addAttribute("usage", coupons.usage());
         model.addAttribute("active", "promos");
         return "admin/promos";
@@ -68,27 +66,5 @@ public class AdminPromoController {
         model.addAttribute("kinds", Coupon.Kind.values());
         model.addAttribute("active", "promos");
         return "admin/promo-form";
-    }
-
-    // ------------------------------------------------------------------ return settings
-
-    @GetMapping("/settings")
-    public String settings(Model model) {
-        model.addAttribute("settings", returnSettings.get());
-        model.addAttribute("active", "settings");
-        return "admin/settings";
-    }
-
-    @PostMapping("/settings")
-    public String saveSettings(@ModelAttribute("settings") ReturnSettings form, Model model, RedirectAttributes ra) {
-        try {
-            returnSettings.save(form, currentUser.get().getEmail());
-            ra.addFlashAttribute("success", "Return settings saved. New returns use them; ones already requested keep what they were promised.");
-            return "redirect:/admin/settings";
-        } catch (BusinessException e) {
-            model.addAttribute("error", e.getMessage());
-            model.addAttribute("active", "settings");
-            return "admin/settings";
-        }
     }
 }
