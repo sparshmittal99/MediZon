@@ -4,6 +4,8 @@ import com.medizon.domain.User;
 import com.medizon.service.CartService;
 import com.medizon.service.CurrentUser;
 import com.medizon.service.MemberService;
+import com.medizon.service.OrderSettingsService;
+import com.medizon.dto.CartSummary;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,15 @@ public class CartController {
     private final MemberService memberService;
     private final CurrentUser currentUser;
     private final DeliveryLocations deliveryLocations;
+    private final OrderSettingsService orderSettings;
+
+    /** The cart, the minimum order value and how far below it the cart is (zero once it's reached). */
+    private void addCart(Model model, CartSummary cart) {
+        java.math.BigDecimal min = orderSettings.minOrderValue();
+        model.addAttribute("cart", cart);
+        model.addAttribute("minOrder", min);
+        model.addAttribute("minShort", OrderSettingsService.shortBy(cart.getSubtotal(), min));
+    }
 
     /** Signed-out visitors see their session cart and sign in to check out, like any shop. */
     @GetMapping
@@ -32,12 +43,12 @@ public class CartController {
         String pin = deliveryLocations.pincode(request);
         model.addAttribute("freeAbove", CartService.FREE_DELIVERY_ABOVE);
         if (signedIn.isEmpty()) {
-            model.addAttribute("cart", cartService.guestSummary(session, pin));
+            addCart(model, cartService.guestSummary(session, pin));
             model.addAttribute("guest", true);
             return "cart";
         }
         User user = signedIn.get();
-        model.addAttribute("cart", cartService.summary(user, pin));
+        addCart(model, cartService.summary(user, pin));
         model.addAttribute("people", memberService.people(user));
         model.addAttribute("common", memberService.common(user));
         model.addAttribute("others", memberService.others(user));

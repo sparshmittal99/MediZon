@@ -6,6 +6,7 @@ import com.medizon.domain.User;
 import com.medizon.dto.CartSummary;
 import com.medizon.service.CartService;
 import com.medizon.service.CurrentUser;
+import com.medizon.service.OrderSettingsService;
 import com.medizon.web.DeliveryLocations;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -30,6 +31,7 @@ public class CartApi {
     private final CartService cartService;
     private final CurrentUser currentUser;
     private final DeliveryLocations deliveryLocations;
+    private final OrderSettingsService orderSettings;
 
     public record QuantityRequest(int quantity) {}
 
@@ -66,6 +68,7 @@ public class CartApi {
         out.put("total", c.getTotal());
         out.put("prescriptionRequired", c.isPrescriptionRequired());
         out.put("shipmentCount", c.getByStore().size());
+        minimum(out, c);
         return out;
     }
 
@@ -106,6 +109,7 @@ public class CartApi {
         out.put("prescriptionRequired", c.isPrescriptionRequired());
         out.put("empty", c.isEmpty());
         out.put("shipmentCount", c.getByStore().size());
+        minimum(out, c);
         c.getItems().stream().filter(i -> i.getMedicine().getId().equals(medicineId)).findFirst().ifPresent(i -> {
             out.put("cartItemId", i.getId());   // null for a signed-out visitor's session cart
             out.put("allocation", i.getAllocationById());
@@ -114,6 +118,13 @@ public class CartApi {
             if (i.isAvailable()) out.put("store", i.getOffer().store().getName());
         });
         return out;
+    }
+
+    /** The minimum order value, and how much more the medicines need to reach it (zero once they do). */
+    private void minimum(Map<String, Object> out, CartSummary c) {
+        BigDecimal min = orderSettings.minOrderValue();
+        out.put("minOrderValue", min);
+        out.put("minOrderShort", OrderSettingsService.shortBy(c.getSubtotal(), min));
     }
 
     /** Packs per member id; members missing or at 0 aren't on the line. */

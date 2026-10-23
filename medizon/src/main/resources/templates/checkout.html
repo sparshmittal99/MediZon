@@ -206,8 +206,18 @@
                 </div>
                 <p class="small text-success mb-3" th:if="${cart.discounted}"
                    th:text="'You save ₹' + ${cart.discount} + ' on this order with ' + ${cart.couponCode} + '.'"></p>
+                <div th:if="${minShort.signum() > 0}" class="mz-min-order mb-3" role="status">
+                    <div class="d-flex gap-2 align-items-start">
+                        <i class="bi bi-basket2 text-warning" aria-hidden="true"></i>
+                        <div class="small">
+                            <strong th:text="'Add ₹' + ${#numbers.formatDecimal(minShort, 1, 'COMMA', 2, 'POINT')} + ' more to place your order'">Add ₹40.00 more</strong>
+                            <div class="text-muted">The minimum order value is <span th:text="'₹' + ${T(com.medizon.service.OrderSettingsService).plain(minOrder)}"></span>,
+                                before promos and delivery. <a th:href="@{/medicines}">Add medicines</a></div>
+                        </div>
+                    </div>
+                </div>
                 <button form="placeOrder" class="btn btn-primary w-100" type="submit"
-                        th:disabled="${selectedAddress == null or (cart.prescriptionRequired and !rxCoverage.complete)}">Place order</button>
+                        th:disabled="${selectedAddress == null or (cart.prescriptionRequired and !rxCoverage.complete) or minShort.signum() > 0}">Place order</button>
             </div>
         </div>
     </div>

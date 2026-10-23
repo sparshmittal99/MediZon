@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head th:replace="~{fragments/layout :: head('Manage orders')}"></head>
 <body>
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
@@ -24,6 +24,8 @@
                 <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Show</button></noscript>
             </form>
             <th:block th:unless="${q != null}"><div th:replace="~{fragments/layout :: periodFilter(@{/admin/orders}, ${ {'status': selected, 'store': store?.id} })}"></div></th:block>
+            <a sec:authorize="hasRole('ADMIN')" th:href="@{/admin/order-settings}" class="btn btn-sm btn-outline-primary text-nowrap">
+                <i class="bi bi-gear me-1" aria-hidden="true"></i>Order settings</a>
         </div>
     </div>
     <div class="mz-chip-scroll mb-2">

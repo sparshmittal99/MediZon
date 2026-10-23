@@ -47,6 +47,7 @@ public class OrderService {
     private final PrescriptionService prescriptionService;
     private final CouponService coupons;
     private final WalletService wallet;
+    private final OrderSettingsService orderSettings;
 
     /** One order line: packs of a medicine and how many packs each person gets. */
     /** @param othersPatient who the "Others" share is for, when known (from a prescription) */
@@ -72,6 +73,9 @@ public class OrderService {
                     + " can't be delivered to " + ship.getPincode() + " right now. Remove " + (cart.getUnavailable().size() == 1 ? "it" : "them")
                     + " from the cart or choose another address.");
         }
+
+        // The admin's minimum order value, on the medicines before any promo or delivery fee
+        orderSettings.requireMinimum(cart.getSubtotal());
 
         // Each prescription medicine comes from the customer's approved prescriptions: the one written for its
         // patient first, several if one hasn't enough. Anything none of them covers stops the checkout.

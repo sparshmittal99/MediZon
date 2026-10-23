@@ -91,7 +91,23 @@
                 <div class="mz-rx-note small mb-3" data-mz-rx-note th:hidden="${!cart.prescriptionRequired}">
                     Some items need a prescription. You'll choose or upload one at checkout.
                 </div>
-                <a th:unless="${guest}" th:href="@{/checkout}" class="btn btn-primary w-100">Go to checkout</a>
+                <!-- The admin's minimum order value: below it, how much more to add (kept current by the page script) -->
+                <div class="mz-min-order mb-3" role="status" data-mz-min-order th:hidden="${minShort.signum() == 0}"
+                     th:attr="data-min=${minOrder}">
+                    <div class="d-flex gap-2 align-items-start">
+                        <i class="bi bi-basket2 text-warning" aria-hidden="true"></i>
+                        <div class="small">
+                            <strong data-mz-min-order-text th:text="'Add ₹' + ${#numbers.formatDecimal(minShort, 1, 'COMMA', 2, 'POINT')} + ' more to place your order'">Add ₹40.00 more</strong>
+                            <div class="text-muted" th:text="'Minimum order value is ₹' + ${T(com.medizon.service.OrderSettingsService).plain(minOrder)} + ', before promos and delivery.'"></div>
+                        </div>
+                    </div>
+                    <div class="progress mt-2" role="presentation">
+                        <div class="progress-bar" data-mz-min-order-bar
+                             th:style="'width: ' + ${minOrder.signum() > 0 ? cart.subtotal.multiply(100).divide(minOrder, 0, T(java.math.RoundingMode).DOWN).min(100) : 100} + '%'"></div>
+                    </div>
+                </div>
+                <a th:unless="${guest}" th:href="@{/checkout}" class="btn btn-primary w-100" data-mz-checkout-link
+                   th:classappend="${minShort.signum() > 0} ? 'disabled'" th:attr="aria-disabled=${minShort.signum() > 0}">Go to checkout</a>
                 <th:block th:if="${guest}">
                     <!-- /checkout needs a signed-in customer: Spring Security sends visitors to sign in, then back to checkout. -->
                     <a th:href="@{/checkout}" class="btn btn-primary w-100"><i class="bi bi-box-arrow-in-right me-1"></i>Sign in to checkout</a>

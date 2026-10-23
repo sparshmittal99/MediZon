@@ -41,6 +41,7 @@ public class OrderController {
     private final CouponService couponService;
     private final WalletService walletService;
     private final ReturnSettingsService returnSettings;
+    private final OrderSettingsService orderSettings;
 
     /** The promo code applied at checkout, kept in the session until the order is placed or it's removed. */
     static final String COUPON = "mzCoupon";
@@ -65,6 +66,8 @@ public class OrderController {
         CartSummary cart = cartService.summary(user, pin, (String) session.getAttribute(COUPON));
         if (cart.isEmpty()) return "redirect:/cart";
         model.addAttribute("cart", cart);
+        model.addAttribute("minOrder", orderSettings.minOrderValue());
+        model.addAttribute("minShort", OrderSettingsService.shortBy(cart.getSubtotal(), orderSettings.minOrderValue()));
         model.addAttribute("paymentMethods", PaymentMethod.payable());
         List<Coupon> promos = couponService.available();
         Set<String> usedToday = promos.stream().filter(c -> couponService.usedToday(user, c))

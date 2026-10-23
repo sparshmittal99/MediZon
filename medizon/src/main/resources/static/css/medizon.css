@@ -1221,3 +1221,9 @@ html.translated-ltr h1, html.translated-ltr h2, html.translated-ltr h3, html.tra
 .mz-review-table .mz-review-now { color: var(--mz-muted); }
 .mz-review-table .mz-review-new { font-weight: 600; }
 @media (max-width: 575.98px) { .mz-category-filter { flex: 1 1 10rem; width: auto; } }
+
+/* ---------- Minimum order value: how much more the cart needs ---------- */
+.mz-min-order { padding: .65rem .75rem; border: 1px solid #f3d38a; border-radius: .6rem; background: #fff8e6; }
+.mz-min-order[hidden] { display: none; }
+.mz-min-order .progress { height: .35rem; background: #f6e7c1; }
+.mz-min-order .progress-bar { background: var(--mz-green); transition: width .2s ease; }

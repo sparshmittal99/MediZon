@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Order settings')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-w-page">
+    <a th:href="@{/admin/orders}" class="small"><i class="bi bi-arrow-left"></i> Orders</a>
+    <h1 class="mz-page-title mt-2">Order settings</h1>
+    <p class="small text-muted mb-4">Applies to checkouts from now on; orders already placed aren't affected.
+        <span th:if="${settings.updatedAt != null}"
+              th:text="'Last changed ' + ${#temporals.format(settings.updatedAt, 'd MMM yyyy, h:mm a')} + ' by ' + ${settings.updatedBy} + '.'"></span></p>
+
+    <form th:action="@{/admin/order-settings}" method="post">
+        <section class="mz-panel mb-4">
+            <h2 class="h6 mb-3"><i class="bi bi-basket me-1 text-success"></i>Minimum order value</h2>
+            <label class="form-label small" for="minOrderValue">Smallest cart customers can check out</label>
+            <div class="input-group mb-1" style="max-width: 16rem">
+                <span class="input-group-text">₹</span>
+                <input class="form-control" id="minOrderValue" name="minOrderValue" type="number" step="0.01" min="0"
+                       th:max="${maxMinOrder}" th:value="${T(com.medizon.service.OrderSettingsService).plain(settings.minOrderValue)}" required>
+            </div>
+            <div class="form-text">The medicines' total before promos and delivery. Below it, the cart and checkout say how much more to add
+                and the order can't be placed. Set 0 for no minimum. Automatic refills of medication plans aren't held to it.</div>
+        </section>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save settings</button>
+    </form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

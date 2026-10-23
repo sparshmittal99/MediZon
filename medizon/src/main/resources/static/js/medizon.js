@@ -525,6 +525,23 @@
         summary.querySelector('[data-mz-total]').textContent = rupees(data.total);
         summary.querySelector('[data-mz-free-note]').hidden = freeDelivery;
         summary.querySelector('[data-mz-rx-note]').hidden = !data.prescriptionRequired;
+        updateMinOrder(summary, data);
+    }
+
+    /** Below the admin's minimum order value: how much more to add, and checkout waits until it's reached. */
+    function updateMinOrder(summary, data) {
+        const box = summary.querySelector('[data-mz-min-order]');
+        if (!box || data.minOrderShort == null) return;
+        const short = Number(data.minOrderShort), min = Number(data.minOrderValue);
+        box.hidden = short <= 0;
+        box.querySelector('[data-mz-min-order-text]').textContent = `Add ${rupees(short)} more to place your order`;
+        const bar = box.querySelector('[data-mz-min-order-bar]');
+        if (bar) bar.style.width = (min > 0 ? Math.min(100, Math.floor(Number(data.subtotal) * 100 / min)) : 100) + '%';
+        const link = summary.querySelector('[data-mz-checkout-link]');
+        if (link) {
+            link.classList.toggle('disabled', short > 0);
+            link.setAttribute('aria-disabled', String(short > 0));
+        }
     }
 
     /** An amount from the API (a number of rupees) the way the pages print it: ₹1,234.50. */

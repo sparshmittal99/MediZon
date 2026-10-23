@@ -1,10 +1,12 @@
 package com.medizon.service;
 
 import com.medizon.domain.Coupon;
+import com.medizon.domain.OrderSettings;
 import com.medizon.domain.ReturnSettings;
 import com.medizon.dto.PromoForm;
 import com.medizon.repository.CouponRepository;
 import com.medizon.repository.OrderRepository;
+import com.medizon.repository.OrderSettingsRepository;
 import com.medizon.repository.ReturnSettingsRepository;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +41,31 @@ class AdminSettingsTest {
         ReturnSettings saved = service.save(form, "admin@medizon.in");
         assertThat(saved.getBankRefundDays()).isEqualTo(5);
         assertThat(saved.getUpdatedBy()).isEqualTo("admin@medizon.in");
+    }
+
+    @Test
+    void theMinimumOrderValueStartsAt99AndStopsSmallerCarts() {
+        OrderSettingsRepository repo = mock(OrderSettingsRepository.class);
+        when(repo.findById(OrderSettings.ID)).thenReturn(Optional.empty());
+        when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
+        OrderSettingsService service = new OrderSettingsService(repo);
+
+        assertThat(service.minOrderValue()).isEqualByComparingTo("99");
+        assertThatThrownBy(() -> service.requireMinimum(new BigDecimal("59.50")))
+                .hasMessage("The minimum order value is ₹99. Add medicines worth ₹39.50 more to place this order.");
+        service.requireMinimum(new BigDecimal("99"));
+
+        assertThat(OrderSettingsService.shortBy(new BigDecimal("60"), new BigDecimal("99"))).isEqualByComparingTo("39");
+        assertThat(OrderSettingsService.shortBy(new BigDecimal("150"), new BigDecimal("99"))).isEqualByComparingTo("0");
+        assertThat(OrderSettingsService.shortBy(new BigDecimal("10"), BigDecimal.ZERO)).isEqualByComparingTo("0");
+
+        assertThatThrownBy(() -> service.save(new BigDecimal("-1"), "admin@medizon.in")).hasMessageContaining("₹0 to ₹10000");
+        assertThatThrownBy(() -> service.save(null, "admin@medizon.in")).hasMessageContaining("0 for none");
+        OrderSettings saved = service.save(new BigDecimal("149.5"), "admin@medizon.in");
+        assertThat(saved.getMinOrderValue()).isEqualByComparingTo("149.50");
+        assertThat(saved.getUpdatedBy()).isEqualTo("admin@medizon.in");
+        assertThat(OrderSettingsService.plain(saved.getMinOrderValue())).isEqualTo("149.50");
+        assertThat(OrderSettingsService.plain(new BigDecimal("99.00"))).isEqualTo("99");
     }
 
     @Test
