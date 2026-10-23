@@ -62,6 +62,24 @@
                th:href="@{/admin/medicines(category=${c})}" th:title="${n == null} ? 'No products in it yet' : null">
                 <span th:text="${c}">Pain &amp; Fever</span><span class="mz-chip-count" th:text="${n} ?: 0">4</span></a>
         </div>
+        <!-- Rename a category, or merge it into another by giving that one's name -->
+        <form th:unless="${#lists.isEmpty(categories)}" th:action="@{/admin/medicines/categories/rename}" method="post"
+              class="d-flex flex-wrap gap-2 align-items-center mt-3 pt-3 border-top"
+              data-mz-confirm="Every product in it moves too, in every store and for shoppers. Giving another category's name merges the two."
+              data-mz-confirm-title="Rename this category?" data-mz-confirm-ok="Rename">
+            <span class="small fw-semibold">Rename</span>
+            <select name="from" class="form-select form-select-sm" style="width: 15rem; max-width: 100%" required aria-label="Category to rename">
+                <option value="">Choose a category…</option>
+                <option th:each="c : ${categories}" th:value="${c}" th:text="${c}"></option>
+            </select>
+            <span class="small">to</span>
+            <input type="text" name="to" class="form-control form-control-sm" style="width: 15rem; max-width: 100%" required maxlength="60"
+                   list="mzCategoryNames" placeholder="New name, or another category" aria-label="New name">
+            <datalist id="mzCategoryNames"><option th:each="c : ${categories}" th:value="${c}"></option></datalist>
+            <button class="btn btn-sm btn-outline-primary" type="submit">Rename</button>
+        </form>
+        <p th:unless="${#lists.isEmpty(categories)}" class="small text-muted mt-2 mb-0">To merge two categories, rename one to the other's name.
+            Changing only capital letters (Pain &amp; fever to Pain &amp; Fever) works too.</p>
     </section>
     <section th:replace="~{fragments/layout :: catalogImport(@{/admin/medicines/import}, @{/admin/medicines/import/template.xlsx}, null)}"></section>
     <section th:replace="~{fragments/layout :: importReport}"></section>

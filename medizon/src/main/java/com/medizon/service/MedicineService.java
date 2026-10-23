@@ -72,11 +72,42 @@ public class MedicineService {
         return categoryRepo.findFirstByNameIgnoreCase(n).map(Category::getName).orElseGet(() -> categoryRepo.save(new Category(n)).getName());
     }
 
-    /** Categories from before they were kept on their own: every one a product is in becomes a category. */
+    /**
+     * Categories from before they were kept on their own: every one a product is in becomes a category, and products
+     * whose category differs only in case ("Pain & fever", "Pain & Fever") all take the category's one spelling.
+     */
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void registerMissingCategories() {
         medicines.findAllCategories().forEach(this::registerCategory);
+        categoryRepo.findAll().forEach(c -> medicines.moveCategory(c.getName(), c.getName()));
+    }
+
+    /**
+     * Renames a category, with every product in it, in every store and for shoppers at once. Renaming it to another
+     * category's name merges the two. A change of case only ("Pain & fever" to "Pain & Fever") is a rename too.
+     * Returns what happened, for the admin.
+     */
+    @Transactional
+    public String renameCategory(String from, String to) {
+        String f = tidy(from), t = tidy(to);
+        if (f.isEmpty()) throw new BusinessException("Choose the category to rename.");
+        if (t.isEmpty()) throw new BusinessException("Enter the new name for " + f + ".");
+        if (t.length() > Category.MAX_NAME) throw new BusinessException("Keep the category name to " + Category.MAX_NAME + " characters.");
+        Category source = categoryRepo.findFirstByNameIgnoreCase(f)
+                .orElseThrow(() -> new BusinessException(f + " isn't a category any more."));
+        if (source.getName().equals(t)) throw new BusinessException(t + " already has that name.");
+        Category target = categoryRepo.findFirstByNameIgnoreCase(t).filter(c -> !c.getId().equals(source.getId())).orElse(null);
+        String old = source.getName();
+        if (target == null) {
+            source.setName(t);
+            categoryRepo.saveAndFlush(source);
+            int moved = medicines.moveCategory(old, t);
+            return old + " is now " + t + (moved == 1 ? " (1 product)." : " (" + moved + " products).");
+        }
+        int moved = medicines.moveCategory(old, target.getName());
+        categoryRepo.delete(source);
+        return old + " merged into " + target.getName() + (moved == 1 ? ": 1 product moved." : ": " + moved + " products moved.");
     }
 
     public List<Medicine> allActive() { return medicines.findByActiveTrueOrderByNameAsc(); }

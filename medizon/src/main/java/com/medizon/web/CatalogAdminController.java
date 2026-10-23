@@ -105,6 +105,16 @@ public class CatalogAdminController {
         return "redirect:/admin/medicines";
     }
 
+    /** The admin renames a category, or merges it into another by giving that one's name. */
+    @PostMapping("/categories/rename")
+    public String renameCategory(@RequestParam(required = false) String from, @RequestParam(required = false) String to,
+                                 RedirectAttributes ra) {
+        if (!currentUser.get().isAdmin()) throw new BusinessException("Only the admin renames categories.");
+        ra.addFlashAttribute("success", medicineService.renameCategory(from, to));
+        ra.addFlashAttribute("openCategories", true);
+        return "redirect:/admin/medicines";
+    }
+
     // ---------------------------------------------------------------- master products
 
     /** A new product: the admin adds it to the master catalogue; a store also starts selling it right away. */

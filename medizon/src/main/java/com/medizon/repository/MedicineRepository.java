@@ -4,6 +4,7 @@ import com.medizon.domain.Medicine;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -49,6 +50,11 @@ public interface MedicineRepository extends JpaRepository<Medicine, Long> {
              and exists (select i from StoreItem i where i.medicine = m and i.active = true and i.store.active = true)
            """)
     Page<Medicine> searchSold(@Param("q") String q, @Param("category") String category, Pageable pageable);
+
+    /** Moves every product in {@code from} (any case) to {@code to}: renames or merges a category. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Medicine m set m.category = :to where lower(m.category) = lower(:from) and m.category <> :to")
+    int moveCategory(@Param("from") String from, @Param("to") String to);
 
     /** Every category a product has, listed or hidden. */
     @Query("select distinct m.category from Medicine m")
