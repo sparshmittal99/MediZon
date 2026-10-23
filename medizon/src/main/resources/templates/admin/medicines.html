@@ -10,7 +10,15 @@
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
         <h1 class="mz-page-title mb-0">Master catalogue</h1>
         <div class="mz-list-tools">
-            <div th:replace="~{fragments/layout :: numberSearch(@{/admin/medicines}, 'Search name or product code', ${ {} })}"></div>
+            <div th:replace="~{fragments/layout :: numberSearch(@{/admin/medicines}, 'Search name, code or category', ${ {'category': category} })}"></div>
+            <form th:action="@{/admin/medicines}" method="get" class="d-flex gap-2" role="search">
+                <input th:if="${q != null}" type="hidden" name="q" th:value="${q}">
+                <select name="category" class="form-select form-select-sm mz-category-filter" aria-label="Show one category" data-mz-autosubmit>
+                    <option value="">All categories</option>
+                    <option th:each="c : ${categories}" th:value="${c}" th:text="${c}" th:selected="${category != null and #strings.equalsIgnoreCase(c, category)}"></option>
+                </select>
+                <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Show</button></noscript>
+            </form>
             <!-- Each store's own catalogue: stock, expiry and OTC prices -->
             <form th:action="@{/admin/medicines}" method="get" class="d-flex gap-2" th:unless="${#lists.isEmpty(stores)}">
                 <select name="store" class="form-select" aria-label="Open a store's catalogue" data-mz-autosubmit>
@@ -19,6 +27,8 @@
                 </select>
                 <noscript><button class="btn btn-outline-primary" type="submit">Open</button></noscript>
             </form>
+            <button type="button" class="btn btn-outline-primary text-nowrap" data-bs-toggle="collapse" data-bs-target="#mzCategories"
+                    th:attr="aria-expanded=${openCategories != null}" aria-controls="mzCategories"><i class="bi bi-tags me-1"></i>Categories</button>
             <button type="button" class="btn btn-outline-primary text-nowrap" data-bs-toggle="collapse" data-bs-target="#mzImport"
                     aria-expanded="false" aria-controls="mzImport"><i class="bi bi-upload me-1"></i>Import</button>
             <a th:href="@{/admin/medicines/new}" class="btn btn-primary text-nowrap"><i class="bi bi-plus-lg me-1"></i>Add product</a>
@@ -26,12 +36,40 @@
     </div>
     <p class="small text-muted mb-4">Every product, the same for all stores. Prescription medicines sell at this price in every store;
         stores set their own price for OTC medicines, up to the MRP. Product codes are given automatically and are for staff only.</p>
+    <div th:if="${pendingReview != null}" class="mz-panel mb-4 border-warning d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span class="small" th:text="${pendingReview.reviews.size()} + (${pendingReview.reviews.size() == 1} ? ' product' : ' products')
+            + ' from ' + ${pendingReview.file} + ' would change. Nothing has changed in them yet.'">3 products would change.</span>
+        <a th:href="@{/admin/medicines/import/review}" class="btn btn-sm btn-primary text-nowrap">Review changes</a>
+    </div>
+    <!-- The categories products go in: choose one to see its products, or add a new one -->
+    <section class="mz-panel mb-4 collapse" id="mzCategories" th:classappend="${openCategories != null} ? 'show'">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+            <div>
+                <h2 class="h6 mb-1">Categories</h2>
+                <p class="small text-muted mb-0">Choose one to see its products. A category new to the catalogue is also added
+                    when you save or import a product in it.</p>
+            </div>
+            <form th:action="@{/admin/medicines/categories}" method="post" class="d-flex gap-2">
+                <input type="text" name="name" class="form-control form-control-sm" style="width: 15rem; max-width: 100%" required maxlength="60"
+                       placeholder="New category, e.g. Skin care" aria-label="New category name">
+                <button class="btn btn-sm btn-primary text-nowrap" type="submit"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Add category</button>
+            </form>
+        </div>
+        <p th:if="${#lists.isEmpty(categories)}" class="small text-muted mb-0">No categories yet.</p>
+        <div class="mz-chip-scroll" th:unless="${#lists.isEmpty(categories)}">
+            <a th:each="c : ${categories}" th:with="n=${categoryCounts.get(#strings.toLowerCase(c))}" class="mz-chip"
+               th:classappend="(${n == null} ? 'is-empty ' : '') + (${category != null and #strings.equalsIgnoreCase(c, category)} ? 'active' : '')"
+               th:href="@{/admin/medicines(category=${c})}" th:title="${n == null} ? 'No products in it yet' : null">
+                <span th:text="${c}">Pain &amp; Fever</span><span class="mz-chip-count" th:text="${n} ?: 0">4</span></a>
+        </div>
+    </section>
     <section th:replace="~{fragments/layout :: catalogImport(@{/admin/medicines/import}, @{/admin/medicines/import/template.xlsx}, null)}"></section>
     <section th:replace="~{fragments/layout :: importReport}"></section>
-    <p th:if="${q != null}" class="small text-muted">Products whose name or code contains <strong th:text="${q}"></strong>.
+    <p th:if="${q != null or category != null}" class="small text-muted">
+        <th:block th:if="${category != null}">Products in <strong th:text="${category}"></strong></th:block><th:block th:if="${category != null and q != null}"> whose</th:block><th:block th:if="${category == null}">Products whose</th:block><th:block th:if="${q != null}"> name, code or category contains <strong th:text="${q}"></strong></th:block>.
         <a th:href="@{/admin/medicines}">Show all</a></p>
     <div th:if="${#lists.isEmpty(medicines)}" class="mz-panel mz-empty"><i class="bi bi-capsule"></i>
-        <p class="mb-0" th:text="${q != null} ? 'No product matches that name or code.' : 'No products yet.'">No products yet.</p></div>
+        <p class="mb-0" th:text="${q != null or category != null} ? 'No product matches that search.' : 'No products yet.'">No products yet.</p></div>
 
     <div class="mz-panel-flush" th:unless="${#lists.isEmpty(medicines)}">
         <div class="table-responsive">

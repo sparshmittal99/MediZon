@@ -50,6 +50,10 @@ public interface MedicineRepository extends JpaRepository<Medicine, Long> {
            """)
     Page<Medicine> searchSold(@Param("q") String q, @Param("category") String category, Pageable pageable);
 
+    /** Every category a product has, listed or hidden. */
+    @Query("select distinct m.category from Medicine m")
+    List<String> findAllCategories();
+
     @Query("select distinct m.category from Medicine m where m.active = true order by m.category")
     List<String> findActiveCategories();
 

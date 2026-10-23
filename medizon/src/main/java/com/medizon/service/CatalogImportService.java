@@ -30,10 +30,12 @@ import java.util.stream.Collectors;
 
 /**
  * Catalogue imports from a sheet (Excel, CSV or PDF; see {@link SheetReader}). The admin imports products into the
- * master catalogue: a row with a known product code, or the exact name of one product, updates it; any other row adds
- * a product, which gets its code automatically. A store imports its listings: each row names a master product by code
- * or name, with the store's stock, batch expiry and OTC price. Empty cells leave what's there. Good rows are saved and
- * every row that isn't is listed with the reason, so the sheet can be fixed and imported again.
+ * master catalogue: a row with a known product code, or the exact name of one product, is that product; any other row
+ * adds a product, which gets its code automatically. A row that would change a product already there is held for the
+ * admin to review: each value it changes, now and in the file, to take or keep ({@link #applyReviews}). A category
+ * that isn't in the catalogue yet is added with the product. A store imports its listings: each row names a master
+ * product by code or name, with the store's stock, batch expiry and OTC price. Empty cells leave what's there. Good
+ * rows are saved and every row that isn't is listed with the reason, so the sheet can be fixed and imported again.
  */
 @Slf4j
 @Service
@@ -46,13 +48,14 @@ public class CatalogImportService {
             new Column("name", "Name", true, "e.g. Dolo 650", "productname", "medicinename", "medicine", "product", "itemname", "brandname"),
             new Column("generic", "Salt / composition", false, "e.g. Paracetamol 650 mg", "salt", "composition", "genericname", "generic"),
             new Column("manufacturer", "Manufacturer", false, "", "company", "mfr", "mfg", "marketedby", "marketer"),
-            new Column("category", "Category", true, "e.g. Pain & fever", "group", "therapeuticclass"),
-            new Column("form", "Form", false, "Tablet, Capsule, Syrup, ...; Tablet if empty", "dosageform", "type"),
+            new Column("category", "Category", true, "e.g. Pain & fever; a new one is added to the categories", "group", "therapeuticclass"),
+            new Column("form", "Form", false, "Tablet, Capsule, Syrup, Gel, ...; from the name, else Tablet, if empty", "dosageform", "type"),
             new Column("strength", "Strength", false, "e.g. 650 mg"),
-            new Column("units", "Units per pack", false, "Tablets or ml in one pack; 10 if empty", "packsize", "unitsperpack", "units", "qtyperpack", "pack"),
+            new Column("units", "Units per pack", false, "Tablets in one pack, or the quantity with its unit (100 ml, 30 g); 10 if empty",
+                    "packsize", "unitsperpack", "unitspack", "unitsinpack", "units", "qtyperpack", "pack", "packing"),
             new Column("price", "Price", true, "Catalogue price in rupees, GST included", "catalogueprice", "sellingprice", "saleprice", "rate"),
             new Column("mrp", "MRP", false, "At least the price", "maxretailprice"),
-            new Column("rx", "Prescription required", false, "Yes or No; No if empty", "prescription", "rx", "rxrequired"),
+            new Column("rx", "Prescription required", false, "Yes or No; No if empty", "prescription", "rx", "rxrequired", "rxreq", "rxreqd"),
             new Column("hsn", "HSN code", false, "4 to 8 digits; 3004 if empty", "hsn"),
             new Column("gst", "GST %", false, "0, 5, 12 or 18; 5 if empty", "gst", "gstrate", "tax", "taxrate"),
             new Column("returnable", "Returnable", false, "Yes or No; Yes if empty", "return"),
@@ -69,12 +72,27 @@ public class CatalogImportService {
     /** One row that wasn't imported, and why. */
     public record Skipped(int row, String product, String reason) implements Serializable { }
 
-    /** What an import did: shown on the catalogue page afterwards. */
-    public record Report(String file, int added, int updated, List<Skipped> skipped) implements Serializable {
+    /** One value a row would change on a product already in the catalogue: what it is now, and what the file says. */
+    public record Change(String key, String label, String current, String incoming) implements Serializable { }
+
+    /** A product already in the catalogue that a row would change, held until the admin says which changes to make. */
+    public record Review(Row row, Long medicineId, String code, String name, List<Change> changes) implements Serializable {
+        public boolean touches(String key) { return changes.stream().anyMatch(c -> c.key().equals(key)); }
+    }
+
+    /** What an import did: shown on the catalogue page afterwards, and the products waiting for review. */
+    public record Report(String file, int added, int updated, int unchanged, List<Skipped> skipped, List<Review> reviews)
+            implements Serializable {
+        public Report(String file, int added, int updated, List<Skipped> skipped) {
+            this(file, added, updated, 0, skipped, List.of());
+        }
+
         public String getSummary() {
             List<String> parts = new ArrayList<>();
             if (added > 0) parts.add(added + (added == 1 ? " product added" : " products added"));
             if (updated > 0) parts.add(updated + (updated == 1 ? " product updated" : " products updated"));
+            if (unchanged > 0) parts.add(unchanged + (unchanged == 1 ? " product unchanged" : " products unchanged"));
+            if (!reviews.isEmpty()) parts.add(reviews.size() + (reviews.size() == 1 ? " product to review" : " products to review"));
             if (!skipped.isEmpty()) parts.add(skipped.size() + (skipped.size() == 1 ? " row skipped" : " rows skipped"));
             return file + ": " + (parts.isEmpty() ? "nothing to import" : String.join(", ", parts)) + ".";
         }
@@ -83,6 +101,9 @@ public class CatalogImportService {
     private static final Set<String> YES = Set.of("yes", "y", "true", "1", "rx", "required");
     private static final Set<String> NO = Set.of("no", "n", "false", "0", "otc", "notrequired", "-");
 
+    /** The columns a review compares, in the order it shows them; the product code never changes. */
+    private static final List<String> REVIEWED = MASTER.stream().map(Column::key).filter(k -> !k.equals("code")).toList();
+
     private final MedicineRepository medicines;
     private final MedicineService medicineService;
     private final StoreCatalogService storeCatalog;
@@ -90,24 +111,37 @@ public class CatalogImportService {
 
     // ------------------------------------------------------------------ master catalogue (admin)
 
+    /**
+     * Adds the file's new products. A row for a product already there that says the same as the catalogue is left
+     * alone; one that would change it comes back in {@link Report#reviews()} for the admin to decide.
+     */
     public Report importMaster(MultipartFile file) {
         List<Row> rows = SheetReader.read(file, MASTER);
         Map<String, Medicine> byCode = new HashMap<>();
         Map<String, List<Medicine>> byName = new HashMap<>();
         medicines.findAll().forEach(m -> remember(m, byCode, byName));
-        int added = 0, updated = 0;
+        List<String> categories = new ArrayList<>(medicineService.categories());
+        int added = 0, unchanged = 0;
         List<Skipped> skipped = new ArrayList<>();
+        List<Review> reviews = new ArrayList<>();
         for (Row row : rows) {
             String label = Optional.ofNullable(row.get("name")).orElse(Optional.ofNullable(row.get("code")).orElse("-"));
             try {
                 Medicine existing = find(row, byCode, byName);
-                // Changes go on a copy, so a row that fails leaves the product exactly as it was
+                // Changes go on a copy: the product stays exactly as it is until they're saved
                 Medicine m = new Medicine();
                 if (existing != null) BeanUtils.copyProperties(existing, m);
-                applyMaster(row, m, existing == null);
-                Medicine saved = medicineService.save(m, null, null, false);
-                remember(saved, byCode, byName);
-                if (existing == null) added++; else updated++;
+                applyMaster(row, m, existing == null, categories);
+                if (existing == null) {
+                    Medicine saved = medicineService.save(m, null, null, false);
+                    remember(saved, byCode, byName);
+                    if (categories.stream().noneMatch(c -> c.equalsIgnoreCase(saved.getCategory()))) categories.add(saved.getCategory());
+                    added++;
+                    continue;
+                }
+                List<Change> changes = changes(existing, m);
+                if (changes.isEmpty()) unchanged++;
+                else reviews.add(new Review(row, existing.getId(), existing.getProductCode(), existing.getName(), changes));
             } catch (BusinessException e) {
                 skipped.add(new Skipped(row.number(), label, e.getMessage()));
             } catch (RuntimeException e) {
@@ -115,7 +149,44 @@ public class CatalogImportService {
                 skipped.add(new Skipped(row.number(), label, "This row couldn't be saved. Check its values and try again."));
             }
         }
-        return new Report(file.getOriginalFilename(), added, updated, skipped);
+        return new Report(file.getOriginalFilename(), added, 0, unchanged, skipped, reviews);
+    }
+
+    /**
+     * Makes the changes the admin chose after an import: {@code accepted} holds, by each review's place in the list,
+     * the columns to take from the file. Everything else stays as it is in the catalogue, and with it in every store.
+     */
+    public Report applyReviews(String file, List<Review> reviews, Map<Integer, Set<String>> accepted) {
+        List<String> categories = new ArrayList<>(medicineService.categories());
+        int updated = 0, kept = 0;
+        List<Skipped> skipped = new ArrayList<>();
+        for (int k = 0; k < reviews.size(); k++) {
+            Review review = reviews.get(k);
+            Set<String> take = new HashSet<>(accepted.getOrDefault(k, Set.of()));
+            take.removeIf(key -> !review.touches(key));
+            if (take.isEmpty()) {
+                kept++;
+                continue;
+            }
+            try {
+                Medicine existing = medicines.findById(review.medicineId())
+                        .orElseThrow(() -> new BusinessException("This product isn't in the catalogue any more."));
+                Map<String, String> cells = new LinkedHashMap<>();
+                take.forEach(key -> cells.put(key, review.row().cells().get(key)));
+                Medicine m = new Medicine();
+                BeanUtils.copyProperties(existing, m);
+                applyMaster(new Row(review.row().number(), cells), m, false, categories);
+                Medicine saved = medicineService.save(m, null, null, false);
+                if (categories.stream().noneMatch(c -> c.equalsIgnoreCase(saved.getCategory()))) categories.add(saved.getCategory());
+                updated++;
+            } catch (BusinessException e) {
+                skipped.add(new Skipped(review.row().number(), review.name(), e.getMessage()));
+            } catch (RuntimeException e) {
+                log.warn("Catalogue import review of row {} failed", review.row().number(), e);
+                skipped.add(new Skipped(review.row().number(), review.name(), "This product couldn't be saved. Check its values and try again."));
+            }
+        }
+        return new Report(file, 0, updated, kept, skipped, List.of());
     }
 
     private static void remember(Medicine m, Map<String, Medicine> byCode, Map<String, List<Medicine>> byName) {
@@ -139,28 +210,99 @@ public class CatalogImportService {
         return same.isEmpty() ? null : same.get(0);
     }
 
-    private void applyMaster(Row row, Medicine m, boolean isNew) {
+    private void applyMaster(Row row, Medicine m, boolean isNew, Collection<String> categories) {
         if (isNew) {
             for (String key : List.of("name", "category", "price")) {
                 if (row.get(key) == null) throw new BusinessException("Fill in the " + label(MASTER, key) + " for a new product.");
             }
         }
-        set(row, "name", m::setName);
+        // A name that differs only in case or spacing is the same product: it keeps the catalogue's spelling
+        if (row.get("name") != null && !key(row.get("name")).equals(key(m.getName()))) m.setName(row.get("name"));
         set(row, "generic", m::setGenericName);
         set(row, "manufacturer", m::setManufacturer);
-        set(row, "category", m::setCategory);
+        set(row, "category", v -> m.setCategory(MedicineService.canonicalCategory(v, categories)));
         set(row, "form", m::setDosageForm);
         set(row, "strength", m::setStrength);
+        set(row, "units", m::setUnitsPerPack);
         set(row, "description", v -> m.setDescription(v.length() > 2000 ? v.substring(0, 2000) : v));
-        if (row.get("units") != null) m.setUnitsPerPack(wholeNumber(row.get("units"), "Units per pack"));
         if (row.get("price") != null) m.setPrice(money(row.get("price"), "Price"));
         if (row.get("mrp") != null) m.setMrp(money(row.get("mrp"), "MRP"));
         if (row.get("rx") != null) m.setPrescriptionRequired(yesNo(row.get("rx"), "Prescription required"));
         if (row.get("returnable") != null) m.setReturnable(yesNo(row.get("returnable"), "Returnable"));
         if (row.get("hsn") != null) m.setHsnCode(row.get("hsn").replaceAll("\\.0+$", "").replaceAll("\\s", ""));
         if (row.get("gst") != null) m.setGstRate(money(row.get("gst").replace("%", ""), "GST %"));
+        if (isNew && row.get("form") == null) m.setDosageForm(formFromName(m.getName()));
+        // A syrup's or gel's "strength" is often what the pack holds (100 ml, 30 g)
+        if (isNew && row.get("units") == null && m.getStrength() != null && PACK_QUANTITY.matcher(m.getStrength()).matches()) {
+            m.setUnitsPerPack(m.getStrength());
+        }
         Set<ConstraintViolation<Medicine>> problems = validator.validate(m);
         if (!problems.isEmpty()) throw new BusinessException(problems.iterator().next().getMessage() + ".");
+        if (m.exceedsMrp(m.getPrice())) throw new BusinessException("The price can't be above the MRP.");
+    }
+
+    private static final java.util.regex.Pattern PACK_QUANTITY =
+            java.util.regex.Pattern.compile("(?i)\\d+(\\.\\d+)?\\s*(ml|l|g|gm|kg)");
+
+    /** Forms a product's name often says ("Volini Gel", "Ascoril LS Syrup"), first match wins; Tablet otherwise. */
+    private static final List<String[]> FORMS = List.of(
+            new String[]{"syrup", "Syrup"}, new String[]{"suspension", "Syrup"}, new String[]{"gel", "Gel"},
+            new String[]{"ointment", "Ointment"}, new String[]{"cream", "Cream"}, new String[]{"lotion", "Lotion"},
+            new String[]{"drops?", "Drops"}, new String[]{"injection|inj", "Injection"}, new String[]{"spray", "Spray"},
+            new String[]{"capsules?|caps?", "Capsule"}, new String[]{"sachet", "Sachet"}, new String[]{"powder", "Powder"});
+
+    static String formFromName(String name) {
+        String n = name == null ? "" : name.toLowerCase(Locale.ROOT);
+        for (String[] f : FORMS) {
+            if (java.util.regex.Pattern.compile("\\b(" + f[0] + ")\\b").matcher(n).find()) return f[1];
+        }
+        return "Tablet";
+    }
+
+    /** What applying the row changed on the copy {@code m} of {@code existing}, column by column. */
+    private static List<Change> changes(Medicine existing, Medicine m) {
+        List<Change> out = new ArrayList<>();
+        for (String key : REVIEWED) {
+            Object now = value(existing, key), next = value(m, key);
+            if (!same(key, now, next)) out.add(new Change(key, label(MASTER, key), shown(now), shown(next)));
+        }
+        return out;
+    }
+
+    private static Object value(Medicine m, String key) {
+        return switch (key) {
+            case "name" -> m.getName();
+            case "generic" -> m.getGenericName();
+            case "manufacturer" -> m.getManufacturer();
+            case "category" -> m.getCategory();
+            case "form" -> m.getDosageForm();
+            case "strength" -> m.getStrength();
+            case "units" -> m.getUnitsPerPack();
+            case "price" -> m.getPrice();
+            case "mrp" -> m.getMrp();
+            case "rx" -> m.isPrescriptionRequired();
+            case "hsn" -> m.getHsnCode();
+            case "gst" -> m.getGstRate();
+            case "returnable" -> m.isReturnable();
+            case "description" -> m.getDescription();
+            default -> throw new IllegalArgumentException(key);
+        };
+    }
+
+    private static boolean same(String key, Object a, Object b) {
+        if (a instanceof BigDecimal x && b instanceof BigDecimal y) return x.compareTo(y) == 0;
+        if (a instanceof String || b instanceof String || a == null || b == null) {
+            String x = a == null ? "" : a.toString().trim().replaceAll("\\s+", " ");
+            String y = b == null ? "" : b.toString().trim().replaceAll("\\s+", " ");
+            return key.equals("category") ? x.equalsIgnoreCase(y) : x.equals(y);
+        }
+        return a.equals(b);
+    }
+
+    private static String shown(Object v) {
+        if (v instanceof Boolean b) return b ? "Yes" : "No";
+        if (v instanceof BigDecimal n) return n.stripTrailingZeros().toPlainString();
+        return v == null || v.toString().isBlank() ? null : v.toString();
     }
 
     // ------------------------------------------------------------------ a store's catalogue

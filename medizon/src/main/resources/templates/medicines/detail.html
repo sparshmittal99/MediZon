@@ -30,7 +30,7 @@
                 <span th:if="${m.discountPercent > 0}" class="mz-mrp" th:text="'MRP ₹' + ${#numbers.formatDecimal(m.mrp, 1, 'COMMA', 2, 'POINT')}"></span>
                 <span th:if="${m.discountPercent > 0}" class="mz-off" th:text="${m.discountPercent} + '% off'"></span>
             </div>
-            <p class="small text-muted mb-1" th:text="'Pack of ' + ${m.unitsPerPack} + ' ' + ${m.unitLabel} + ', inclusive of all taxes'"></p>
+            <p class="small text-muted mb-1" th:text="'Pack of ' + ${m.packLabel} + ', inclusive of all taxes'"></p>
             <p class="small text-muted mb-4" th:if="${m.storeName != null and deliverTo != null and deliverTo.serviceable}">
                 <i class="bi bi-shop me-1" aria-hidden="true"></i>Sold and delivered by <span class="fw-semibold" th:text="${m.storeName}"></span></p>
             <div class="mb-4" th:unless="${m.storeName != null and deliverTo != null and deliverTo.serviceable}"></div>

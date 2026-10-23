@@ -441,7 +441,7 @@ public class MedicationPlanService {
         for (OrderItem item : order.getItems()) {
             Medicine m = item.getMedicine();
             List<Member> targets = targets(item, user);
-            int[] shares = item.shareOf(targets, item.getQuantity() * m.getUnitsPerPack());
+            int[] shares = item.shareOf(targets, item.getQuantity() * m.getUnitCount());
             for (int i = 0; i < targets.size(); i++) {
                 Member member = targets.get(i);
                 if (member.isOthers()) continue;   // bought for someone outside the household: nothing to track
@@ -457,7 +457,7 @@ public class MedicationPlanService {
                 p.setMember(member);
                 p.setMedicine(m);
                 p.addSupply(shares[i], item.getExpiryDate());
-                p.setReorderPacks(Math.max(1, shares[i] / Math.max(1, m.getUnitsPerPack())));
+                p.setReorderPacks(Math.max(1, shares[i] / Math.max(1, m.getUnitCount())));
                 if (member.isCommon()) {
                     // Common medicines go straight onto the shelf; there's nothing to set up
                     p.setReorderMode(ReorderMode.OFF);
@@ -498,7 +498,7 @@ public class MedicationPlanService {
     public void onItemsReturned(OrderItem item, int packs) {
         Medicine m = item.getMedicine();
         List<Member> targets = targets(item, item.getOrder().getUser());
-        int[] shares = item.shareOf(targets, packs * m.getUnitsPerPack());
+        int[] shares = item.shareOf(targets, packs * m.getUnitCount());
         for (int i = 0; i < targets.size(); i++) {
             int share = shares[i];
             if (targets.get(i).isOthers()) continue;

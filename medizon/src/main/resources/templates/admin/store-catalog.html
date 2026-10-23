@@ -14,7 +14,16 @@
             <span th:unless="${store.active}" class="badge text-bg-secondary mt-1">Store paused: nothing here is on sale</span>
         </div>
         <div class="mz-list-tools">
-            <div th:replace="~{fragments/layout :: numberSearch(@{/admin/medicines}, 'Search name or product code', ${ {'store': store.id} })}"></div>
+            <div th:replace="~{fragments/layout :: numberSearch(@{/admin/medicines}, 'Search name, code or category', ${ {'store': store.id, 'category': category} })}"></div>
+            <form th:action="@{/admin/medicines}" method="get" class="d-flex gap-2" role="search">
+                <input type="hidden" name="store" th:value="${store.id}">
+                <input th:if="${q != null}" type="hidden" name="q" th:value="${q}">
+                <select name="category" class="form-select form-select-sm mz-category-filter" aria-label="Show one category" data-mz-autosubmit>
+                    <option value="">All categories</option>
+                    <option th:each="c : ${categories}" th:value="${c}" th:text="${c}" th:selected="${category != null and #strings.equalsIgnoreCase(c, category)}"></option>
+                </select>
+                <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Show</button></noscript>
+            </form>
             <button type="button" class="btn btn-outline-primary text-nowrap" data-bs-toggle="collapse" data-bs-target="#mzImport"
                     aria-expanded="false" aria-controls="mzImport"><i class="bi bi-upload me-1"></i>Import</button>
             <button type="button" class="btn btn-primary text-nowrap" data-bs-toggle="collapse" data-bs-target="#mzAddProducts"
@@ -53,11 +62,12 @@
         <p class="small text-muted mt-3 mb-0">A product that isn't in the master catalogue yet is added by the admin.</p>
     </section>
 
-    <p th:if="${q != null}" class="small text-muted">Products whose name or code contains <strong th:text="${q}"></strong>.
+    <p th:if="${q != null or category != null}" class="small text-muted">
+        <th:block th:if="${category != null}">Products in <strong th:text="${category}"></strong></th:block><th:block th:if="${category != null and q != null}"> whose</th:block><th:block th:if="${category == null}">Products whose</th:block><th:block th:if="${q != null}"> name, code or category contains <strong th:text="${q}"></strong></th:block>.
         <a th:href="@{/admin/medicines(store=${store.id})}">Show all</a></p>
 
     <div th:if="${#lists.isEmpty(items)}" class="mz-panel mz-empty"><i class="bi bi-capsule"></i>
-        <p class="mb-0" th:text="${q != null} ? 'No product here matches that name or code.'
+        <p class="mb-0" th:text="${q != null or category != null} ? 'No product here matches that search.'
             : 'This store sells nothing yet. Use Add products to start.'">Nothing here yet.</p></div>
     <div th:unless="${#lists.isEmpty(items)}" class="mz-panel-flush">
         <div class="table-responsive">
@@ -68,7 +78,7 @@
                     <td class="mz-code text-nowrap" th:text="${m.productCode} ?: '–'">MZP00001</td>
                     <td><span class="fw-semibold" th:text="${m.name}"></span>
                         <span th:if="${m.prescriptionRequired}" class="mz-rx position-static ms-1">Rx</span>
-                        <div class="small text-muted" th:text="${m.manufacturer}"></div>
+                        <div class="small text-muted" th:text="${m.manufacturer != null and m.manufacturer != ''} ? ${m.manufacturer} + ' · ' + ${m.category} : ${m.category}"></div>
                         <div class="small text-danger" th:unless="${m.active}">Hidden in the master catalogue</div></td>
                     <td class="text-end text-nowrap" th:text="${m.mrp != null} ? '₹' + ${m.mrp} : '–'"></td>
                     <td>

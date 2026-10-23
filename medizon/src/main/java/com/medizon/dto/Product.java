@@ -32,7 +32,9 @@ public class Product {
     public String getDescription() { return medicine.getDescription(); }
     public String getDosageForm() { return medicine.getDosageForm(); }
     public String getStrength() { return medicine.getStrength(); }
-    public int getUnitsPerPack() { return medicine.getUnitsPerPack(); }
+    public String getUnitsPerPack() { return medicine.getUnitsPerPack(); }
+    public int getUnitCount() { return medicine.getUnitCount(); }
+    public String getPackLabel() { return medicine.getPackLabel(); }
     public BigDecimal getMrp() { return medicine.getMrp(); }
     public boolean isPrescriptionRequired() { return medicine.isPrescriptionRequired(); }
     public boolean isReturnable() { return medicine.isReturnable(); }

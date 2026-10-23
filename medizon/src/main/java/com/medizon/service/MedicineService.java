@@ -1,7 +1,10 @@
 package com.medizon.service;
 
+import com.medizon.domain.Category;
 import com.medizon.domain.Medicine;
+import com.medizon.repository.CategoryRepository;
 import com.medizon.repository.MedicineRepository;
+import com.medizon.repository.StoreItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -16,9 +19,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /** The master catalogue: products as the admin defines them for every store. What shoppers see is {@link CatalogService}. */
@@ -29,9 +34,50 @@ public class MedicineService {
     public static final int PAGE_SIZE = 12;
     private final MedicineRepository medicines;
     private final FileStorageService fileStorage;
+    private final CategoryRepository categoryRepo;
+    private final StoreItemRepository storeItems;
 
-    /** Every category in the master catalogue, for the admin's product form. */
-    public List<String> categories() { return medicines.findActiveCategories(); }
+    /** Every category in the master catalogue A to Z, with those no product is in yet: for the admin's pages. */
+    public List<String> categories() {
+        return categoryRepo.findAllByOrderByNameAsc().stream().map(Category::getName).sorted(String.CASE_INSENSITIVE_ORDER).toList();
+    }
+
+    /** A new category for products to go in. Returns its name as saved. */
+    @Transactional
+    public String addCategory(String name) {
+        String n = tidy(name);
+        if (n.isEmpty()) throw new BusinessException("Enter a name for the category.");
+        if (n.length() > Category.MAX_NAME) throw new BusinessException("Keep the category name to " + Category.MAX_NAME + " characters.");
+        categoryRepo.findFirstByNameIgnoreCase(n).ifPresent(c -> {
+            throw new BusinessException(c.getName() + " is already a category.");
+        });
+        return categoryRepo.save(new Category(n)).getName();
+    }
+
+    /**
+     * The category as the catalogue spells it when one of {@code known} matches whatever the case ("pain & fever" is
+     * "Pain & Fever"), else the name with its spaces tidied.
+     */
+    public static String canonicalCategory(String name, Collection<String> known) {
+        String n = tidy(name);
+        return known.stream().filter(k -> k.equalsIgnoreCase(n)).findFirst().orElse(n);
+    }
+
+    private static String tidy(String name) { return name == null ? "" : name.trim().replaceAll("\\s+", " "); }
+
+    /** The product's category as the catalogue spells it, added to the categories when it's new. */
+    private String registerCategory(String name) {
+        String n = tidy(name);
+        if (n.isEmpty()) return name;
+        return categoryRepo.findFirstByNameIgnoreCase(n).map(Category::getName).orElseGet(() -> categoryRepo.save(new Category(n)).getName());
+    }
+
+    /** Categories from before they were kept on their own: every one a product is in becomes a category. */
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void registerMissingCategories() {
+        medicines.findAllCategories().forEach(this::registerCategory);
+    }
 
     public List<Medicine> allActive() { return medicines.findByActiveTrueOrderByNameAsc(); }
 
@@ -58,11 +104,16 @@ public class MedicineService {
         }
         m.setImageUrl(next);
         if (m.exceedsMrp(m.getPrice())) throw new BusinessException("The price can't be above the MRP.");
+        m.setCategory(registerCategory(m.getCategory()));
         // The code is never posted with the form: an edit keeps the product's code, a new product gets one once it has an id
         m.setProductCode(m.getId() == null ? null : medicines.findById(m.getId()).map(Medicine::getProductCode).orElse(null));
         Medicine saved = medicines.save(m);
         if (saved.getProductCode() == null) saved.setProductCode(productCode(saved.getId()));
         if (current != null && !current.equals(next)) fileStorage.deleteMedicineImage(current);
+        // Stores sell the product as it is now; a store price above a lowered MRP comes down to the MRP
+        if (m.getId() != null) {
+            storeItems.findByMedicine(saved).stream().filter(i -> saved.exceedsMrp(i.getPrice())).forEach(i -> i.setPrice(saved.getMrp()));
+        }
         return saved;
     }
 
@@ -76,12 +127,18 @@ public class MedicineService {
         medicines.findByProductCodeIsNull().forEach(m -> m.setProductCode(productCode(m.getId())));
     }
 
-    /** Products whose name or code contains {@code q} (any case); all of them when it's empty. */
+    /** Products whose name, code or category contains {@code q} (any case); all of them when it's empty. */
     public static boolean matches(Medicine m, String q) {
         if (q == null || q.isBlank()) return true;
-        String t = q.trim().toLowerCase(java.util.Locale.ROOT);
-        return m.getName().toLowerCase(java.util.Locale.ROOT).contains(t)
-                || (m.getProductCode() != null && m.getProductCode().toLowerCase(java.util.Locale.ROOT).contains(t));
+        String t = q.trim().toLowerCase(Locale.ROOT);
+        return m.getName().toLowerCase(Locale.ROOT).contains(t)
+                || (m.getProductCode() != null && m.getProductCode().toLowerCase(Locale.ROOT).contains(t))
+                || (m.getCategory() != null && m.getCategory().toLowerCase(Locale.ROOT).contains(t));
+    }
+
+    /** Products in {@code category} (any case); all of them when it's empty. */
+    public static boolean inCategory(Medicine m, String category) {
+        return category == null || category.isBlank() || category.trim().equalsIgnoreCase(m.getCategory());
     }
 
     /** The image stored for this medicine, or null for a new one. */

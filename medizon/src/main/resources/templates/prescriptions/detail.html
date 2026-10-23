@@ -113,7 +113,7 @@
                             <i class="bi" th:classappend="${m.icon}" aria-hidden="true"></i>
                             <span>
                                 <span class="d-block fw-semibold" th:text="${m.name}">Product</span>
-                                <span class="small text-muted" th:text="'₹' + ${#numbers.formatDecimal(m.price, 1, 'COMMA', 2, 'POINT')} + ' · pack of ' + ${m.unitsPerPack}"></span>
+                                <span class="small text-muted" th:text="'₹' + ${#numbers.formatDecimal(m.price, 1, 'COMMA', 2, 'POINT')} + ' · pack of ' + ${m.packLabel}"></span>
                             </span>
                         </a>
                         <span th:if="${s.canAdd}" class="small text-success text-nowrap" th:text="${s.packs} + ' pack(s)'"></span>

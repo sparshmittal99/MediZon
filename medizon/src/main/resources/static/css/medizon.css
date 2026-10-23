@@ -1212,3 +1212,12 @@ html.translated-ltr h1, html.translated-ltr h2, html.translated-ltr h3, html.tra
 .mz-import-cols { display: flex; flex-wrap: wrap; gap: .35rem; }
 .mz-import-col { padding: .2rem .6rem; border: 1px solid var(--mz-line); border-radius: 999px; font-size: .8rem; cursor: help; }
 .mz-import-col.is-required { border-color: var(--mz-green); background: var(--mz-mint); color: var(--mz-green); font-weight: 600; }
+
+/* ---------- Catalogue categories, and the changes an import would make ---------- */
+.mz-chip-count { margin-left: .35rem; color: var(--mz-muted); font-size: .78rem; }
+.mz-chip.is-empty { border-style: dashed; }
+.mz-category-filter { width: 12rem; max-width: 100%; }
+.mz-review-table td { word-break: break-word; }
+.mz-review-table .mz-review-now { color: var(--mz-muted); }
+.mz-review-table .mz-review-new { font-weight: 600; }
+@media (max-width: 575.98px) { .mz-category-filter { flex: 1 1 10rem; width: auto; } }

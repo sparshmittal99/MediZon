@@ -159,7 +159,7 @@ public class AssistantTools {
         out.put("category", p.getCategory());
         out.put("price", p.getPrice());
         out.put("mrp", p.getMrp());
-        out.put("pack", p.getUnitsPerPack() + " " + p.getUnitLabel());
+        out.put("pack", p.getPackLabel());
         out.put("in_stock", p.isInStock());
         out.put("rx", p.isPrescriptionRequired());
         out.put("url", "/medicines/" + p.getId());
@@ -258,7 +258,7 @@ public class AssistantTools {
         form.setDosePerIntake(Math.max(1, Math.min(args.path("dose").asInt(1), 10)));
         form.setTimes(times);
         int units = args.path("units_remaining").asInt(-1);
-        form.setUnitsRemaining(units < 0 ? m.getUnitsPerPack() : Math.min(units, 10_000));
+        form.setUnitsRemaining(units < 0 ? m.getUnitCount() : Math.min(units, 10_000));
         form.setReorderMode(ReorderMode.MANUAL);
         MedicationPlan p = planService.save(user, form);
         reorderService.evaluate(p.getId());

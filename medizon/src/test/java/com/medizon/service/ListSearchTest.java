@@ -60,4 +60,39 @@ class ListSearchTest {
         assertThat(MedicineService.matches(m, "crocin")).isFalse();
         assertThat(MedicineService.matches(m, null)).isTrue();
     }
+
+    @Test
+    void productsAreFoundByCategory() {
+        Medicine m = new Medicine();
+        m.setName("Dolo 650");
+        m.setCategory("Pain & Fever");
+        assertThat(MedicineService.matches(m, "fever")).isTrue();
+        assertThat(MedicineService.inCategory(m, "pain & fever")).isTrue();
+        assertThat(MedicineService.inCategory(m, "Pain")).isFalse();
+        assertThat(MedicineService.inCategory(m, "")).isTrue();
+        assertThat(MedicineService.canonicalCategory(" pain &  fever ", List.of("Diabetes", "Pain & Fever"))).isEqualTo("Pain & Fever");
+        assertThat(MedicineService.canonicalCategory("Skin  care", List.of("Diabetes"))).isEqualTo("Skin care");
+    }
+
+    @Test
+    void packsHoldACountOrAQuantity() {
+        Medicine tablets = new Medicine();
+        tablets.setUnitsPerPack(" 15 ");
+        assertThat(tablets.getUnitsPerPack()).isEqualTo("15");
+        assertThat(tablets.getUnitCount()).isEqualTo(15);
+        assertThat(tablets.getPackLabel()).isEqualTo("15 tablet(s)");
+        Medicine syrup = new Medicine();
+        syrup.setDosageForm("Syrup");
+        syrup.setUnitsPerPack("100  ml");
+        assertThat(syrup.getUnitCount()).isEqualTo(100);
+        assertThat(syrup.getPackLabel()).isEqualTo("100 ml");
+        jakarta.validation.Validator v = jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator();
+        assertThat(v.validateProperty(syrup, "unitsPerPack")).isEmpty();
+        syrup.setUnitsPerPack("30 g");
+        assertThat(v.validateProperty(syrup, "unitsPerPack")).isEmpty();
+        syrup.setUnitsPerPack("ml");
+        assertThat(v.validateProperty(syrup, "unitsPerPack")).isNotEmpty();
+        syrup.setUnitsPerPack("0");
+        assertThat(v.validateProperty(syrup, "unitsPerPack")).isNotEmpty();
+    }
 }

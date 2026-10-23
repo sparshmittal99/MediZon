@@ -51,9 +51,16 @@ public class Medicine {
 
     private String strength;
 
-    /** Tablets/capsules/ml per pack. Used to convert ordered packs into units at home. */
-    @Min(value = 1, message = "A pack holds at least 1 unit")
-    private int unitsPerPack = 10;
+    /**
+     * What one pack holds: a count of tablets or capsules ("10"), or a quantity with its unit ("100 ml", "30 g").
+     * Its number ({@link #getUnitCount()}) converts ordered packs into units at home.
+     */
+    @NotBlank(message = "Enter the units per pack")
+    @Size(max = 20, message = "Keep units per pack to 20 characters")
+    @Pattern(regexp = "\\d*[1-9]\\d*(\\.\\d+)?\\s*[A-Za-z]*\\.?",
+            message = "Units per pack is a number, with a unit if needed: 10, 100 ml or 30 g")
+    @Column(length = 20)
+    private String unitsPerPack = "10";
 
     /** Selling price for prescription medicines in every store, and the default for OTC ones. */
     @NotNull(message = "Enter a price")
@@ -112,6 +119,28 @@ public class Medicine {
         if (f.contains("drop")) return "drop(s)";
         if (f.contains("device") || f.contains("strip")) return "unit(s)";
         return f + "(s)";
+    }
+
+    /** Spaces trimmed and squeezed, so "100  ml " is stored as "100 ml". */
+    public void setUnitsPerPack(String unitsPerPack) {
+        this.unitsPerPack = unitsPerPack == null ? null : unitsPerPack.trim().replaceAll("\\s+", " ");
+    }
+
+    /** The number in {@link #unitsPerPack}: 10 for "10", 100 for "100 ml"; 1 when there is none. */
+    public int getUnitCount() {
+        java.util.regex.Matcher n = java.util.regex.Pattern.compile("\\d+").matcher(unitsPerPack == null ? "" : unitsPerPack);
+        if (!n.find()) return 1;
+        try {
+            return Math.max(1, Integer.parseInt(n.group()));
+        } catch (NumberFormatException e) {
+            return Integer.MAX_VALUE;
+        }
+    }
+
+    /** What a pack holds, for shoppers: "10 tablet(s)" for a plain count, "100 ml" or "30 g" as given otherwise. */
+    public String getPackLabel() {
+        if (unitsPerPack == null || unitsPerPack.isBlank()) return getUnitCount() + " " + getUnitLabel();
+        return unitsPerPack.matches("[\\d.]+") ? unitsPerPack + " " + getUnitLabel() : unitsPerPack;
     }
 
     /** Above MRP is never allowed: a store's OTC price, or the master price. */

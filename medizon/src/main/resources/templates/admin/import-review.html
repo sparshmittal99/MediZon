@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Review import')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-w-wide">
+    <a th:href="@{/admin/medicines}" class="small"><i class="bi bi-arrow-left"></i> Master catalogue</a>
+    <h1 class="mz-page-title mt-2 mb-1">Review changes from the import</h1>
+    <p class="small text-muted mb-4" th:text="${pending.reviews.size() == 1}
+        ? 'This product is already in the catalogue, and ' + ${pending.file} + ' says something different about it.'
+        : 'These ' + ${pending.reviews.size()} + ' products are already in the catalogue, and ' + ${pending.file} + ' says something different about them.'"></p>
+    <section th:replace="~{fragments/layout :: importReport}"></section>
+
+    <form th:action="@{/admin/medicines/import/review}" method="post">
+        <div class="mz-panel mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <p class="small mb-0">Choose, value by value, whether to update it or keep what's there. What you update changes the product
+                in every store and for shoppers straight away; a new category is added to the categories.</p>
+            <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-sm btn-outline-primary text-nowrap" type="submit" name="all" value="new">Update everything</button>
+                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="submit" name="all" value="keep">Keep everything as it is</button>
+            </div>
+        </div>
+
+        <section th:each="r, s : ${pending.reviews}" class="mz-panel mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
+                <h2 class="h6 mb-0"><span th:text="${r.name}">Dolo 650</span>
+                    <span class="mz-code ms-1" th:text="${r.code}">MZP00007</span></h2>
+                <span class="small text-muted" th:text="'Row ' + ${r.row.number} + ' of the file'">Row 4</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0 mz-review-table">
+                    <thead><tr><th style="width: 11rem">Value</th><th>Now</th><th>In the file</th><th class="text-end" style="width: 11rem">Use</th></tr></thead>
+                    <tbody>
+                    <tr th:each="c : ${r.changes}" th:with="field='take.' + ${s.index} + '.' + ${c.key}">
+                        <td class="fw-semibold" th:text="${c.label}">Price</td>
+                        <td class="mz-review-now" th:text="${c.current} ?: '–'">30</td>
+                        <td class="mz-review-new"><span th:text="${c.incoming} ?: '–'">32</span>
+                            <span th:if="${c.key == 'category' and c.incoming != null and !knownCategories.contains(#strings.toLowerCase(c.incoming))}"
+                                  class="badge text-bg-light border ms-1">New category</span></td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm" role="group" th:attr="aria-label=${c.label} + ' of ' + ${r.name}">
+                                <input type="radio" class="btn-check" th:name="${field}" value="keep" th:id="${field} + '.keep'">
+                                <label class="btn btn-outline-secondary" th:for="${field} + '.keep'">Keep</label>
+                                <input type="radio" class="btn-check" th:name="${field}" value="new" th:id="${field} + '.new'" checked>
+                                <label class="btn btn-outline-primary" th:for="${field} + '.new'">Update</label>
+                            </div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-primary" type="submit">Save my choices</button>
+            <a th:href="@{/admin/medicines}" class="btn btn-link">Decide later</a>
+        </div>
+        <p class="small text-muted mt-2 mb-0">Decide later keeps this review until you import another file or sign out.</p>
+    </form>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

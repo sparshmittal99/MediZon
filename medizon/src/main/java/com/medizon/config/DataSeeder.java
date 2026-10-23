@@ -59,6 +59,7 @@ public class DataSeeder implements CommandLineRunner {
         dropStaleEnumChecks();
         backfillInvoicePatients();
         relaxLegacyColumns();
+        unitsPerPackAsText();
         if (stores.count() == 0) {
             Store main = createMainStore();
             if (medicines.count() > 0) moveIntoStore(main);
@@ -124,6 +125,17 @@ public class DataSeeder implements CommandLineRunner {
     private void relaxLegacyColumns() {
         for (String column : new String[]{"stock", "expiry_date", "delivery_min_days", "delivery_max_days"}) {
             if (hasColumn("medicine", column)) jdbc.execute("alter table medicine alter column " + column + " drop not null");
+        }
+    }
+
+    /** Units per pack became text ("100 ml", "30 g"); schema updates don't change a column's type, so it's done here. */
+    private void unitsPerPackAsText() {
+        String type = jdbc.query("select data_type from information_schema.columns where table_name = 'medicine' and column_name = 'units_per_pack'",
+                rs -> rs.next() ? rs.getString(1) : null);
+        if (type != null && !type.contains("char")) {
+            // The old "at least 1" check compares a number, so it has to go before the column can hold text
+            jdbc.execute("alter table medicine drop constraint if exists medicine_units_per_pack_check");
+            jdbc.execute("alter table medicine alter column units_per_pack type varchar(20) using units_per_pack::text");
         }
     }
 
@@ -258,7 +270,7 @@ public class DataSeeder implements CommandLineRunner {
         m.setManufacturer(maker);
         m.setCategory(category);
         m.setDosageForm(form);
-        m.setUnitsPerPack(units);
+        m.setUnitsPerPack(String.valueOf(units));
         m.setPrice(new BigDecimal(price));
         m.setMrp(new BigDecimal(mrp));
         m.setPrescriptionRequired(rx);

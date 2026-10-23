@@ -228,7 +228,7 @@
     <div class="mz-med-body">
         <h3 class="mz-med-name"><a th:href="@{/medicines/{id}(id=${m.id})}" th:text="${m.name}">Name</a></h3>
         <p class="mz-med-meta" th:text="${m.manufacturer}">Maker</p>
-        <p class="mz-med-meta" th:text="'Pack of ' + ${m.unitsPerPack} + ' ' + ${m.unitLabel}">Pack</p>
+        <p class="mz-med-meta" th:text="'Pack of ' + ${m.packLabel}">Pack</p>
         <div class="mz-med-foot">
             <div>
                 <span class="mz-price" th:text="'₹' + ${#numbers.formatDecimal(m.price, 1, 'COMMA', 2, 'POINT')}">₹0</span>
@@ -385,7 +385,7 @@
         <div>
             <h2 class="h6 mb-1">Import from Excel, CSV or PDF</h2>
             <p class="small text-muted mb-0" th:text="${storeId == null}
-                ? 'Each row adds a product, or updates one with the same product code or exact name. New products get their code automatically.'
+                ? 'Each row adds a product; new products get their code automatically. For a product already here (same product code or exact name), you see what the file would change and choose before anything changes.'
                 : 'Each row is a master catalogue product, by product code or exact name, with the stock, expiry and price at this store. Products already here are updated.'"></p>
         </div>
         <a th:href="${template}" class="btn btn-sm btn-outline-secondary text-nowrap"><i class="bi bi-file-earmark-spreadsheet me-1" aria-hidden="true"></i>Download sheet</a>

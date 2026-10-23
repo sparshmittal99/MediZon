@@ -138,7 +138,7 @@ public class PrescriptionScanService {
                 .collect(Collectors.toMap(Product::getId, p -> p));
         return reading.medicines().stream().map(l -> {
             Product product = l.catalogId() == null ? null : products.get(l.catalogId());
-            return new Suggestion(l, product, product == null ? 1 : packs(l.unitsNeeded(), product.getUnitsPerPack()));
+            return new Suggestion(l, product, product == null ? 1 : packs(l.unitsNeeded(), product.getUnitCount()));
         }).toList();
     }
 
@@ -170,7 +170,7 @@ public class PrescriptionScanService {
                     .collect(Collectors.toMap(Medicine::getId, m -> m));
             for (PrescriptionReading.Line l : r.medicines()) {
                 Medicine m = l.catalogId() == null ? null : found.get(l.catalogId());
-                if (m != null) ai.merge(m.getId(), packs(l.unitsNeeded(), m.getUnitsPerPack()), Integer::sum);
+                if (m != null) ai.merge(m.getId(), packs(l.unitsNeeded(), m.getUnitCount()), Integer::sum);
             }
         });
         Map<Long, Integer> cart = p.getRequestedPacks();

@@ -26,7 +26,7 @@
                                 <a class="fw-semibold text-decoration-none" th:href="@{/medicines/{id}(id=${i.medicine.id})}" th:text="${i.medicine.name}">Name</a>
                                 <span th:if="${i.medicine.prescriptionRequired}" class="mz-rx position-static ms-1">Rx</span>
                                 <div class="small text-muted"><span data-mz-unit-price th:text="'₹' + ${i.unitPrice}"></span>
-                                    <span th:text="' per pack of ' + ${i.medicine.unitsPerPack}"></span></div>
+                                    <span th:text="' per pack of ' + ${i.medicine.packLabel}"></span></div>
                                 <!-- The store that sends this line: the nearest one with enough in stock -->
                                 <div class="small text-muted" th:if="${i.available}"><i class="bi bi-shop me-1" aria-hidden="true"></i>From
                                     <span data-mz-line-store th:text="${i.offer.store().name}"></span></div>

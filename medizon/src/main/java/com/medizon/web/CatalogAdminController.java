@@ -7,6 +7,7 @@ import com.medizon.domain.Store;
 import com.medizon.domain.StoreItem;
 import com.medizon.domain.User;
 import com.medizon.service.*;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -21,10 +22,11 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Catalogues. The admin keeps the master catalogue (every product, its MRP, tax details and the price prescription
@@ -53,29 +55,54 @@ public class CatalogAdminController {
 
     /**
      * A store account sees its own catalogue; the admin the master catalogue, or one store's with {@code store}.
-     * {@code q} narrows either to products whose name or product code contains it.
+     * {@code q} narrows either to products whose name, product code or category contains it, and {@code category}
+     * to the products in one category.
      */
     @GetMapping
-    public String list(@RequestParam(required = false) Long store, @RequestParam(required = false) String q, Model model) {
+    public String list(@RequestParam(required = false) Long store, @RequestParam(required = false) String q,
+                       @RequestParam(required = false) String category, HttpSession session, Model model) {
         User me = currentUser.get();
         Store s = storeService.scopeOf(me).orElse(store == null ? null : storeService.get(store));
         String term = q == null || q.isBlank() ? null : q.trim();
+        String cat = category == null || category.isBlank() ? null : category.trim();
         model.addAttribute("active", "medicines");
         model.addAttribute("stores", me.isAdmin() ? storeService.all() : List.of());
         model.addAttribute("q", term);
+        model.addAttribute("category", cat);
         if (s == null) {
-            model.addAttribute("medicines", medicineService.all().stream().filter(m -> MedicineService.matches(m, term)).toList());
+            List<Medicine> all = medicineService.all();
+            model.addAttribute("medicines", all.stream()
+                    .filter(m -> MedicineService.matches(m, term) && MedicineService.inCategory(m, cat)).toList());
+            model.addAttribute("categories", medicineService.categories());
+            model.addAttribute("categoryCounts", all.stream()
+                    .collect(Collectors.groupingBy(m -> m.getCategory().toLowerCase(Locale.ROOT), Collectors.counting())));
             model.addAttribute("coverage", storeCatalog.coverage());
             model.addAttribute("importColumns", CatalogImportService.MASTER);
+            model.addAttribute("pendingReview", session.getAttribute(REVIEW));
             return "admin/medicines";
         }
         List<StoreItem> items = storeCatalog.items(s);
         model.addAttribute("store", s);
-        model.addAttribute("items", items.stream().filter(i -> MedicineService.matches(i.getMedicine(), term)).toList());
+        model.addAttribute("items", items.stream()
+                .filter(i -> MedicineService.matches(i.getMedicine(), term) && MedicineService.inCategory(i.getMedicine(), cat)).toList());
+        model.addAttribute("categories", items.stream().map(i -> i.getMedicine().getCategory()).distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER).toList());
         model.addAttribute("itemCount", items.size());
         model.addAttribute("importColumns", CatalogImportService.STORE);
         model.addAttribute("lowBelow", StoreCatalogService.LOW_STOCK_BELOW);
         return "admin/store-catalog";
+    }
+
+    // ---------------------------------------------------------------- categories
+
+    /** The admin adds a category for products to go in. */
+    @PostMapping("/categories")
+    public String addCategory(@RequestParam(required = false) String name, RedirectAttributes ra) {
+        if (!currentUser.get().isAdmin()) throw new BusinessException("Only the admin adds categories.");
+        String added = medicineService.addCategory(name);
+        ra.addFlashAttribute("success", added + " added to the categories. Choose it for a product, or import products into it.");
+        ra.addFlashAttribute("openCategories", true);
+        return "redirect:/admin/medicines";
     }
 
     // ---------------------------------------------------------------- master products
@@ -165,11 +192,65 @@ public class CatalogAdminController {
 
     // ---------------------------------------------------------------- imports from Excel, CSV or PDF
 
-    /** The admin imports products into the master catalogue from a sheet. */
+    /** Products an import would change, kept in the admin's session until they choose what to change. */
+    public record PendingReview(String file, List<CatalogImportService.Review> reviews) implements Serializable { }
+
+    private static final String REVIEW = "catalogImportReview";
+
+    /**
+     * The admin imports products into the master catalogue from a sheet. New products are added straight away; when
+     * rows would change products already there, the admin reviews those changes first.
+     */
     @PostMapping("/import")
-    public String importMaster(@RequestParam(required = false) MultipartFile file, RedirectAttributes ra) {
+    public String importMaster(@RequestParam(required = false) MultipartFile file, HttpSession session, RedirectAttributes ra) {
         if (!currentUser.get().isAdmin()) throw new BusinessException("Only the admin imports into the master catalogue.");
-        return reported(catalogImport.importMaster(file), ra, "redirect:/admin/medicines");
+        CatalogImportService.Report report = catalogImport.importMaster(file);
+        if (report.reviews().isEmpty()) {
+            session.removeAttribute(REVIEW);
+            return reported(report, ra, "redirect:/admin/medicines");
+        }
+        session.setAttribute(REVIEW, new PendingReview(report.file(), report.reviews()));
+        ra.addFlashAttribute("success", report.getSummary() + " Choose what to change in the products already in the catalogue.");
+        ra.addFlashAttribute("importReport", report);
+        return "redirect:/admin/medicines/import/review";
+    }
+
+    /** Each product the import would change: every value it changes, as it is now and as the file has it. */
+    @GetMapping("/import/review")
+    public String reviewImport(HttpSession session, Model model, RedirectAttributes ra) {
+        if (!currentUser.get().isAdmin()) throw new BusinessException("Only the admin imports into the master catalogue.");
+        if (!(session.getAttribute(REVIEW) instanceof PendingReview pending)) {
+            ra.addFlashAttribute("success", "Nothing from an import is waiting for review.");
+            return "redirect:/admin/medicines";
+        }
+        model.addAttribute("active", "medicines");
+        model.addAttribute("pending", pending);
+        model.addAttribute("knownCategories", medicineService.categories().stream()
+                .map(c -> c.toLowerCase(Locale.ROOT)).collect(Collectors.toSet()));
+        return "admin/import-review";
+    }
+
+    /**
+     * Makes the changes the admin chose: {@code all} is "new" or "keep" for every change at once; otherwise each
+     * {@code take.<product>.<column>} of "new" takes the file's value. A product changes in every store at once.
+     */
+    @PostMapping("/import/review")
+    public String applyImportReview(@RequestParam Map<String, String> params, @RequestParam(required = false) String all,
+                                    HttpSession session, RedirectAttributes ra) {
+        if (!currentUser.get().isAdmin()) throw new BusinessException("Only the admin imports into the master catalogue.");
+        if (!(session.getAttribute(REVIEW) instanceof PendingReview pending)) {
+            ra.addFlashAttribute("error", "That review was already saved or has expired. Import the file again to review it.");
+            return "redirect:/admin/medicines";
+        }
+        Map<Integer, Set<String>> accepted = new HashMap<>();
+        for (int k = 0; k < pending.reviews().size(); k++) {
+            for (CatalogImportService.Change c : pending.reviews().get(k).changes()) {
+                boolean take = all != null ? all.equals("new") : "new".equals(params.get("take." + k + "." + c.key()));
+                if (take) accepted.computeIfAbsent(k, x -> new HashSet<>()).add(c.key());
+            }
+        }
+        session.removeAttribute(REVIEW);
+        return reported(catalogImport.applyReviews(pending.file(), pending.reviews(), accepted), ra, "redirect:/admin/medicines");
     }
 
     /** A store (or the admin, for any store) imports its stock, expiry and prices from a sheet. */

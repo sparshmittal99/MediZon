@@ -36,7 +36,7 @@
                         <option value="">Choose a medicine</option>
                         <option th:each="m : ${medicines}" th:value="${m.id}"
                                 th:attr="data-shelf=${shelfStock.getOrDefault(m.id, 0)},data-unit=${m.unitLabel},data-members=${medicineTakers.get(m.id)}"
-                                th:text="${m.name} + ' (pack of ' + ${m.unitsPerPack} + ' ' + ${m.unitLabel} + ')'"></option>
+                                th:text="${m.name} + ' (pack of ' + ${m.packLabel} + ')'"></option>
                     </select>
                     <div class="invalid-feedback" th:errors="*{medicineId}"></div>
                     <div class="form-text" data-mz-plan-medicine-hint>Medicines delivered for this person, and the common (OTC) medicines at home.</div>

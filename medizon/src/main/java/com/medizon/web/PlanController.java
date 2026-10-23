@@ -78,7 +78,7 @@ public class PlanController {
             form.setMedicineId(m.getId());
             // Medicines already on the common shelf are moved across on save, so start from what the person has of their own
             boolean onShelf = planService.shelfStock(user).getOrDefault(m.getId(), 0) > 0;
-            form.setUnitsRemaining(onShelf ? 0 : m.getUnitsPerPack());
+            form.setUnitsRemaining(onShelf ? 0 : m.getUnitCount());
             if (!onShelf) form.setExpiryDate(catalog.offer(m, deliveryLocations.pincode(request), 1).expiryDate());
         }
         return showForm(form, model);
