@@ -63,6 +63,9 @@ public class GlobalModelAdvice {
                 model.addAttribute("selectedAddressId", deliveryLocations.selectedAddressId(request));
             }
             model.addAttribute("me", u);
+            // The full chat button is only on the front page; elsewhere it's a small tab on the right edge
+            String path = request.getRequestURI().substring(request.getContextPath().length());
+            model.addAttribute("frontPage", path.equals("/") || path.equals("/admin") || path.equals("/admin/"));
             // The change this page is built from; the page reloads itself when a newer one arrives. Only for pages
             // a plain reload can repeat (not a form result shown straight from a POST).
             if ("GET".equals(request.getMethod())) model.addAttribute("liveVersion", liveUpdates.version(u));

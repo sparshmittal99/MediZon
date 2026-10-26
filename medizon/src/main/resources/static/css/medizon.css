@@ -396,6 +396,20 @@ body *::-webkit-scrollbar { display: none; }
 .mz-bot-launcher:hover { background: var(--mz-green-ink); transform: translateY(-2px); }
 .mz-bot-launcher-close, .mz-bot.is-open .mz-bot-launcher-open { display: none; }
 .mz-bot.is-open .mz-bot-launcher-close { display: inline; font-size: 1.15rem; }
+.mz-bot-launcher-tab { display: none; }
+
+/* Phones, off the front page: a slim tab on the right edge instead of the round button */
+@media (max-width: 767.98px) {
+    .mz-bot.is-tucked { right: 0; bottom: 5rem; }
+    .mz-bot.is-tucked .mz-bot-launcher { width: 1.6rem; height: 3.4rem; border-radius: .7rem 0 0 .7rem; font-size: 1rem;
+        opacity: .85; box-shadow: -2px 4px 12px rgba(14, 107, 87, .25); }
+    .mz-bot.is-tucked .mz-bot-launcher:hover { opacity: 1; width: 2rem; transform: none; }
+    .mz-bot.is-tucked .mz-bot-launcher-open, .mz-bot.is-tucked .mz-bot-teaser { display: none; }
+    .mz-bot.is-tucked .mz-bot-launcher-tab { display: inline; }
+    .mz-bot.is-tucked.is-open .mz-bot-launcher { display: none; }
+    .mz-bot.is-tucked .mz-bot-panel { right: 1rem; bottom: 0; }
+    body:has(.mz-bot.is-tucked) .mz-toasts { bottom: 1rem; }
+}
 
 .mz-bot-teaser { position: absolute; right: 0; bottom: 4.4rem; width: 16rem; background: #fff; border: 1px solid var(--mz-line);
     border-radius: 1rem 1rem .3rem 1rem; box-shadow: 0 8px 24px rgba(23, 48, 42, .14); display: flex; align-items: flex-start;
@@ -467,7 +481,7 @@ body *::-webkit-scrollbar { display: none; }
 
 @media (max-width: 575.98px) {
     .mz-bot { right: 1rem; bottom: 1rem; }
-    .mz-bot-panel { position: fixed; inset: 0; width: auto; height: auto; border-radius: 0; border: 0; }
+    .mz-bot-panel, .mz-bot.is-tucked .mz-bot-panel { position: fixed; inset: 0; width: auto; height: auto; border-radius: 0; border: 0; }
     .mz-bot.is-open .mz-bot-launcher { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -736,7 +736,7 @@
 
     <!-- MediZon Assistant: floating chat for signed-in users -->
     <th:block sec:authorize="hasAnyRole('CUSTOMER','ADMIN')">
-        <div class="mz-bot" id="mzBot" th:attr="data-first-name=${me != null} ? ${me.firstName} : '',
+        <div class="mz-bot" id="mzBot" th:classappend="${frontPage} ? '' : 'is-tucked'" th:attr="data-first-name=${me != null} ? ${me.firstName} : '',
              data-role=${me != null and me.admin} ? 'admin' : 'customer'">
             <div class="mz-bot-teaser" hidden>
                 <button type="button" class="mz-bot-teaser-text" data-mz-bot-open></button>
@@ -762,7 +762,7 @@
                 </form>
             </section>
             <button type="button" class="mz-bot-launcher" aria-controls="mzBotPanel" aria-expanded="false" aria-label="Open MediZon assistant">
-                <i class="bi bi-chat-dots-fill mz-bot-launcher-open"></i><i class="bi bi-x-lg mz-bot-launcher-close"></i>
+                <i class="bi bi-chat-dots-fill mz-bot-launcher-open"></i><i class="bi bi-chevron-left mz-bot-launcher-tab"></i><i class="bi bi-x-lg mz-bot-launcher-close"></i>
             </button>
         </div>
         <script th:src="@{/js/assistant.js}"></script>
