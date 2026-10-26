@@ -177,12 +177,14 @@
                             <i class="bi bi-geo-alt me-1" aria-hidden="true"></i><span
                                 th:text="${p.refillAddress != null} ? 'To ' + ${p.refillAddress.label} + ', ' + ${p.refillAddress.city} : 'To your default address'"></span>
                         </div>
-                        <div th:with="rs=${p.refillStatus}" th:if="${rs != null}" class="small fw-normal mt-1"
+                        <th:block th:with="rs=${p.refillStatus}"><!-- th:if runs before th:with, so they can't share an element -->
+                        <div th:if="${rs != null}" class="small fw-normal mt-1"
                              th:classappend="${rs.tone == 'danger'} ? 'text-danger' : (${rs.tone == 'warning'} ? 'text-warning-emphasis' : 'text-muted')">
                             <i th:if="${rs.tone != 'muted'}" class="bi bi-exclamation-circle me-1" aria-hidden="true"></i><span
                                 th:text="${rs.text}"></span>
                             <a th:if="${p.refillOrder != null}" th:href="@{/orders/{id}(id=${p.refillOrder.id})}" class="ms-1">View order</a>
                         </div>
+                        </th:block>
                     </div>
 
                     <div class="mt-auto d-flex flex-wrap gap-2">
