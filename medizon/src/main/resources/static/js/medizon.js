@@ -563,7 +563,11 @@
         const btn = e.target.closest('.mz-qty-btn');
         if (!btn) return;
         const box = btn.closest('[data-mz-cart]');
-        setQty(box, Number(box.dataset.qty || 0) + Number(btn.dataset.step));
+        const qty = Number(box.dataset.qty || 0) + Number(btn.dataset.step);
+        // On the cart page, going below 1 is the same as the row's remove button
+        const remove = qty <= 0 && box.closest('[data-mz-cart-row]')?.querySelector('.mz-cart-remove form');
+        if (remove) { btn.disabled = true; remove.requestSubmit(); return; }
+        setQty(box, qty);
     });
 
     // ---- AI prescription reading takes a few seconds: say so on the button ----
