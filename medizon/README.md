@@ -142,6 +142,7 @@ pickup range, refund days), a sales and returns report (a date range, a month or
 
 - A reminder counts the dose as taken. Tapping **Skip** adds it back, so the count stays right even if the customer never taps anything.
 - `reorderPending` makes sure there is one alert or one auto order per low-supply cycle. It clears when the refill is delivered or the customer edits the plan's supply.
+- The plan links its refill order (`refillOrder`: the automatic one, or one the customer placed after the alert), and the card shows that order's live status (ordered, on the way, cancelled). A blocked automatic refill keeps a short reason (`reorderIssue`) and is retried on every check, and when a prescription is approved, without alerting again.
 - A daily 9 AM sweep clears expired stock, switches off courses that have no dose days left, and re-checks every plan.
 - Each cart line records how many packs each person gets. On delivery the units go to those members' plans in the
   same proportion (`domain/Shares` splits them so they always add up; older orders without per-person packs are

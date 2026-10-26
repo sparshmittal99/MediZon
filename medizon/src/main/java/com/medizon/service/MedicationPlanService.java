@@ -174,7 +174,7 @@ public class MedicationPlanService {
             p.setActive(true);
         }
         int moved = form.isTakeFromCommon() ? moveFromShelf(user, p) : 0;
-        if (!p.isRunningLow()) p.setReorderPending(false);   // edited supply re-arms alerts
+        if (!p.isRunningLow()) p.clearRefill();   // edited supply re-arms alerts
         return new Saved(plans.save(p), moved);
     }
 
@@ -192,7 +192,7 @@ public class MedicationPlanService {
         p.setUnitsRemaining(form.getUnitsRemaining());
         p.setExpiryDate(form.getExpiryDate());
         p.setReorderMode(ReorderMode.OFF);
-        p.setReorderPending(false);
+        p.clearRefill();
         p.setSetupRequired(false);
         p.setActive(true);
         return plans.save(p);
@@ -449,7 +449,7 @@ public class MedicationPlanService {
                 if (existing.isPresent()) {
                     MedicationPlan p = existing.get();
                     p.addSupply(shares[i], item.getExpiryDate());
-                    p.setReorderPending(false);
+                    p.clearRefill();
                     continue;
                 }
                 MedicationPlan p = new MedicationPlan();

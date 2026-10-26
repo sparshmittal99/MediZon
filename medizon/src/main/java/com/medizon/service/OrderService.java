@@ -179,22 +179,34 @@ public class OrderService {
     // ------------------------------------------------------------------ auto refill
 
     /** Why an auto-refill can't be placed right now, or empty if it can. Never throws. */
-    public Optional<String> autoReorderBlocker(MedicationPlan plan) {
+    /** Why an automatic refill can't be placed: the full reason for the alert, and a short status for the plan card. */
+    public record ReorderBlocker(String reason, String status) {}
+
+    public Optional<ReorderBlocker> autoReorderBlocker(MedicationPlan plan) {
         User user = plan.getUser();
         Medicine m = plan.getMedicine();
         Address ship = refillAddress(plan);
-        if (ship == null) return Optional.of("there's no saved delivery address");
-        if (!deliveryAreas.isServiceable(ship.getPincode())) return Optional.of("we don't deliver to PIN code " + ship.getPincode() + " yet");
-        if (!m.isActive()) return Optional.of(m.getName() + " is no longer sold on MediZon");
+        if (ship == null) return blocked("there's no saved delivery address",
+                "No delivery address. Add one to refill");
+        if (!deliveryAreas.isServiceable(ship.getPincode())) return blocked("we don't deliver to PIN code " + ship.getPincode() + " yet",
+                "We don't deliver to " + ship.getPincode() + " yet");
+        if (!m.isActive()) return blocked(m.getName() + " is no longer sold on MediZon", "No longer sold on MediZon");
         Offer offer = catalog.offer(m, ship.getPincode(), Math.max(1, plan.getReorderPacks()));
-        if (!offer.isListed()) return Optional.of(m.getName() + " isn't sold by the stores that deliver to " + ship.getPincode());
-        if (!offer.canSell(Math.max(1, plan.getReorderPacks()))) return Optional.of(m.getName() + " is out of stock for delivery to " + ship.getPincode());
+        if (!offer.isListed()) return blocked(m.getName() + " isn't sold by the stores that deliver to " + ship.getPincode(),
+                "Not sold by stores near " + ship.getPincode());
+        if (!offer.canSell(Math.max(1, plan.getReorderPacks()))) return blocked(m.getName() + " is out of stock for delivery to " + ship.getPincode(),
+                "Out of stock. We'll refill when it's back");
         if (m.isPrescriptionRequired() && !prescriptionService.cover(user, List.of(new PrescriptionService.RxLine(m,
                 Math.max(1, plan.getReorderPacks()), patientOf(plan.getMember())))).isComplete()) {
-            return Optional.of("there's no approved prescription with " + Math.max(1, plan.getReorderPacks()) + " pack(s) of "
-                    + m.getName() + " left on it. Upload a new prescription");
+            return blocked("there's no approved prescription with " + Math.max(1, plan.getReorderPacks()) + " pack(s) of "
+                    + m.getName() + " left on it. Upload a new prescription",
+                    "Rx medicine: upload a valid prescription to refill");
         }
         return Optional.empty();
+    }
+
+    private static Optional<ReorderBlocker> blocked(String reason, String status) {
+        return Optional.of(new ReorderBlocker(reason, status));
     }
 
     @Transactional

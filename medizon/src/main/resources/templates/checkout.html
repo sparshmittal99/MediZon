@@ -104,7 +104,6 @@
                     <span class="mz-addr-pick-body">
                         <strong><i class="bi bi-wallet2 me-1" aria-hidden="true"></i>MediZon Money</strong>
                         <span class="d-block small" th:text="'Balance ₹' + ${#numbers.formatDecimal(walletBalance, 1, 'COMMA', 2, 'POINT')}"></span>
-                        <span class="d-block small text-muted" th:if="${walletBalance.signum() == 0}">Refunds you take as MediZon Money show up here.</span>
                     </span>
                 </label>
                 <p class="small text-success mb-2" data-mz-wallet-covers hidden><i class="bi bi-check-circle me-1"></i>MediZon Money covers the whole order.</p>

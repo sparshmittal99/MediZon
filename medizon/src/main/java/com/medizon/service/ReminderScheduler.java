@@ -57,6 +57,12 @@ public class ReminderScheduler {
         }
     }
 
+    /** On startup, so refill statuses are current: blocked automatic refills retry and orders placed by hand get linked. */
+    @EventListener(ApplicationReadyEvent.class)
+    public void refreshRefills() {
+        planService.activePlanIds().forEach(this::safeEvaluate);
+    }
+
     private void safeEvaluate(Long planId) {
         try {
             reorderService.evaluate(planId);

@@ -480,7 +480,11 @@
             const data = await res.json();
             if (!res.ok) { qtyError(box, data.error || 'Could not update your cart.'); return; }
             const msg = data.quantity > before ? 'Added to cart' : 'Cart updated';
-            document.querySelectorAll(`[data-mz-cart="${box.dataset.mzCart}"]`).forEach(b => renderQty(b, data.quantity, msg));
+            // A cart-page row at zero is removed outright, never turned back into an "Add" button
+            document.querySelectorAll(`[data-mz-cart="${box.dataset.mzCart}"]`).forEach(b => {
+                if (data.quantity === 0 && b.closest('[data-mz-cart-row]')) return;
+                renderQty(b, data.quantity, msg);
+            });
             setBadge('mzCartCount', data.cartCount);
             updateCartPage(box, data);
         } catch (e) {
@@ -494,8 +498,9 @@
     function updateCartPage(box, data) {
         const summary = document.querySelector('[data-mz-cart-summary]');
         if (!summary) return;
-        if (data.empty) { location.reload(); return; }      // shows the "cart is empty" state
         const row = box.closest('[data-mz-cart-row]');
+        if (row && data.quantity === 0) row.remove();
+        if (data.empty) { location.reload(); return; }      // shows the "cart is empty" state
         // A line that couldn't be delivered, or one that now moves to another store, is simplest shown fresh
         if (row && data.quantity > 0 && (row.classList.contains('mz-cart-unavailable') || !data.store)) { location.reload(); return; }
         const deliveries = summary.querySelector('[data-mz-deliveries]');
@@ -504,8 +509,7 @@
             deliveries.querySelector('span').textContent = `Comes from ${data.shipmentCount} stores, as separate orders paid for together.`;
         }
         if (row) {
-            if (data.quantity === 0) row.remove();
-            else row.querySelector('[data-mz-line-total]').textContent = rupees(data.lineTotal);
+            if (data.quantity > 0) row.querySelector('[data-mz-line-total]').textContent = rupees(data.lineTotal);
             const unit = row.querySelector('[data-mz-unit-price]');
             if (unit && data.unitPrice != null) unit.textContent = rupees(data.unitPrice);
             const store = row.querySelector('[data-mz-line-store]');

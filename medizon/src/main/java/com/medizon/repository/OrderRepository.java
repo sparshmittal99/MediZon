@@ -62,6 +62,11 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     @Query("select i.medicine.id, m from CustomerOrder o join o.items i left join i.members m where o.user = :user and o.status = :status")
     List<Object[]> medicineMembers(@Param("user") User user, @Param("status") OrderStatus status);
 
+    /** The account's orders containing this medicine since {@code since}, newest first. */
+    @Query("select distinct o from CustomerOrder o join o.items i where o.user = :user and i.medicine = :medicine and o.createdAt >= :since order by o.createdAt desc")
+    List<Order> withMedicineSince(@Param("user") User user, @Param("medicine") com.medizon.domain.Medicine medicine,
+                                  @Param("since") LocalDateTime since);
+
     /** Rows of [userId, orderCount] for the admin user list. */
     @Query("select o.user.id, count(o) from CustomerOrder o group by o.user.id")
     List<Object[]> countPerUser();

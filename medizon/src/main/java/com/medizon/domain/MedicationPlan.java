@@ -111,6 +111,36 @@ public class MedicationPlan {
 
     private LocalDateTime lastReorderAt;
 
+    /** Short reason the automatic refill can't be placed yet; empty once it's ordered. */
+    private String reorderIssue;
+
+    /** The order that refills this low-supply cycle: the automatic one, or one the customer placed after the alert. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Order refillOrder;
+
+    /** Re-arms alerts and automatic refills for the next time supply runs low. */
+    public void clearRefill() {
+        reorderPending = false;
+        reorderIssue = null;
+        refillOrder = null;
+    }
+
+    /** The refill line on the plan's card: short text, and "muted", "warning" or "danger" for its colour. */
+    public record RefillStatus(String text, String tone) {}
+
+    public RefillStatus getRefillStatus() {
+        if (!reorderPending || reorderMode == ReorderMode.OFF) return null;
+        if (refillOrder != null) return switch (refillOrder.getStatus()) {
+            case PLACED, CONFIRMED -> new RefillStatus("Refill ordered on "
+                    + refillOrder.getCreatedAt().format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)), "muted");
+            case SHIPPED -> new RefillStatus("Refill on the way", "muted");
+            case DELIVERED -> new RefillStatus("Refill delivered", "muted");
+            case CANCELLED -> new RefillStatus("Refill cancelled. Reorder when you're ready", "warning");
+        };
+        if (reorderMode == ReorderMode.MANUAL) return new RefillStatus("Running low. Reorder soon", "warning");
+        return new RefillStatus(reorderIssue != null ? reorderIssue : "Refill pending", reorderIssue != null ? "danger" : "muted");
+    }
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public boolean isExpired() { return expiryDate != null && expiryDate.isBefore(LocalDate.now()); }
