@@ -69,7 +69,8 @@ public class AssistantService {
         if (user.isStaff() && !user.isAdmin()) {
             return new Result(AssistantReply.text("The assistant helps customers and the admin. Your account's pages are in the menu above."), state);
         }
-        if (llmAskedLast && isFollowUp(message)) {
+        // Sales figures and order look-ups for the admin: only the LLM has those tools
+        if (llmAskedLast && isFollowUp(message) || ChatFallback.aboutSales(user, message)) {
             Optional<ChatFallback.Answer> answer = llm.answer(user, message, history);
             if (answer.isPresent()) return new Result(reply(user, answer.get()), state, true);
         }

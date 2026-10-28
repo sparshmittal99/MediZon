@@ -45,8 +45,14 @@ public class ChatFallback {
     private static final int MAX_ROUNDS = 4;
     /** Tool results are cut to this many characters, to keep each request well inside Groq's tokens per minute. */
     private static final int MAX_RESULT = 3000;
-    /** The review digest is bigger: the comments are what the admin wants analysed. */
+    /** The review digest and sales report are bigger: comments and day-by-day rows are what the admin asked for. */
     private static final int MAX_REVIEW_RESULT = 7000;
+    private static final Set<String> BIG_RESULTS = Set.of("review_digest", "sales_report");
+    /** An admin question about sales or a particular order: the LLM answers it (Python has no sales figures). */
+    private static final Pattern ABOUT_SALES = Pattern.compile(
+            "sales?\\b|sold|revenue|turnover|income|earning|refund|best.?sell|top.?sell|\\bnet\\b|\\bfy\\b|financial year"
+                    + "|\\border (no|number|#)|\\bMZ\\d{6,}",
+            Pattern.CASE_INSENSITIVE);
     /** An admin question about reviews or feedback: Gemini, which can't call tools, gets the digest with it. */
     private static final Pattern ABOUT_REVIEWS = Pattern.compile(
             "review|feedback|rating|star|complain|complaint|sentiment|unhappy|happy|customers? (say|think|like|want)|improve",
@@ -90,7 +96,7 @@ public class ChatFallback {
 
     private static final String ADMIN = """
             You are the chat assistant of MediZon, an online pharmacy in India, talking to the store's admin, %s.
-            You can't see orders, sales or stock here. For numbers point them to Admin pages: Orders /admin/orders, Sales
+            You can't see orders or stock here. For numbers point them to Admin pages: Orders /admin/orders, Sales
             /admin/sales, Catalog /admin/medicines, Prescriptions /admin/prescriptions, Reviews /admin/reviews,
             Monitoring /admin/monitoring. Help with general pharmacy operations and how to use MediZon.
             Never make up figures. Plain text, no markdown, at most 120 words.
@@ -106,6 +112,15 @@ public class ChatFallback {
             REVIEW DATA: %s
             """;
 
+    /** Added to Gemini's admin prompt when the question is about sales. */
+    private static final String ADMIN_SALES = """
+            The admin is asking about sales. Here are the figures, as JSON: each usual period (and each store's month
+            so far) in one line of orders, sales in rupees, refunds and returns. Sales include GST and delivery and
+            leave out cancelled orders; net revenue is sales minus refunds. Answer from these only; for another day,
+            range or store, or a single order, point them to Sales /admin/sales or Orders /admin/orders.
+            SALES DATA: %s
+            """;
+
     private static final String ADMIN_TOOLS = """
             You are the chat assistant of MediZon, an online pharmacy in India, talking to the store's admin, %s.
             It is now %s (India time).
@@ -113,8 +128,12 @@ public class ChatFallback {
             revenue), the catalogue and the admin's own reminders. To read or analyse customer reviews and feedback,
             call review_digest (rating to see only 1★ or 5★ ones, days for another period) and analyse what it returns:
             the overall picture and trend, recurring complaints and praise (how many comments mention each, quote a few
-            words), and two to four concrete improvements; up to 250 words for that. Never make up figures or comments:
-            look them up. For anything
+            words), and two to four concrete improvements; up to 250 words for that. For sales, orders, refunds and
+            net revenue of any day, date range, month or financial year (April to March), for all stores or one, and
+            the best-selling medicines, call sales_report; work out dates from today (e.g. "last Tuesday", "Sept") and
+            pass from and to as yyyy-MM-dd, or month, or fy. Sales include GST and delivery and leave out cancelled
+            orders; net revenue is sales minus refunds. For one order by its number (MZ...), call find_order. Give the
+            figures in rupees and add the report's url. Never make up figures or comments: look them up. For anything
             else point them to Admin pages: Orders /admin/orders, Sales /admin/sales, Catalog /admin/medicines,
             Prescriptions /admin/prescriptions, Reviews /admin/reviews, Monitoring /admin/monitoring.
             Plain text, no markdown, at most 120 words.
@@ -139,10 +158,26 @@ public class ChatFallback {
                 .map(a -> new Answer(a.length() > MAX_REPLY ? a.substring(0, MAX_REPLY) + "…" : a, cartChanged[0]));
     }
 
-    /** Gemini can't look anything up, so an admin's question about reviews comes with the review digest. */
+    /** An admin asking about sales or an order, which only the LLM can answer. */
+    public static boolean aboutSales(User user, String message) {
+        return user.isAdmin() && message != null && ABOUT_SALES.matcher(message).find();
+    }
+
+    /**
+     * Gemini can't look anything up, so an admin's question about reviews comes with the review digest, and one about
+     * sales with the usual periods' sales.
+     */
     private String geminiPrompt(User user, String message) {
         if (!user.isAdmin()) return CUSTOMER.formatted(user.getFirstName());
         String prompt = ADMIN.formatted(user.getFirstName());
+        if (ABOUT_SALES.matcher(message).find()) {
+            try {
+                return prompt + ADMIN_SALES.formatted(json.writeValueAsString(tools.salesSnapshot()));
+            } catch (Exception e) {
+                log.warn("Couldn't read sales for the chat: {}", e.toString());
+                return prompt;
+            }
+        }
         if (!ABOUT_REVIEWS.matcher(message).find()) return prompt;
         try {
             String digest = json.writeValueAsString(tools.reviewDigest(null, AssistantTools.DIGEST_DAYS));
@@ -180,7 +215,7 @@ public class ChatFallback {
                     JsonNode result = run(name, call.path("function").path("arguments").asText("{}"), user);
                     if (CART_TOOLS.contains(name) && !result.has("error")) cartChanged[0] = true;
                     String out = result.toString();
-                    int max = "review_digest".equals(name) ? MAX_REVIEW_RESULT : MAX_RESULT;
+                    int max = BIG_RESULTS.contains(name) ? MAX_REVIEW_RESULT : MAX_RESULT;
                     messages.addObject().put("role", "tool").put("tool_call_id", call.path("id").asText())
                             .put("content", out.length() > max ? out.substring(0, max) + "…(cut)" : out);
                 }
@@ -258,6 +293,16 @@ public class ChatFallback {
                             + "and the newest comments.",
                     "rating", "integer", "Optional: only reviews with this many stars, 1 to 5", false,
                     "days", "integer", "Optional: how many days back, default 90", false);
+            tool(t, "sales_report", "Sales, orders, refunds and net revenue for a day, date range, month or financial "
+                            + "year, all stores or one: totals, each store's share, top medicines and the days or months. "
+                            + "Give from (and to), or month, or fy; nothing means the last 30 days.",
+                    "from", "string", "First day, yyyy-MM-dd; alone it means just that day", false,
+                    "to", "string", "Last day, yyyy-MM-dd", false,
+                    "month", "string", "A month, yyyy-MM", false,
+                    "fy", "string", "A financial year (April to March), e.g. 2026-27", false,
+                    "store", "string", "Optional store name; leave out for all stores", false);
+            tool(t, "find_order", "One order by its number: customer, store, status, payment, items and totals.",
+                    "order_number", "string", "Order number, e.g. MZ26102812345", true);
         } else {
             tool(t, "medicine_details", "Details of one medicine by id (from search_medicines).",
                     "id", "integer", "Medicine id", true);

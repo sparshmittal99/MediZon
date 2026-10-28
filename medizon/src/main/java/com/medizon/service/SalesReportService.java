@@ -200,6 +200,22 @@ public class SalesReportService {
         return out;
     }
 
+    /** A medicine's packs and sales in a period. */
+    public record MedicineSales(String name, long packs, BigDecimal sales) {}
+
+    /** The best-selling medicines in the period by sales, cancelled orders left out; a null store means all of them. */
+    public List<MedicineSales> topMedicines(LocalDate from, LocalDate to, Long storeId, int limit) {
+        Date start = Date.valueOf(from), end = Date.valueOf(to.plusDays(1));
+        String store = storeId == null ? "" : " and o.store_id = ?";
+        Object[] args = storeId == null ? new Object[]{start, end, limit} : new Object[]{start, end, storeId, limit};
+        return jdbc.query("""
+                select i.medicine_name as name, coalesce(sum(i.quantity), 0) as packs, coalesce(sum(i.line_total), 0) as sales
+                from order_item i join orders o on o.id = i.order_id
+                where o.status <> 'CANCELLED' and o.created_at >= ? and o.created_at < ?""" + store
+                        + " group by 1 order by 3 desc, 2 desc limit ?",
+                (rs, n) -> new MedicineSales(rs.getString("name"), rs.getLong("packs"), rs.getBigDecimal("sales")), args);
+    }
+
     private Map<LocalDate, SalesDay> collect(LocalDate from, LocalDate to, Long storeId) {
         Date start = Date.valueOf(from), end = Date.valueOf(to.plusDays(1));
         Map<LocalDate, SalesDay> days = new TreeMap<>();

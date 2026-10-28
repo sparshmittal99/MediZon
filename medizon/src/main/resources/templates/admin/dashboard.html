@@ -41,10 +41,10 @@
             <h2 class="mz-section-title mb-0 me-auto">Sales by store</h2>
             <a class="btn btn-sm btn-outline-secondary" th:href="@{/admin(storeDay=${storeDay.minusDays(1)})} + '#store-sales'"
                aria-label="Previous day"><i class="bi bi-chevron-left"></i></a>
-            <form th:action="@{/admin}" method="get" class="d-flex align-items-center gap-2">
+            <form th:action="@{/admin} + '#store-sales'" method="get" class="d-flex align-items-center gap-2">
                 <label class="visually-hidden" for="storeDay">Day</label>
                 <input class="form-control form-control-sm" type="date" id="storeDay" name="storeDay" th:value="${storeDay}"
-                       th:max="${#temporals.format(#temporals.createToday(), 'yyyy-MM-dd')}" onchange="this.form.submit()">
+                       th:max="${#temporals.format(#temporals.createToday(), 'yyyy-MM-dd')}" data-mz-autosubmit>
                 <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Show</button></noscript>
             </form>
             <a th:unless="${storeDayIsToday}" class="btn btn-sm btn-outline-secondary"

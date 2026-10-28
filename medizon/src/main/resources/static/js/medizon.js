@@ -39,6 +39,9 @@
     // ---- no inline handlers (the Content-Security-Policy blocks them): filters that apply on change, print buttons ----
     document.addEventListener('change', (e) => {
         if (e.target.matches && e.target.matches('select[data-mz-autosubmit]')) e.target.form.submit();
+        // a date picker: only once a whole, valid day is chosen (typing fires change part-way through)
+        if (e.target.matches && e.target.matches('input[type="date"][data-mz-autosubmit]') && e.target.value
+            && e.target.checkValidity()) e.target.form.submit();
     });
     document.addEventListener('click', (e) => {
         if (e.target.closest && e.target.closest('[data-mz-print]')) window.print();

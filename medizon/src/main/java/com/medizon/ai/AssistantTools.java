@@ -5,6 +5,8 @@ import com.medizon.domain.*;
 import com.medizon.dto.CartSummary;
 import com.medizon.dto.PlanForm;
 import com.medizon.dto.Product;
+import com.medizon.dto.ReportPeriod;
+import com.medizon.dto.SalesDay;
 import com.medizon.repository.FeedbackRepository;
 import com.medizon.repository.OrderRepository;
 import com.medizon.repository.PrescriptionRepository;
@@ -12,17 +14,21 @@ import com.medizon.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 /**
  * Actions the assistant can ask for. Every call runs as the signed-in user, so it can only see and change
  * that user's own data, and each role gets its own set: customers shop and manage reminders, admins read
- * store data and reviews.
+ * store data, sales, any order and reviews.
  */
 @Component
 @RequiredArgsConstructor
@@ -32,7 +38,7 @@ public class AssistantTools {
             "cart_summary", "my_orders", "my_returns", "my_plans", "todays_doses", "create_plan", "mark_dose", "refill_plan",
             "submit_feedback", "create_reminder", "list_reminders", "complete_reminder");
     private static final Set<String> ADMIN = Set.of("search_medicines", "store_tasks", "review_data", "review_digest",
-            "create_reminder", "list_reminders", "complete_reminder");
+            "sales_report", "find_order", "create_reminder", "list_reminders", "complete_reminder");
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM");
     private static final int MAX_RESULTS = 8;
@@ -40,6 +46,11 @@ public class AssistantTools {
     static final int DIGEST_DAYS = 90;
     private static final int DIGEST_COMMENTS = 25;
     private static final int DIGEST_CHARS = 140;
+    /** A sales report lists every day up to this long a period, month by month beyond it. */
+    private static final int SALES_DAILY_DAYS = 31;
+    private static final int TOP_MEDICINES = 5;
+    private static final DateTimeFormatter DAY_YEAR = DateTimeFormatter.ofPattern("d MMM yyyy");
+    private static final DateTimeFormatter PLACED = DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a");
 
     private final MedicineService medicineService;
     private final CatalogService catalog;
@@ -54,6 +65,8 @@ public class AssistantTools {
     private final FeedbackService feedbackService;
     private final ReviewService reviewService;
     private final ReturnService returnService;
+    private final SalesReportService salesReport;
+    private final StoreService storeService;
     private final OrderRepository orderRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final FeedbackRepository feedbackRepository;
@@ -103,6 +116,8 @@ public class AssistantTools {
             case "review_data" -> reviewData();
             case "review_digest" -> reviewDigest(args.hasNonNull("rating") ? args.get("rating").asInt() : null,
                     args.path("days").asInt(DIGEST_DAYS));
+            case "sales_report" -> salesReport(args);
+            case "find_order" -> findOrder(args.path("order_number").asText(""));
             default -> Map.of("error", "Unknown action " + name);
         };
     }
@@ -345,6 +360,142 @@ public class AssistantTools {
     private static String cut(String text) {
         String t = text.strip().replaceAll("[\\s]+", " ");
         return t.length() > DIGEST_CHARS ? t.substring(0, DIGEST_CHARS) + "…" : t;
+    }
+
+    /**
+     * Sales, orders and returns for a day, a range, a month or a financial year, all stores or one, as on the Sales
+     * page: the totals, each store's share, the best sellers and the days (or months, for long periods) with activity.
+     */
+    private Object salesReport(JsonNode args) {
+        LocalDate from = date(args, "from"), to = date(args, "to");
+        if (from != null && to == null) to = from;
+        YearMonth month = null;
+        if (!args.path("month").asText("").isBlank()) {
+            try {
+                month = YearMonth.parse(args.get("month").asText().trim());
+            } catch (DateTimeParseException e) {
+                throw new BusinessException("Give the month as yyyy-MM.");
+            }
+        }
+        String fy = args.path("fy").asText("").trim();
+        String kind = !fy.isEmpty() ? "fy" : month != null ? "month" : "range";
+        ReportPeriod p = salesReport.resolve(kind, from, to, month, fy.isEmpty() ? null : fy);
+
+        Store store = null;
+        String wanted = args.path("store").asText("").trim();
+        if (!wanted.isEmpty()) {
+            List<Store> stores = storeService.all();
+            store = stores.stream().filter(s -> s.getId().toString().equals(wanted) || s.getName().equalsIgnoreCase(wanted))
+                    .findFirst().or(() -> stores.stream().filter(s -> contains(s.getName(), wanted.toLowerCase())).findFirst())
+                    .orElse(null);
+            if (store == null) {
+                return Map.of("error", "No store called " + wanted, "stores", stores.stream().map(Store::getName).toList());
+            }
+        }
+        Long storeId = store == null ? null : store.getId();
+        boolean daily = p.getDays() <= SALES_DAILY_DAYS;
+        List<SalesDay> rows = daily ? salesReport.daily(p.getFrom(), p.getTo(), storeId) : salesReport.monthly(p.getFrom(), p.getTo(), storeId);
+        SalesDay total = SalesDay.total(rows);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("period", p.getLabel());
+        out.put("from", p.getFrom().toString());
+        out.put("to", p.getTo().toString());
+        out.put("store", store == null ? "All stores" : store.getName());
+        out.put("totals", figures(total));
+        if (store == null) {
+            out.put("by_store", salesReport.byStore(p.getFrom(), p.getTo()).stream().filter(s -> !s.totals().isEmpty())
+                    .map(s -> s.name() + ": " + line(s.totals()) + ", " + s.shareOf(total.getSales()) + "% of sales").toList());
+        }
+        out.put("top_medicines", salesReport.topMedicines(p.getFrom(), p.getTo(), storeId, TOP_MEDICINES).stream()
+                .map(m -> m.name() + ": " + m.packs() + " pack(s), ₹" + money(m.sales())).toList());
+        if (!p.isSingleDay()) {
+            out.put(daily ? "days" : "months", rows.stream().filter(d -> !d.isEmpty())
+                    .map(d -> (daily ? d.getDay().format(DAY_YEAR) : d.getMonth().toString()) + ": " + line(d)).toList());
+        }
+        String query = switch (p.getKind()) {
+            case FY -> "period=fy&fy=" + p.getFy();
+            case MONTH -> "period=month&month=" + p.getMonth();
+            case RANGE -> "from=" + p.getFrom() + "&to=" + p.getTo();
+        };
+        out.put("url", "/admin/sales?" + query + (storeId == null ? "" : "&store=" + storeId));
+        return out;
+    }
+
+    /**
+     * The usual periods' totals in one go, for an LLM that can't ask for a period itself: today, yesterday, the last
+     * 7 and 30 days, this and last month, this financial year, and each store's month so far.
+     */
+    public Map<String, Object> salesSnapshot() {
+        LocalDate today = LocalDate.now();
+        YearMonth month = YearMonth.from(today);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("today " + today.format(DAY_YEAR), line(salesReport.day(today)));
+        out.put("yesterday", line(salesReport.day(today.minusDays(1))));
+        out.put("last 7 days", line(SalesDay.total(salesReport.daily(today.minusDays(6), today))));
+        out.put("last 30 days", line(SalesDay.total(salesReport.daily(today.minusDays(29), today))));
+        out.put(month + " to date", line(SalesDay.total(salesReport.daily(month.atDay(1), today))));
+        out.put(month.minusMonths(1).toString(), line(SalesDay.total(salesReport.daily(month.minusMonths(1).atDay(1), month.minusMonths(1).atEndOfMonth()))));
+        ReportPeriod fy = salesReport.resolve("fy", null, null, null, null);
+        out.put(fy.getLabel(), line(SalesDay.total(salesReport.monthly(fy.getFrom(), fy.getTo()))));
+        out.put("stores this month", salesReport.byStore(month.atDay(1), today).stream().filter(s -> !s.totals().isEmpty())
+                .map(s -> s.name() + ": " + line(s.totals())).toList());
+        return out;
+    }
+
+    private static LocalDate date(JsonNode args, String field) {
+        String v = args.path(field).asText("").trim();
+        if (v.isEmpty()) return null;
+        try {
+            return LocalDate.parse(v);
+        } catch (DateTimeParseException e) {
+            throw new BusinessException("Give dates as yyyy-MM-dd.");
+        }
+    }
+
+    private static Map<String, Object> figures(SalesDay d) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("orders", d.getOrders());
+        out.put("cancelled", d.getCancelled());
+        out.put("packs_sold", d.getPacks());
+        out.put("sales", money(d.getSales()));
+        out.put("average_order", money(d.getAverageOrder()));
+        out.put("returns_requested", d.getReturns());
+        out.put("refunds_paid", d.getRefundCount());
+        out.put("refunded", money(d.getRefunds()));
+        out.put("net_revenue", money(d.getNet()));
+        return out;
+    }
+
+    /** One row in a few words, to keep long periods small. */
+    private static String line(SalesDay d) {
+        return d.getOrders() + " order(s)" + (d.getCancelled() > 0 ? " (" + d.getCancelled() + " cancelled)" : "")
+                + ", ₹" + money(d.getSales()) + " sales"
+                + (d.getRefunds().signum() > 0 ? ", ₹" + money(d.getRefunds()) + " refunded" : "")
+                + (d.getReturns() > 0 ? ", " + d.getReturns() + " return(s)" : "");
+    }
+
+    private static String money(BigDecimal v) { return v.setScale(2, RoundingMode.HALF_UP).toPlainString(); }
+
+    /** One order, any customer's, by its number. */
+    private Object findOrder(String number) {
+        Optional<Order> found = number.isBlank() ? Optional.empty() : orderRepository.findByOrderNumberIgnoreCase(number.trim());
+        if (found.isEmpty()) return Map.of("error", "No order numbered " + number);
+        Order o = found.get();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("order_number", o.getOrderNumber());
+        out.put("placed", o.getCreatedAt().format(PLACED));
+        out.put("status", o.getStatus().getLabel());
+        out.put("store", o.getStore() == null ? "(no store)" : o.getStore().getName());
+        out.put("customer", Objects.requireNonNullElse(o.getReceiverName(), o.getBillingName()));
+        out.put("payment", o.getPaymentMethod().getLabel() + ", " + o.getPaymentStatus().name().toLowerCase());
+        out.put("items", o.getItems().stream().map(i -> i.getQuantity() + " × " + i.getMedicineName() + " ₹" + money(i.getLineTotal())).toList());
+        out.put("subtotal", money(o.getSubtotal()));
+        out.put("discount", money(o.getDiscount()));
+        out.put("delivery", money(o.getDeliveryFee()));
+        out.put("total", money(o.getTotal()));
+        out.put("url", "/admin/orders/" + o.getId());
+        return out;
     }
 
     private Object reviewData() {
