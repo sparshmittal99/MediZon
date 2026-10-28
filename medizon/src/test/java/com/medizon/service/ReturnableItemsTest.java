@@ -27,7 +27,8 @@ class ReturnableItemsTest {
     { when(settings.get()).thenReturn(ReturnSettings.defaults()); }
     private final ReturnService service = new ReturnService(returns, orders, mock(MedicationPlanService.class),
             mock(FileStorageService.class), mock(NotificationService.class), mock(StaffAlerts.class),
-            mock(AddressService.class), areas, Validation.buildDefaultValidatorFactory().getValidator(), mock(WalletService.class), settings);
+            mock(AddressService.class), areas, Validation.buildDefaultValidatorFactory().getValidator(), mock(WalletService.class), settings,
+            mock(com.medizon.payment.PaymentGateways.class));
 
     private static OrderItem item(long id, String name, Boolean returnableAtOrder, boolean medicineReturnable) {
         Medicine m = new Medicine();

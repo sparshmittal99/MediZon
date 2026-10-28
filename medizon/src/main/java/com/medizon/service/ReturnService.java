@@ -4,11 +4,13 @@ import com.medizon.domain.*;
 import com.medizon.dto.AddressForm;
 import com.medizon.dto.PeriodFilter;
 import com.medizon.dto.ReturnPickupForm;
+import com.medizon.payment.PaymentGateways;
 import com.medizon.repository.ReturnRequestRepository;
 import com.medizon.repository.UserRepository;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,7 @@ import java.util.regex.Pattern;
  * at once, or to UPI / a bank account / the card a few days after pickup (see {@link RefundMode#days}). Refunds are
  * what was paid for the packs, after any promo.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReturnService {
@@ -53,6 +56,7 @@ public class ReturnService {
     private final Validator validator;
     private final WalletService wallet;
     private final ReturnSettingsService settings;
+    private final PaymentGateways gateways;
 
     // ------------------------------------------------------------------ customer
 
@@ -264,7 +268,7 @@ public class ReturnService {
             r.setRefundMode(RefundMode.WALLET);
             return;
         }
-        if (o.getPaymentMethod() != PaymentMethod.COD) {
+        if (!o.getPaymentMethod().isOnDelivery()) {
             r.setRefundMode(RefundMode.ORIGINAL);
             return;
         }
@@ -428,25 +432,43 @@ public class ReturnService {
         return finishRefund(get(id), true);
     }
 
-    /** Picked-up returns whose refund day has come are paid out. Payments are simulated, as at checkout. */
+    /**
+     * Picked-up returns whose refund day has come are paid out: back through Razorpay for orders paid online, otherwise
+     * simulated. One Razorpay can't take right now is tried again on the next run.
+     */
     @Transactional
     public int refundDue() {
-        List<ReturnRequest> due = returns.findByStatusAndRefundDueOnLessThanEqual(ReturnStatus.PICKED_UP, LocalDate.now());
-        due.forEach(r -> finishRefund(r, true));
-        return due.size();
+        int paid = 0;
+        for (ReturnRequest r : returns.findByStatusAndRefundDueOnLessThanEqual(ReturnStatus.PICKED_UP, LocalDate.now())) {
+            try {
+                finishRefund(r, true);
+                paid++;
+            } catch (BusinessException e) {
+                log.warn("Refund for return {} not paid yet: {}", r.getReturnNumber(), e.getMessage());
+            }
+        }
+        return paid;
     }
 
     private ReturnRequest finishRefund(ReturnRequest r, boolean tell) {
         if (!r.getStatus().canMoveTo(ReturnStatus.REFUNDED)) {
             throw new BusinessException("A return that is " + r.getStatus().getLabel().toLowerCase() + " can't be marked refunded.");
         }
+        Order o = r.getOrder();
+        // Back to the card, UPI or bank account that paid, through its gateway, before it's marked refunded
+        boolean toOriginal = r.getRefundMode() == RefundMode.ORIGINAL || (r.getRefundMode() == null && !o.getPaymentMethod().isOnDelivery());
+        if (toOriginal && o.isPaidOnline() && r.getPayoutAmount().signum() > 0 && r.getGatewayRefundId() == null) {
+            r.setGatewayRefundId(gateways.get(o.getPaymentGateway()).refund(o.getGatewayOrderId(), o.getGatewayPaymentId(),
+                    r.getPayoutAmount().movePointRight(2).longValueExact(),
+                    "Return " + r.getReturnNumber()));
+        }
         r.setStatus(ReturnStatus.REFUNDED);
         r.setRefundedAt(LocalDateTime.now());
-        Order o = r.getOrder();
         if (remaining(o).values().stream().allMatch(q -> q == 0)) o.setPaymentStatus(PaymentStatus.REFUNDED);
         if (tell && r.getPayoutAmount().signum() > 0) {
             notifyCustomer(r, "Refund processed", "₹" + r.getPayoutAmount() + " for return " + r.getReturnNumber()
-                    + " is refunded" + (r.getRefundTo() == null ? "." : " to " + r.getRefundTo() + "."));
+                    + " is refunded" + (r.getRefundTo() == null ? "." : " to " + r.getRefundTo() + ".")
+                    + (r.getGatewayRefundId() == null ? "" : " Refund id " + r.getGatewayRefundId() + "."));
         }
         return r;
     }

@@ -42,9 +42,10 @@ public class OrderController {
     private final WalletService walletService;
     private final ReturnSettingsService returnSettings;
     private final OrderSettingsService orderSettings;
+    private final PaymentService paymentService;
 
     /** The promo code applied at checkout, kept in the session until the order is placed or it's removed. */
-    static final String COUPON = "mzCoupon";
+    public static final String COUPON = "mzCoupon";
 
     /**
      * Checkout starts on the address asked for (just added), else the one picked in the header, else the default,
@@ -68,13 +69,11 @@ public class OrderController {
         model.addAttribute("cart", cart);
         model.addAttribute("minOrder", orderSettings.minOrderValue());
         model.addAttribute("minShort", OrderSettingsService.shortBy(cart.getSubtotal(), orderSettings.minOrderValue()));
-        model.addAttribute("paymentMethods", PaymentMethod.payable());
         List<Coupon> promos = couponService.available();
         Set<String> usedToday = promos.stream().filter(c -> couponService.usedToday(user, c))
                 .map(Coupon::getCode).collect(java.util.stream.Collectors.toSet());
         model.addAttribute("promos", CouponService.bestFirst(promos, cart.getSubtotal(), usedToday));   // biggest saving first
         model.addAttribute("promosUsedToday", usedToday);
-        model.addAttribute("walletBalance", walletService.balance(user));
         model.addAttribute("prescriptions", prescriptionService.validForUser(user));
         // Which prescription(s) each prescription medicine comes from, and anything none of them covers
         model.addAttribute("rxCoverage", prescriptionService.cover(user, OrderService.rxLines(cart)));
@@ -109,21 +108,32 @@ public class OrderController {
         return "redirect:/checkout" + (address == null ? "" : "?address=" + address);
     }
 
-    @PostMapping("/checkout")
-    public String placeOrder(@RequestParam(required = false) PaymentMethod paymentMethod,
-                             @RequestParam(required = false) Long addressId,
-                             @RequestParam(defaultValue = "false") boolean useWallet,
-                             HttpSession session, RedirectAttributes ra) {
-        List<Order> placed = orderService.checkout(currentUser.get(), paymentMethod, addressId, (String) session.getAttribute(COUPON), useWallet);
-        session.removeAttribute(COUPON);
-        if (placed.size() == 1) {
-            ra.addFlashAttribute("success", "Order " + placed.get(0).getOrderNumber() + " placed. We'll notify you as it moves.");
-            return "redirect:/orders/" + placed.get(0).getId();
+    /**
+     * The payment page, after checkout's "Pay now": MediZon Money, then UPI (MediZon UPI's checkout), card or net
+     * banking (Razorpay), or pay on delivery. Online orders are placed once paid; the rest with "Place order"
+     * (CheckoutApi).
+     */
+    @GetMapping("/checkout/payment")
+    public String payment(@RequestParam(required = false) Long addressId, HttpSession session, Model model, RedirectAttributes ra) {
+        User user = currentUser.get();
+        String coupon = (String) session.getAttribute(COUPON);
+        OrderService.Ready ready;
+        try {
+            ready = orderService.ready(user, addressId, coupon);
+        } catch (BusinessException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+            return "redirect:/checkout" + (addressId == null ? "" : "?address=" + addressId);
         }
-        ra.addFlashAttribute("success", "Your cart comes from " + placed.size() + " stores, so it's " + placed.size() + " orders: "
-                + placed.stream().map(Order::getOrderNumber).collect(java.util.stream.Collectors.joining(", "))
-                + ". Each has its own delivery and invoice.");
-        return "redirect:/orders";
+        List<PaymentMethod> online = paymentService.onlineMethods();
+        model.addAttribute("cart", ready.cart());
+        model.addAttribute("ship", ready.ship());
+        model.addAttribute("walletBalance", walletService.balance(user));
+        model.addAttribute("onlineMethods", online);
+        model.addAttribute("upiTestMode", paymentService.isUpiTestMode());
+        // Razorpay's script only when it takes something: cards, net banking, or UPI once it does UPI
+        boolean razorpayUpi = online.contains(PaymentMethod.UPI) && !paymentService.isUpiTestMode();
+        model.addAttribute("razorpayOn", razorpayUpi || online.stream().anyMatch(m -> m != PaymentMethod.UPI));
+        return "payment";
     }
 
     /** Order sections on the customer's Orders page. */

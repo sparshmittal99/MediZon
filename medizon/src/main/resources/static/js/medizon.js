@@ -262,6 +262,7 @@
             const a = document.activeElement;
             if (a && a.matches('textarea, select, [contenteditable="true"], input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit])')) return true;
             if (document.querySelector('.modal.show, .offcanvas.show, .dropdown-menu.show, .mz-bot-panel:not([hidden])')) return true;
+            if (document.querySelector('[data-mz-hold-live]')) return true;   // the payment page: never reload mid-payment
             return [...document.querySelectorAll('form input, form textarea, form select')].some(edited);
         };
         function apply() {
@@ -934,32 +935,6 @@
             form.querySelector('#amount').max = pct ? '100' : '';
         };
         form.querySelectorAll('[data-mz-promo-kind]').forEach(r => r.addEventListener('change', sync));
-        sync();
-    });
-
-    // ---- checkout: MediZon Money pays as much as it can; the chosen method pays the rest ----
-    document.querySelectorAll('[data-mz-checkout-pay]').forEach(box => {
-        const use = document.querySelector('[data-mz-use-wallet]');
-        if (!use) return;
-        const total = Number(box.dataset.total), balance = Number(box.dataset.balance);
-        const rest = document.querySelector('[data-mz-pay-rest]');
-        const restLabel = document.querySelector('[data-mz-pay-rest-label]');
-        const covers = document.querySelector('[data-mz-wallet-covers]');
-        const money = n => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        const sync = () => {
-            const used = use.checked ? Math.min(balance, total) : 0;
-            const toPay = Math.round((total - used) * 100) / 100;
-            box.querySelector('[data-mz-wallet-line]').hidden = used === 0;
-            box.querySelector('[data-mz-wallet-amount]').textContent = '− ' + money(used);
-            box.querySelector('[data-mz-to-pay-line]').hidden = used === 0;
-            box.querySelector('[data-mz-to-pay]').textContent = money(toPay);
-            covers.hidden = toPay > 0;
-            rest.hidden = toPay <= 0;
-            rest.querySelectorAll('input').forEach(i => { i.disabled = toPay <= 0; });
-            restLabel.hidden = used === 0 || toPay <= 0;
-            restLabel.textContent = `Pay the remaining ${money(toPay)} by`;
-        };
-        use.addEventListener('change', sync);
         sync();
     });
 

@@ -53,6 +53,20 @@ public class Order {
     @Enumerated(EnumType.STRING)
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
+    /** The gateway paid through online; null on orders from before there were several (Razorpay) and on others. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private com.medizon.payment.Gateway paymentGateway;
+
+    /** The gateway's order for paying online (orders placed together share it), and the payment that paid it. */
+    @Column(length = 45)
+    private String gatewayOrderId;
+    @Column(length = 40)
+    private String gatewayPaymentId;
+    /** The gateway's refund of {@link #getAmountDue()} when the order was cancelled. */
+    @Column(length = 40)
+    private String gatewayRefundId;
+
     @Enumerated(EnumType.STRING)
     private OrderSource source = OrderSource.CUSTOMER;
 
@@ -152,6 +166,9 @@ public class Order {
     }
 
     public boolean isAutoReorder() { return source == OrderSource.AUTO_REORDER; }
+
+    /** Paid through a payment gateway, so refunds go back through it. */
+    public boolean isPaidOnline() { return gatewayPaymentId != null; }
 
     /** Progress steps shown on the order page (cancelled orders don't show the tracker). */
     public List<OrderStatus> getTrackSteps() {

@@ -101,6 +101,10 @@ public class ReturnRequest {
     private LocalDateTime pickedUpAt;
     private LocalDateTime refundedAt;
 
+    /** The gateway's refund, when the order was paid online and the refund went back to that payment. */
+    @Column(length = 40)
+    private String gatewayRefundId;
+
     public void addItem(ReturnItem item) {
         item.setRequest(this);
         items.add(item);
@@ -113,7 +117,7 @@ public class ReturnRequest {
     /** "your UPI", "UPI ID name@bank" or "bank account ••••6789 (HDFC0001234)"; null for a cash order from before refunds had a mode. */
     public String getRefundTo() {
         RefundMode mode = refundMode != null ? refundMode
-                : order.getPaymentMethod() == PaymentMethod.COD ? null : RefundMode.ORIGINAL;
+                : order.getPaymentMethod().isOnDelivery() ? null : RefundMode.ORIGINAL;
         if (mode == null) return null;
         return switch (mode) {
             case ORIGINAL -> "your " + order.getPaymentMethod().getLabel();

@@ -4,6 +4,8 @@ import com.medizon.domain.*;
 import com.medizon.dto.CartSummary;
 import com.medizon.dto.Offer;
 import com.medizon.dto.PeriodFilter;
+import com.medizon.payment.Gateway;
+import com.medizon.payment.PaymentGateways;
 import com.medizon.repository.MedicineRepository;
 import com.medizon.repository.OrderRepository;
 import com.medizon.repository.PrescriptionRepository;
@@ -48,6 +50,7 @@ public class OrderService {
     private final CouponService coupons;
     private final WalletService wallet;
     private final OrderSettingsService orderSettings;
+    private final PaymentGateways gateways;
 
     /** One order line: packs of a medicine and how many packs each person gets. */
     /** @param othersPatient who the "Others" share is for, when known (from a prescription) */
@@ -57,12 +60,16 @@ public class OrderService {
 
     // ------------------------------------------------------------------ customer checkout
 
+    /** A cart checked as checkout would check it: deliverable to {@code ship}, prescriptions covered, promo valid. */
+    public record Ready(Address ship, CartSummary cart, PrescriptionService.Coverage coverage, CouponService.Applied promo) {}
+
     /**
-     * Places the cart as one order per store; returns them, the biggest first. {@code couponCode} may be null;
-     * {@code paymentMethod} may be null when MediZon Money covers everything.
+     * Checks the cart can be ordered to {@code addressId}, before anything is paid for, the same way placing it does.
+     *
+     * @throws BusinessException naming what stops it
      */
     @Transactional
-    public List<Order> checkout(User user, PaymentMethod paymentMethod, Long addressId, String couponCode, boolean useWallet) {
+    public Ready ready(User user, Long addressId, String couponCode) {
         if (user.isStaff()) throw new BusinessException("Staff accounts can't place orders.");
         if (addressId == null) throw new BusinessException("Choose a delivery address.");
         Address ship = addressService.get(addressId, user);
@@ -83,6 +90,39 @@ public class OrderService {
         coverage.require();
 
         CouponService.Applied promo = coupons.require(user, couponCode, cart.getSubtotal());
+        for (CartItem i : cart.getItems()) {
+            if (i.getMembers().isEmpty()) throw new BusinessException("Choose who " + i.getMedicine().getName() + " is for.");
+        }
+        return new Ready(ship, cart, coverage, promo);
+    }
+
+    /** What MediZon Money pays of {@code total} (as far as the balance goes, if it's used) and what's left to pay. */
+    public record Due(BigDecimal wallet, BigDecimal rest) {}
+
+    public Due due(User user, BigDecimal total, boolean useWallet) {
+        BigDecimal fromWallet = useWallet ? wallet.balance(user).min(total).max(BigDecimal.ZERO) : BigDecimal.ZERO;
+        return new Due(fromWallet, total.subtract(fromWallet));
+    }
+
+    /**
+     * Places the cart as one order per store; returns them, the biggest first. {@code couponCode} may be null;
+     * {@code paymentMethod} may be null when MediZon Money covers everything. Online methods are only placed once
+     * paid (see {@link PaymentService}).
+     */
+    @Transactional
+    public List<Order> checkout(User user, PaymentMethod paymentMethod, Long addressId, String couponCode, boolean useWallet) {
+        return checkout(user, paymentMethod, addressId, couponCode, useWallet, null, null, null);
+    }
+
+    /** Places the cart, paid by payment {@code gatewayPaymentId} of {@code gateway}'s order {@code gatewayOrderId} when given. */
+    @Transactional
+    public List<Order> checkout(User user, PaymentMethod paymentMethod, Long addressId, String couponCode, boolean useWallet,
+                                Gateway gateway, String gatewayOrderId, String gatewayPaymentId) {
+        Ready ready = ready(user, addressId, couponCode);
+        Address ship = ready.ship();
+        CartSummary cart = ready.cart();
+        PrescriptionService.Coverage coverage = ready.coverage();
+        CouponService.Applied promo = ready.promo();
         BigDecimal balance = useWallet ? wallet.balance(user) : BigDecimal.ZERO;
         if (balance.compareTo(cart.getTotal()) < 0 && (paymentMethod == null || paymentMethod == PaymentMethod.WALLET)) {
             throw new BusinessException(balance.signum() > 0
@@ -92,7 +132,6 @@ public class OrderService {
 
         List<Line> lines = new ArrayList<>();
         for (CartItem i : cart.getItems()) {
-            if (i.getMembers().isEmpty()) throw new BusinessException("Choose who " + i.getMedicine().getName() + " is for.");
             lines.add(new Line(i.getMedicine().getId(), i.getQuantity(), i.getAllocation(), i.getOthersPatientName()));
         }
 
@@ -115,6 +154,15 @@ public class OrderService {
                                 : "orders " + placed.stream().map(Order::getOrderNumber).collect(Collectors.joining(", ")))
                                 + ". Balance left: ₹" + wallet.balance(user) + ".",
                         placed.size() == 1 ? "/orders/" + first.getId() : "/wallet");
+            }
+        }
+        if (gatewayPaymentId != null) {
+            for (Order o : placed) {
+                if (o.getPaymentMethod() == PaymentMethod.WALLET) continue;   // all MediZon Money: nothing went through the gateway
+                o.setPaymentGateway(gateway);
+                o.setGatewayOrderId(gatewayOrderId);
+                o.setGatewayPaymentId(gatewayPaymentId);
+                o.setPaymentStatus(PaymentStatus.PAID);
             }
         }
         prescriptionService.finishUse(coverage.prescriptions());
@@ -374,8 +422,9 @@ public class OrderService {
             order.setBillingName(user.getFullName());   // the buyer, even when the parcel goes to someone else
             order.setBillingAddress(order.getShippingAddress());
         }
-        // UPI / card are simulated as paid. Plug a gateway (Razorpay, Stripe ...) in here.
-        order.setPaymentStatus(paymentMethod == PaymentMethod.COD ? PaymentStatus.PENDING : PaymentStatus.PAID);
+        // Cash / UPI on delivery are paid at the door. Online orders are only placed once paid (PaymentService), or
+        // simulated as paid when no gateway has keys.
+        order.setPaymentStatus(paymentMethod.isOnDelivery() ? PaymentStatus.PENDING : PaymentStatus.PAID);
         return order;
     }
 
@@ -397,6 +446,14 @@ public class OrderService {
         if (!o.getStatus().canMoveTo(next)) {
             throw new BusinessException("An order that is " + o.getStatus().getLabel().toLowerCase()
                     + " can't be marked " + next.getLabel().toLowerCase() + ".");
+        }
+        // Paid online: the money goes back through the gateway first, so a refund that fails leaves the order as it was
+        BigDecimal onlineBack = BigDecimal.ZERO;
+        if (next == OrderStatus.CANCELLED && o.isPaidOnline() && o.getPaymentStatus() == PaymentStatus.PAID && o.getAmountDue().signum() > 0) {
+            onlineBack = o.getAmountDue();
+            o.setGatewayRefundId(gateways.get(o.getPaymentGateway()).refund(o.getGatewayOrderId(), o.getGatewayPaymentId(),
+                    onlineBack.movePointRight(2).longValueExact(),
+                    "Order " + o.getOrderNumber() + " cancelled"));
         }
         o.setStatus(next);
         o.setUpdatedAt(LocalDateTime.now());
@@ -425,6 +482,8 @@ public class OrderService {
                 "Order " + next.getLabel().toLowerCase(),
                 "Order " + o.getOrderNumber() + " is now " + next.getLabel().toLowerCase() + "."
                         + (walletBack.signum() > 0 ? " ₹" + walletBack + " is back in your MediZon Money." : "")
+                        + (onlineBack.signum() > 0 ? " ₹" + onlineBack + " is refunded to your " + o.getPaymentMethod().getLabel()
+                                + " (refund id " + o.getGatewayRefundId() + "); banks take up to 5-7 working days to show it." : "")
                         + (next == OrderStatus.SHIPPED ? " Your tax invoice " + o.getInvoiceNumber() + " is ready on the order page." : "")
                         + (next == OrderStatus.DELIVERED ? " Tell us how it went with a quick review." : ""),
                 "/orders/" + o.getId());

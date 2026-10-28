@@ -69,7 +69,7 @@
                         <td class="text-end fw-bold" th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td></tr>
                     <th:block th:if="${o.paidWithWallet and o.paymentMethod.name() != 'WALLET'}">
                         <tr class="small"><td colspan="3" class="text-end text-muted">Paid with MediZon Money</td><td class="text-end" th:text="'₹' + ${o.walletUsed}"></td></tr>
-                        <tr class="small"><td colspan="3" class="text-end text-muted" th:text="${o.paymentMethod.name() == 'COD'} ? 'Cash on delivery' : ('Paid by ' + ${o.paymentMethod.label})"></td>
+                        <tr class="small"><td colspan="3" class="text-end text-muted" th:text="${o.paymentMethod.onDelivery} ? ${o.paymentMethod.label} : ('Paid by ' + ${o.paymentMethod.label})"></td>
                             <td class="text-end" th:text="'₹' + ${o.amountDue}"></td></tr>
                     </th:block>
                     </tfoot>
@@ -183,6 +183,8 @@
                 <p class="small text-muted mb-3" th:if="${o.contactPhone}"><i class="bi bi-telephone me-1"></i><span th:text="${o.contactPhone}"></span></p>
                 <h2 class="h6">Payment</h2>
                 <p class="small mb-0" th:text="${o.paymentLabel} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></p>
+                <p class="small text-muted mb-0" th:if="${o.gatewayPaymentId != null}" th:text="'Payment id ' + ${o.gatewayPaymentId}"></p>
+                <p class="small text-muted mb-0" th:if="${o.gatewayRefundId != null}" th:text="'Refund id ' + ${o.gatewayRefundId}"></p>
                 <p class="small text-success mb-0" th:if="${o.discounted}" th:text="'You saved ₹' + ${o.discount} + ' with ' + ${o.couponCode}"></p>
                 <p th:each="rx : ${o.prescriptionsUsed}" sec:authorize="hasAnyRole('CUSTOMER','ADMIN','PHARMACIST')" class="small mt-3 mb-0">
                     <i class="bi bi-file-earmark-medical"></i>

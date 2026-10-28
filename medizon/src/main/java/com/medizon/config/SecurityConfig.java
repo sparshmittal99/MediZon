@@ -55,25 +55,25 @@ public class SecurityConfig {
 
     /**
      * Where pages may load code and data from: this site, jsDelivr (Bootstrap, Bootstrap Icons, Leaflet), Google
-     * Translate (the language picker), OpenStreetMap (address search; map tiles are images) and Google Fonts. Images
-     * may come from any https site, since a product's picture can be a link. No inline scripts or event handlers;
-     * inline styles are allowed (Bootstrap and the translator use them). What the browser blocks is reported to
-     * Admin > Monitoring as a browser error.
+     * Translate (the language picker), OpenStreetMap (address search; map tiles are images), Google Fonts, and Razorpay
+     * (the checkout window on the payment page). Images may come from any https site, since a product's
+     * picture can be a link. No inline scripts or event handlers; inline styles are allowed (Bootstrap and the
+     * translator use them). What the browser blocks is reported to Admin > Monitoring as a browser error.
      */
     static final String CONTENT_SECURITY_POLICY = String.join("; ",
             "default-src 'self'",
             "script-src 'self' https://cdn.jsdelivr.net https://translate.google.com https://translate.googleapis.com"
-                    + " https://translate-pa.googleapis.com https://www.gstatic.com",
+                    + " https://translate-pa.googleapis.com https://www.gstatic.com https://*.razorpay.com",
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://www.gstatic.com"
                     + " https://translate.googleapis.com",
             "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
             "img-src 'self' data: blob: https:",
             "connect-src 'self' https://nominatim.openstreetmap.org https://translate.googleapis.com"
-                    + " https://translate-pa.googleapis.com",
-            "frame-src https://translate.google.com https://translate.googleapis.com",
+                    + " https://translate-pa.googleapis.com https://*.razorpay.com",
+            "frame-src https://translate.google.com https://translate.googleapis.com https://*.razorpay.com",
             "object-src 'none'",
             "base-uri 'self'",
-            "form-action 'self'",
+            "form-action 'self' https://*.razorpay.com",
             "frame-ancestors 'none'",
             "report-uri /api/monitoring/csp-report");
 
@@ -142,7 +142,7 @@ public class SecurityConfig {
                 .requestMatchers("/support/attachments/**").authenticated()   // the customer or the staff on the ticket (SupportService)
                 // Shopping and dose reminders are for customers; admin accounts only run the store.
                 // The assistant API is open to both roles; each role gets its own actions in AssistantTools.
-                .requestMatchers("/cart/**", "/api/cart/**", "/api/orders/**", "/checkout", "/checkout/**", "/wallet", "/orders/**", "/plans/**",
+                .requestMatchers("/cart/**", "/api/cart/**", "/api/orders/**", "/api/checkout/**", "/checkout", "/checkout/**", "/wallet", "/orders/**", "/plans/**",
                         "/prescriptions/**", "/support", "/support/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**",
                         "/stock-alerts/**", "/api/stock-alerts/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())

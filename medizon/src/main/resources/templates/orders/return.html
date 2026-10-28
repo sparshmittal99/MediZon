@@ -191,9 +191,9 @@
                 </th:block>
 
                 <th:block th:unless="${o.paymentMethod.name() == 'WALLET'}">
-                    <p class="small mb-2" th:if="${o.paymentMethod.name() == 'COD'}">You paid cash on delivery, so tell us where to send the money.</p>
+                    <p class="small mb-2" th:if="${o.paymentMethod.onDelivery}">You paid on delivery, so tell us where to send the money.</p>
                     <div class="d-grid gap-2 mb-3" role="radiogroup" aria-label="Refund to">
-                        <label class="mz-addr-pick" th:if="${o.paymentMethod.name() != 'COD'}">
+                        <label class="mz-addr-pick" th:if="${!o.paymentMethod.onDelivery}">
                             <input type="radio" name="refundMode" value="ORIGINAL" data-mz-refund-mode checked>
                             <span class="mz-addr-pick-body"><strong><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Original payment method</strong>
                                 <span class="d-block small" th:text="'Back to your ' + ${o.paymentMethod.label}"></span>
@@ -205,7 +205,7 @@
                                 <span class="d-block small">Use it on your next order</span>
                                 <span class="d-block small text-success" th:text="${refundTimings.get('WALLET')}"></span></span>
                         </label>
-                        <th:block th:if="${o.paymentMethod.name() == 'COD'}">
+                        <th:block th:if="${o.paymentMethod.onDelivery}">
                             <label class="mz-addr-pick">
                                 <input type="radio" name="refundMode" value="UPI" data-mz-refund-mode>
                                 <span class="mz-addr-pick-body"><strong><i class="bi bi-phone me-1" aria-hidden="true"></i>UPI</strong>
@@ -218,7 +218,7 @@
                             </label>
                         </th:block>
                     </div>
-                    <th:block th:if="${o.paymentMethod.name() == 'COD'}">
+                    <th:block th:if="${o.paymentMethod.onDelivery}">
                         <div data-mz-refund-for="UPI">
                             <label class="form-label small" for="upiId">UPI ID</label>
                             <input class="form-control" id="upiId" name="upiId" maxlength="60" placeholder="name@okbank" autocomplete="off"

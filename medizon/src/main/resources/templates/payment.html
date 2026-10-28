@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Payment')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<!-- The payment page: MediZon Money, then UPI (MediZon UPI's checkout below), card or net banking (Razorpay), or pay on
+     delivery. Online orders are placed only once paid; the rest straight away. payment.js drives it; data-mz-hold-live
+     stops the page reloading itself mid-payment. -->
+<main class="container mz-page mz-w-page mz-checkout-pay" data-mz-payment data-mz-hold-live
+      th:attr="data-address=${ship.id}, data-total=${cart.total}, data-balance=${walletBalance},
+               data-name=${me.fullName}, data-email=${me.email}, data-phone=${me.phone}">
+    <a th:href="@{/checkout(address=${ship.id})}" class="mz-pay-back"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back to checkout</a>
+    <div class="mz-pay-head">
+        <h1 class="mz-page-title mb-0">Payment</h1>
+        <ol class="mz-pay-steps" aria-label="Checkout steps">
+            <li class="is-done"><i class="bi bi-check-lg" aria-hidden="true"></i>Cart</li>
+            <li class="is-done"><i class="bi bi-check-lg" aria-hidden="true"></i>Address</li>
+            <li class="is-now" aria-current="step"><span>3</span>Payment</li>
+        </ol>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <!-- Where it's going -->
+            <section class="mz-pay-card mz-pay-ship">
+                <span class="mz-pay-icon"><i class="bi" th:classappend="${ship.type.icon}" aria-hidden="true"></i></span>
+                <div class="flex-grow-1 min-w-0">
+                    <div class="small text-muted">Delivering to</div>
+                    <div class="fw-semibold"><span th:text="${ship.receiverName}"></span> <span class="badge text-bg-light ms-1" th:text="${ship.label}">Home</span></div>
+                    <div class="small text-muted text-truncate" th:text="${ship.formatted}"></div>
+                </div>
+                <a th:href="@{/checkout(address=${ship.id})}" class="small fw-semibold">Change</a>
+            </section>
+
+            <h2 class="mz-pay-section">MediZon Money</h2>
+            <label class="mz-pay-card mz-pay-wallet" th:classappend="${walletBalance.signum() == 0} ? 'is-off'">
+                <span class="mz-pay-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></span>
+                <span class="flex-grow-1">
+                    <span class="d-block fw-semibold">Use MediZon Money</span>
+                    <span class="d-block small text-muted" th:text="${walletBalance.signum() == 0} ? 'No balance yet: refunds and cashback land here'
+                        : 'Balance ₹' + ${#numbers.formatDecimal(walletBalance, 1, 'COMMA', 2, 'POINT')}"></span>
+                </span>
+                <span class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" role="switch" data-mz-use-wallet aria-label="Use MediZon Money"
+                           th:checked="${walletBalance.signum() > 0}" th:disabled="${walletBalance.signum() == 0}">
+                </span>
+            </label>
+
+            <h2 class="mz-pay-section" data-mz-rest-title>Pay with</h2>
+            <div class="mz-pay-covered" data-mz-pay-covered hidden>
+                <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+                <div><strong>MediZon Money covers your whole order.</strong>
+                    <div class="small">Nothing else to pay. Place your order below.</div></div>
+            </div>
+            <div class="mz-pay-methods" role="radiogroup" aria-label="Payment method" data-mz-pay-methods>
+                <label th:each="pm, s : ${onlineMethods}" class="mz-pay-option">
+                    <input type="radio" name="method" th:value="${pm}" th:checked="${s.first}">
+                    <span class="mz-pay-icon" th:switch="${pm.name()}">
+                        <i th:case="'UPI'" class="bi bi-phone" aria-hidden="true"></i>
+                        <i th:case="'CARD'" class="bi bi-credit-card" aria-hidden="true"></i>
+                        <i th:case="*" class="bi bi-bank" aria-hidden="true"></i>
+                    </span>
+                    <span class="flex-grow-1 min-w-0">
+                        <span class="d-block fw-semibold">
+                            <span th:text="${pm.label}">UPI</span>
+                            <span th:if="${pm.name() == 'UPI'}" class="mz-pay-tag">Fastest</span>
+                        </span>
+                        <span class="d-block small text-muted" th:switch="${pm.name()}">
+                            <span th:case="'UPI'">Google Pay, PhonePe, Paytm, BHIM, any UPI ID or QR</span>
+                            <span th:case="'CARD'">Visa, Mastercard, RuPay, American Express and Maestro</span>
+                            <span th:case="*">SBI, HDFC, ICICI, Axis, Kotak and 50+ other banks</span>
+                        </span>
+                    </span>
+                    <span class="mz-pay-radio" aria-hidden="true"></span>
+                </label>
+
+                <div class="mz-pay-divider"><span>or pay later</span></div>
+                <label class="mz-pay-option">
+                    <input type="radio" name="method" value="COD" th:checked="${#lists.isEmpty(onlineMethods)}">
+                    <span class="mz-pay-icon"><i class="bi bi-truck" aria-hidden="true"></i></span>
+                    <span class="flex-grow-1 min-w-0">
+                        <span class="d-block fw-semibold">Pay on delivery</span>
+                        <span class="d-block small text-muted">Cash, UPI and more when your order arrives</span>
+                    </span>
+                    <span class="mz-pay-radio" aria-hidden="true"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <aside class="mz-pay-card mz-pay-summary">
+                <h2 class="h5 mb-1">Order summary</h2>
+                <div class="small text-muted mb-3" th:with="packs=${#aggregates.sum(cart.items.![quantity])}">
+                    <span th:text="${packs} + (${packs} == 1 ? ' pack' : ' packs')"></span>
+                    <span th:if="${cart.split}" th:text="' · ' + ${cart.byStore.size()} + ' stores, ' + ${cart.byStore.size()} + ' orders'"></span>
+                </div>
+                <div class="mz-pay-line"><span>Items</span>
+                    <span th:text="'₹' + ${#numbers.formatDecimal(cart.subtotal, 1, 'COMMA', 2, 'POINT')}"></span></div>
+                <div class="mz-pay-line text-success" th:if="${cart.discounted}">
+                    <span th:text="'Promo (' + ${cart.couponCode} + ')'">Promo</span>
+                    <span th:text="'− ₹' + ${#numbers.formatDecimal(cart.discount, 1, 'COMMA', 2, 'POINT')}"></span></div>
+                <div class="mz-pay-line"><span>Delivery</span>
+                    <span th:text="${cart.deliveryFee.signum() == 0} ? 'Free' : ('₹' + ${#numbers.formatDecimal(cart.deliveryFee, 1, 'COMMA', 2, 'POINT')})"></span></div>
+                <div class="mz-pay-line text-muted" th:if="${cart.roundOff.signum() != 0}">
+                    <span>Round off</span><span th:text="${cart.roundOffLabel}"></span></div>
+                <div class="mz-pay-line mz-pay-subtotal"><span>Order total</span>
+                    <span th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
+                <div class="mz-pay-line text-success" data-mz-wallet-line hidden>
+                    <span>MediZon Money</span><span data-mz-wallet-amount></span></div>
+                <div class="mz-pay-total">
+                    <span>To pay</span>
+                    <strong data-mz-to-pay th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></strong>
+                </div>
+
+                <div class="mz-pay-error" role="alert" data-mz-pay-error hidden>
+                    <i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i><span data-mz-pay-error-text></span>
+                </div>
+
+                <button type="button" class="btn btn-primary btn-lg w-100 mz-pay-go d-none d-lg-flex" data-mz-pay-go>
+                    <span data-mz-pay-label>Pay</span>
+                </button>
+                <p class="mz-pay-secure"><i class="bi bi-shield-lock-fill" aria-hidden="true"></i>
+                    <span>Cards and net banking are secured by Razorpay. MediZon never sees your card details, UPI PIN or bank password.</span></p>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Phones: the amount and the button stay at the bottom of the screen, like a payment app -->
+    <div class="mz-pay-bar d-lg-none">
+        <div>
+            <div class="small text-muted">To pay</div>
+            <strong data-mz-to-pay th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></strong>
+        </div>
+        <button type="button" class="btn btn-primary btn-lg mz-pay-go" data-mz-pay-go>
+            <span data-mz-pay-label>Pay</span>
+        </button>
+    </div>
+</main>
+
+<!-- MediZon UPI: pick a UPI app, or enter and verify a UPI ID, or scan the QR; approve the request; enter the UPI PIN.
+     The PIN is checked here and never sent. A bottom sheet on phones, a window on larger screens. -->
+<div class="mz-upi" data-mz-upi hidden>
+    <div class="mz-upi-sheet" role="dialog" aria-modal="true" aria-labelledby="mzUpiTitle">
+        <header class="mz-upi-head">
+            <button type="button" class="mz-upi-icon-btn" data-mz-upi-back aria-label="Back" hidden><i class="bi bi-arrow-left"></i></button>
+            <div class="flex-grow-1 min-w-0">
+                <div class="mz-upi-brand" id="mzUpiTitle"><i class="bi bi-lightning-charge-fill" aria-hidden="true"></i>MediZon UPI</div>
+                <div class="small text-muted">Paying MediZon Pharmacy</div>
+            </div>
+            <div class="mz-upi-amount" data-mz-upi-amount>₹0.00</div>
+            <button type="button" class="mz-upi-icon-btn" data-mz-upi-close aria-label="Cancel payment"><i class="bi bi-x-lg"></i></button>
+        </header>
+        <div class="mz-upi-test" th:if="${upiTestMode}"><i class="bi bi-cone-striped" aria-hidden="true"></i>Test mode: no real money moves</div>
+
+        <!-- 1. How to pay -->
+        <section class="mz-upi-body" data-mz-upi-step="choose">
+            <div class="mz-upi-label">Pay using UPI app</div>
+            <div class="mz-upi-apps">
+                <button type="button" class="mz-upi-app" data-mz-upi-app="Google Pay" data-mz-upi-mark="G" style="--app:#1A73E8">
+                    <span class="mz-upi-app-mark">G</span>Google Pay</button>
+                <button type="button" class="mz-upi-app" data-mz-upi-app="PhonePe" data-mz-upi-mark="Pe" style="--app:#5F259F">
+                    <span class="mz-upi-app-mark">Pe</span>PhonePe</button>
+                <button type="button" class="mz-upi-app" data-mz-upi-app="Paytm" data-mz-upi-mark="P" style="--app:#00A3E0">
+                    <span class="mz-upi-app-mark">P</span>Paytm</button>
+                <button type="button" class="mz-upi-app" data-mz-upi-app="BHIM" data-mz-upi-mark="B" style="--app:#E86A10">
+                    <span class="mz-upi-app-mark">B</span>BHIM</button>
+            </div>
+
+            <div class="mz-upi-or"><span>or</span></div>
+
+            <form class="mz-upi-id" data-mz-upi-id-form novalidate>
+                <label class="mz-upi-label" for="mzUpiId">Pay using UPI ID</label>
+                <div class="mz-upi-field">
+                    <input id="mzUpiId" name="upiId" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                           inputmode="email" placeholder="mobilenumber@upi" maxlength="80">
+                    <button type="submit" class="mz-upi-verify" data-mz-upi-verify>Verify</button>
+                </div>
+                <div class="mz-upi-handles" aria-label="Common UPI handles">
+                    <button type="button" data-mz-upi-handle="@ybl">@ybl</button>
+                    <button type="button" data-mz-upi-handle="@okaxis">@okaxis</button>
+                    <button type="button" data-mz-upi-handle="@oksbi">@oksbi</button>
+                    <button type="button" data-mz-upi-handle="@paytm">@paytm</button>
+                </div>
+                <div class="mz-upi-verified" data-mz-upi-verified hidden>
+                    <i class="bi bi-patch-check-fill" aria-hidden="true"></i>
+                    <span><span class="small text-muted d-block">Verified name</span><strong data-mz-upi-name></strong></span>
+                </div>
+                <div class="mz-upi-error" role="alert" data-mz-upi-id-error hidden></div>
+                <button type="button" class="btn btn-primary w-100 mz-upi-cta" data-mz-upi-request disabled>
+                    Verify your UPI ID to pay</button>
+            </form>
+
+            <div class="mz-upi-or"><span>or</span></div>
+
+            <div class="mz-upi-qr">
+                <canvas width="132" height="132" data-mz-upi-qr aria-label="UPI QR code"></canvas>
+                <div>
+                    <div class="fw-semibold">Scan QR code</div>
+                    <div class="small text-muted mb-2">Open any UPI app on your phone and scan to pay.</div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-mz-upi-scan>
+                        <i class="bi bi-qr-code-scan me-1" aria-hidden="true"></i>I've scanned it</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Waiting for approval in the UPI app -->
+        <section class="mz-upi-body text-center" data-mz-upi-step="wait" hidden>
+            <div class="mz-upi-wait-mark" data-mz-upi-wait-mark style="--app:var(--mz-green)">UPI</div>
+            <h3 class="h5 mt-3 mb-1" data-mz-upi-wait-title>Approve the payment</h3>
+            <p class="small text-muted mb-2" data-mz-upi-wait-text>Open your UPI app and approve the request from MediZon.</p>
+            <div class="mz-upi-timer"><i class="bi bi-clock" aria-hidden="true"></i>Request expires in <strong data-mz-upi-timer>5:00</strong></div>
+
+            <!-- What the customer's UPI app shows, played here in test mode -->
+            <div class="mz-upi-phone">
+                <div class="mz-upi-phone-label"><i class="bi bi-phone" aria-hidden="true"></i><span data-mz-upi-phone-label>Your UPI app</span></div>
+                <div class="mz-upi-notif">
+                    <div class="mz-upi-notif-head">
+                        <span class="mz-upi-notif-logo"><i class="bi bi-capsule" aria-hidden="true"></i></span>
+                        <span class="text-start flex-grow-1"><strong>MediZon Pharmacy</strong>
+                            <span class="d-block small text-muted">is requesting money</span></span>
+                        <strong class="mz-upi-notif-amount" data-mz-upi-amount>₹0.00</strong>
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="button" class="btn btn-outline-secondary flex-fill" data-mz-upi-decline>Decline</button>
+                        <button type="button" class="btn btn-primary flex-fill" data-mz-upi-approve>Pay</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. UPI PIN, as the bank's screen asks for it -->
+        <section class="mz-upi-body mz-upi-pin" data-mz-upi-step="pin" hidden>
+            <div class="mz-upi-pin-to">
+                <div><span class="small text-muted d-block">Paying</span><strong>MediZon Pharmacy</strong></div>
+                <strong class="fs-5" data-mz-upi-amount>₹0.00</strong>
+            </div>
+            <div class="small text-muted text-center mt-2" data-mz-upi-from></div>
+            <div class="mz-upi-pin-title" data-mz-upi-pin-title>ENTER 4-DIGIT UPI PIN</div>
+            <div class="mz-upi-dots" data-mz-upi-dots aria-live="polite"></div>
+            <div class="mz-upi-pin-error" role="alert" data-mz-upi-pin-error hidden></div>
+            <button type="button" class="mz-upi-pin-switch" data-mz-upi-pin-switch>Use a 6-digit PIN</button>
+            <div class="mz-upi-keypad" role="group" aria-label="UPI PIN keypad">
+                <button type="button" data-mz-upi-key="1">1</button><button type="button" data-mz-upi-key="2">2</button>
+                <button type="button" data-mz-upi-key="3">3</button><button type="button" data-mz-upi-key="4">4</button>
+                <button type="button" data-mz-upi-key="5">5</button><button type="button" data-mz-upi-key="6">6</button>
+                <button type="button" data-mz-upi-key="7">7</button><button type="button" data-mz-upi-key="8">8</button>
+                <button type="button" data-mz-upi-key="9">9</button>
+                <button type="button" data-mz-upi-key="back" aria-label="Delete"><i class="bi bi-backspace"></i></button>
+                <button type="button" data-mz-upi-key="0">0</button>
+                <button type="button" data-mz-upi-key="ok" class="is-ok" aria-label="Pay"><i class="bi bi-check-lg"></i></button>
+            </div>
+            <p class="mz-upi-pin-note"><i class="bi bi-lock-fill" aria-hidden="true"></i>Your UPI PIN stays on this device. MediZon never receives it.</p>
+        </section>
+
+        <!-- 4. Processing -->
+        <section class="mz-upi-body text-center py-5" data-mz-upi-step="processing" hidden>
+            <div class="mz-pay-spinner" aria-hidden="true"></div>
+            <h3 class="h5 mt-3 mb-1">Processing your payment</h3>
+            <p class="small text-muted mb-0">Please don't close this window.</p>
+        </section>
+    </div>
+</div>
+
+<!-- Confirming, then "Order placed", then on to the order -->
+<div class="mz-pay-overlay" data-mz-pay-overlay hidden>
+    <div class="mz-pay-overlay-card" role="dialog" aria-modal="true" aria-labelledby="mzPayOverlayTitle">
+        <div data-mz-pay-state="busy">
+            <div class="mz-pay-spinner" aria-hidden="true"></div>
+            <h2 class="h5 mt-3 mb-1" id="mzPayOverlayTitle" data-mz-pay-busy-title>Confirming your payment</h2>
+            <p class="small text-muted mb-0">Please don't close or refresh this page.</p>
+        </div>
+        <div data-mz-pay-state="done" hidden>
+            <svg class="mz-pay-tick" viewBox="0 0 52 52" aria-hidden="true">
+                <circle cx="26" cy="26" r="24"/>
+                <path d="M15 27 l7 7 l15 -16"/>
+            </svg>
+            <h2 class="h4 mt-3 mb-1" tabindex="-1" data-mz-pay-done-title>Order placed!</h2>
+            <p class="mb-1" data-mz-pay-paid></p>
+            <p class="small text-muted mb-3" data-mz-pay-numbers></p>
+            <div class="mz-pay-progress" aria-hidden="true"><span></span></div>
+            <p class="small text-muted mt-2 mb-3">Taking you to your order…</p>
+            <a class="btn btn-primary w-100" href="#" data-mz-pay-view>View order</a>
+        </div>
+    </div>
+</div>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+<script th:if="${razorpayOn}" src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script th:src="@{/js/payment.js}"></script>
+</body>
+</html>

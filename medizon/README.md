@@ -7,7 +7,9 @@ AI-read prescriptions that a pharmacist approves and that fill the cart by thems
 Apache POI (Excel export). Tests use JUnit 5 and Mockito.
 The assistant is a separate Python service (FastAPI + scikit-learn) in [`../medizon-assistant`](../medizon-assistant); it needs no external AI service or API key.
 Google Gemini (optional, `GEMINI_API_KEY`) reads uploaded prescriptions. Groq (optional, `GROQ_API_KEY`) answers chat
-questions the assistant can't, with Gemini as backup.
+questions the assistant can't, with Gemini as backup. Razorpay (optional, `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET`)
+takes card and net banking payments with its test keys; UPI goes through MediZon UPI, a built-in test-mode UPI checkout.
+No real money moves.
 
 ## Run it
 
@@ -53,6 +55,9 @@ All settings are in `application.properties` and can be overridden with environm
 | `GROQ_API_KEY`, `GROQ_MODEL` | Groq key (web app only) for the chat fallback; models tried in order (default `openai/gpt-oss-120b,openai/gpt-oss-20b`) |
 | `GEMINI_MODEL` | Gemini model (default `gemini-flash-latest`; `gemini-flash-lite-latest` allows more free requests) |
 | `AI_PROVIDER`, `AI_FAST_TRACK_SCORE` | Which AI reads prescriptions (default `gemini`); AI score from which a prescription is fast-tracked (default 80) |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_METHODS` | Razorpay API keys (`rzp_test_...` for test payments), and what the account takes of `UPI`, `CARD`, `NETBANKING` (default `CARD,NETBANKING`: Razorpay turns UPI on after KYC). Empty keys: cards and net banking aren't offered |
+| `UPI_TEST_MODE` | MediZon UPI, the built-in test-mode UPI checkout (default `true`). It takes UPI unless Razorpay does |
+| `PAYMENT_SETTLE_MINUTES` | A payment still unconfirmed this long is checked with Razorpay and refunded if it took money without an order (default 20) |
 | `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_USER`, `MAIL_PASSWORD` | Email copies of reminders and alerts (logged only when disabled) |
 | `UPLOAD_DIR` | Where prescription files and return photos are stored |
 | `SELLER_NAME`, `SELLER_GSTIN`, `SELLER_DRUG_LICENSE`, `SELLER_ADDRESS`, `SELLER_STATE`, `SELLER_PHONE`, `SELLER_EMAIL` | Seller details on GST invoices and in the site footer. `SELLER_STATE` decides CGST + SGST (same state as the customer) or IGST. Placeholder values are set in `application.properties` until real ones are given |
@@ -246,6 +251,46 @@ performance, with no outside service needed:
   far as it goes and the chosen method pays the rest (`Order.walletUsed`); cancelled orders get it back at once.
   Deleting an account deletes its unspent balance.
 
+## Payment (UPI, cards, net banking, pay on delivery)
+
+Orders are placed only once they're paid. Checkout's **Pay now** opens the payment page (`/checkout/payment`):
+MediZon Money (a switch; it pays as much as it can), then for the rest **UPI**, **credit / debit card**, **net
+banking**, or **pay on delivery** (cash, UPI and more at the door; placed at once, paid when it arrives).
+
+Each online method goes to the gateway that takes it (`payment.PaymentGateways`): cards and net banking to Razorpay,
+UPI to **MediZon UPI** (`payment.MediZonUpiGateway`) until Razorpay's account takes UPI (`RAZORPAY_METHODS`).
+
+```
+Pay ₹X ──► POST /api/checkout/pay ──► PaymentService.open: cart checked, gateway order for what MediZon Money doesn't
+                                       cover, choice saved (checkout_payments, CREATED). Nothing is placed yet.
+Card / net banking:  Razorpay Checkout, only that method ──► POST /api/checkout/pay/confirm ──► signature checked
+                     (HMAC-SHA256 with the key secret), payment fetched and captured
+UPI:  MediZon UPI sheet (js/payment.js) ──► POST /api/checkout/upi/approve
+Then:  cart checked again ──► orders placed, PAID, gateway + payment id saved ──► "Order placed" screen ──► the order
+Pay on delivery / all MediZon Money:  Place order ──► POST /api/checkout/place ──► orders placed
+```
+
+**MediZon UPI** plays the part a UPI payment service plays, in test mode (no real money; the sheet says so):
+
+- Pay with a UPI app (Google Pay, PhonePe, Paytm, BHIM), a UPI ID (checked first: `POST /api/checkout/upi/verify`
+  shows the name it belongs to; handles like `@ybl` fill in) or a QR code.
+- The request waits 5 minutes for approval, with a countdown. In test mode the UPI app's request (Decline / Pay) is
+  shown on the same screen, then its UPI PIN pad (4 or 6 digits, keyboard too). The PIN is checked in the browser and
+  never sent, as a real UPI PIN never reaches the shop. `0000` plays a wrong PIN (3 tries).
+- A UPI ID starting with `failure` (e.g. `failure@okaxis`) is declined by the "bank", to try the failure path.
+- The payment id is a 12-digit UTR. Requests live in memory; one open when the app restarts expires.
+
+Throughout:
+
+- Money is never kept without an order. If the orders can't be placed after paying (stock ran out, the cart changed),
+  the payment is refunded at once. `PaymentService.settleLeftovers` (every 5 minutes) checks payments still unconfirmed
+  after `PAYMENT_SETTLE_MINUTES` and refunds them.
+- A confirmation sent twice places the orders once (`checkout_payments.status` moves CREATED → PLACING → PLACED).
+- **Refunds** go back through the gateway that took the payment (`Order.paymentGateway`): the amount paid online when
+  an order is cancelled, and a return's refund to the original method on its refund day. Orders paid on delivery
+  refund to MediZon Money, a UPI ID or a bank account.
+- Razorpay test payments: a test card or bank from its docs; they and their refunds show in its dashboard's Test Mode.
+
 ## Help & support
 
 - **Support** (in the category bar, the account menu and the side menu) starts with **Quick answers**: common questions
@@ -364,8 +409,9 @@ Run the tests with `mvn test` (they are plain unit tests and need no database).
 ## Before production
 
 - Replace `ddl-auto=update` with Flyway migrations.
-- Connect a real payment gateway (Razorpay or similar) in `OrderService.createOrder`, and real payouts for
-  UPI, bank and card refunds in `ReturnService.refundDue` (they're marked paid on their day, but no money moves yet).
+- Switch to live gateway keys (needs business KYC) and add the gateways' webhooks, so a payment completed after the
+  browser closes becomes an order instead of being refunded by `PaymentService.settleLeftovers`. Refunds to a UPI ID or bank
+  account for cash-on-delivery returns still need a payout service (RazorpayX); they're marked paid on their day.
 - Move prescription files to object storage (S3) and keep them encrypted. On hosts with a wiped disk (e.g. Render
   without a persistent disk) uploads are lost on every deploy.
 - Use a paid Gemini key: the free tier may use what's sent to improve Google's models.

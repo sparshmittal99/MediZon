@@ -86,7 +86,7 @@ public class ReorderService {
                 notifications.notify(user, NotificationType.AUTO_REORDER, "Refill ordered: " + title,
                         "There's " + supply + " of " + title + " left, so we ordered " + p.getReorderPacks()
                                 + " pack(s). Order " + o.getOrderNumber() + ", ₹" + o.getTotal()
-                                + ", cash on delivery. You can cancel it before it ships.",
+                                + ", pay on delivery. You can cancel it before it ships.",
                         "/orders/" + o.getId(), p.getMember());
                 log.info("Auto-reorder {} placed for plan {}", o.getOrderNumber(), p.getId());
             } else {

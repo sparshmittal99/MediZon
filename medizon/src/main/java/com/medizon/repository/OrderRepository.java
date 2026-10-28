@@ -30,6 +30,7 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     long countByStoreAndStatus(Store store, OrderStatus status);
     List<Order> findTop8ByStoreOrderByCreatedAtDesc(Store store);
     List<Order> findByCheckoutRefOrderByIdAsc(String checkoutRef);
+    List<Order> findByGatewayOrderIdOrderByIdAsc(String gatewayOrderId);
     Optional<Order> findByOrderNumberIgnoreCase(String orderNumber);
 
     /** When the first order was placed, for the years the Orders filter offers. */

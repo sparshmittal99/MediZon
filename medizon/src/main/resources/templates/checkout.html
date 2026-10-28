@@ -76,10 +76,11 @@
                 </form>
             </section>
 
-            <form id="placeOrder" th:action="@{/checkout}" method="post" class="mz-panel">
+            <!-- "Pay now" sends the chosen address on to the payment page, where the customer picks how to pay -->
+            <form id="placeOrder" th:action="@{/checkout/payment}" method="get">
                 <!-- Each prescription medicine comes from whichever approved prescription has it (the one for its patient
                      first, several if needed); nothing to choose. Anything none of them covers is named here. -->
-                <div th:if="${cart.prescriptionRequired}" class="mb-4">
+                <div th:if="${cart.prescriptionRequired}" class="mz-panel mb-4">
                     <h2 class="h5 mb-2">Prescriptions used</h2>
                     <ul class="mz-rx-covers small">
                         <li th:each="i : ${cart.items}" th:if="${i.medicine.prescriptionRequired}"
@@ -93,26 +94,6 @@
                     <div th:unless="${rxCoverage.complete}" class="alert alert-warning small mt-2 mb-0">
                         <span th:text="${#strings.listJoin(rxCoverage.problems, ' ')}"></span>
                         Remove those items or change the quantity, or upload a prescription that includes them.
-                    </div>
-                </div>
-
-                <h2 class="h5 mb-3">Payment</h2>
-                <!-- MediZon Money pays as much as it can; the method below pays the rest -->
-                <label class="mz-addr-pick mb-3" th:classappend="${walletBalance.signum() == 0} ? 'is-off'">
-                    <input type="checkbox" name="useWallet" value="true" data-mz-use-wallet
-                           th:checked="${walletBalance.signum() > 0}" th:disabled="${walletBalance.signum() == 0}">
-                    <span class="mz-addr-pick-body">
-                        <strong><i class="bi bi-wallet2 me-1" aria-hidden="true"></i>MediZon Money</strong>
-                        <span class="d-block small" th:text="'Balance ₹' + ${#numbers.formatDecimal(walletBalance, 1, 'COMMA', 2, 'POINT')}"></span>
-                    </span>
-                </label>
-                <p class="small text-success mb-2" data-mz-wallet-covers hidden><i class="bi bi-check-circle me-1"></i>MediZon Money covers the whole order.</p>
-                <div data-mz-pay-rest>
-                    <p class="small text-muted mb-2" data-mz-pay-rest-label hidden></p>
-                    <div class="form-check mb-2" th:each="pm, s : ${paymentMethods}">
-                        <input class="form-check-input" type="radio" name="paymentMethod" th:id="'pm' + ${s.index}"
-                               th:value="${pm}" th:checked="${s.first}">
-                        <label class="form-check-label" th:for="'pm' + ${s.index}" th:text="${pm.label}">COD</label>
                     </div>
                 </div>
             </form>
@@ -196,13 +177,6 @@
                     <span>Round off</span><span th:text="${cart.roundOffLabel}"></span></div>
                 <div class="d-flex justify-content-between fw-bold fs-5 mb-2"><span>Total</span>
                     <span th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
-                <!-- Filled in by the page script as MediZon Money is ticked -->
-                <div data-mz-checkout-pay th:attr="data-total=${cart.total}, data-balance=${walletBalance}">
-                    <div class="d-flex justify-content-between mb-1 text-success" data-mz-wallet-line hidden>
-                        <span>MediZon Money</span><span data-mz-wallet-amount></span></div>
-                    <div class="d-flex justify-content-between fw-semibold mb-3" data-mz-to-pay-line hidden>
-                        <span>To pay</span><span data-mz-to-pay></span></div>
-                </div>
                 <p class="small text-success mb-3" th:if="${cart.discounted}"
                    th:text="'You save ₹' + ${cart.discount} + ' on this order with ' + ${cart.couponCode} + '.'"></p>
                 <div th:if="${minShort.signum() > 0}" class="mz-min-order mb-3" role="status">
@@ -215,8 +189,10 @@
                         </div>
                     </div>
                 </div>
-                <button form="placeOrder" class="btn btn-primary w-100" type="submit"
-                        th:disabled="${selectedAddress == null or (cart.prescriptionRequired and !rxCoverage.complete) or minShort.signum() > 0}">Place order</button>
+                <button form="placeOrder" class="btn btn-primary btn-lg w-100 mz-pay-now" type="submit"
+                        th:disabled="${selectedAddress == null or (cart.prescriptionRequired and !rxCoverage.complete) or minShort.signum() > 0}">
+                    Pay now</button>
+                <p class="small text-muted text-center mt-2 mb-0">Choose UPI, card, net banking, MediZon Money or pay on delivery next</p>
             </div>
         </div>
     </div>
