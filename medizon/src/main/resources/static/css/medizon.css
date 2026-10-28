@@ -1302,14 +1302,8 @@ html.translated-ltr h1, html.translated-ltr h2, html.translated-ltr h3, html.tra
 .mz-pay-total { display: flex; justify-content: space-between; align-items: baseline; margin: 1rem 0 1.1rem; padding-top: 1rem;
     border-top: 1px dashed var(--mz-line); font-weight: 700; }
 .mz-pay-total strong { font-size: 1.65rem; letter-spacing: -.02em; color: var(--mz-ink); }
-.mz-pay-go { display: flex; justify-content: center; align-items: center; gap: .5rem; border-radius: .85rem; font-weight: 700;
-    box-shadow: 0 8px 20px rgba(14, 107, 87, .25); }
-.mz-pay-go:disabled { box-shadow: none; }
-.mz-pay-go i { transition: transform .15s; }
-.mz-pay-go:not(:disabled):hover i { transform: translateX(3px); }
 .mz-pay-secure { display: flex; gap: .45rem; align-items: flex-start; margin: .9rem 0 0; font-size: .8rem; color: var(--mz-muted); }
 .mz-pay-secure i { color: var(--mz-green); }
-.mz-pay-now { display: flex; justify-content: center; align-items: center; gap: .25rem; border-radius: .85rem; font-weight: 700; }
 
 /* Phones: amount and button pinned to the bottom, in place of the tab bar and the assistant */
 .mz-pay-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1065; display: flex; justify-content: space-between; align-items: center;
@@ -1402,7 +1396,7 @@ body.mz-upi-open { overflow: hidden; }
     background: var(--mz-mint); }
 .mz-upi-verified > i { font-size: 1.3rem; color: var(--mz-green); }
 .mz-upi-error, .mz-upi-pin-error { margin-top: .6rem; font-size: .85rem; color: var(--mz-red); }
-.mz-upi-cta { margin-top: .9rem; padding: .7rem; border-radius: .8rem; font-weight: 700; }
+.mz-upi-cta { margin-top: .9rem; }
 
 .mz-upi-qr { display: flex; align-items: center; gap: 1rem; padding: .9rem; border: 1px dashed #A9C9BB; border-radius: .9rem; }
 .mz-upi-qr canvas { flex: none; width: 6.5rem; height: 6.5rem; border-radius: .4rem; image-rendering: pixelated; }

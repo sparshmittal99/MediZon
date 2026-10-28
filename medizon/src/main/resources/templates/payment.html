@@ -118,7 +118,7 @@
                     <i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i><span data-mz-pay-error-text></span>
                 </div>
 
-                <button type="button" class="btn btn-primary btn-lg w-100 mz-pay-go d-none d-lg-flex" data-mz-pay-go>
+                <button type="button" class="btn btn-primary w-100 d-none d-lg-block" data-mz-pay-go>
                     <span data-mz-pay-label>Pay</span>
                 </button>
                 <p class="mz-pay-secure"><i class="bi bi-shield-lock-fill" aria-hidden="true"></i>
@@ -133,7 +133,7 @@
             <div class="small text-muted">To pay</div>
             <strong data-mz-to-pay th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></strong>
         </div>
-        <button type="button" class="btn btn-primary btn-lg mz-pay-go" data-mz-pay-go>
+        <button type="button" class="btn btn-primary mz-pay-go" data-mz-pay-go>
             <span data-mz-pay-label>Pay</span>
         </button>
     </div>
