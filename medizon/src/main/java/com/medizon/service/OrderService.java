@@ -51,7 +51,6 @@ public class OrderService {
     private final WalletService wallet;
     private final OrderSettingsService orderSettings;
     private final PaymentGateways gateways;
-    private final OrderEmailService orderEmails;
 
     /** One order line: packs of a medicine and how many packs each person gets. */
     /** @param othersPatient who the "Others" share is for, when known (from a prescription) */
@@ -181,7 +180,7 @@ public class OrderService {
                     "/orders");
         }
         placed.forEach(this::alertStore);
-        placed.forEach(orderEmails::sendOrderConfirmation);
+        placed.forEach(o -> events.publishEvent(new OrderEmailService.Placed(o.getId())));
         return placed;
     }
 
@@ -273,7 +272,7 @@ public class OrderService {
                 PaymentMethod.COD, coverage, OrderSource.AUTO_REORDER, refillAddress(plan), null).get(0);
         prescriptionService.finishUse(coverage.prescriptions());
         alertStore(o);
-        orderEmails.sendOrderConfirmation(o);
+        events.publishEvent(new OrderEmailService.Placed(o.getId()));
         return o;
     }
 
@@ -491,7 +490,7 @@ public class OrderService {
                         + (next == OrderStatus.OUT_FOR_DELIVERY ? " Our delivery partner is out for delivery with your package." : "")
                         + (next == OrderStatus.DELIVERED ? " Tell us how it went with a quick review." : ""),
                 "/orders/" + o.getId());
-        orderEmails.sendOrderStatusUpdate(o, next);
+        events.publishEvent(new OrderEmailService.StatusChanged(o.getId(), next));
         return o;
     }
 

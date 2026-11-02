@@ -117,8 +117,16 @@ public class EmailService {
         }
     }
 
+    /** Renders a Thymeleaf HTML email template on the calling thread. */
+    public String render(String templateName, Map<String, Object> variables) {
+        Context context = new Context();
+        if (variables != null) context.setVariables(variables);
+        return templateEngine.process(templateName, context);
+    }
+
     /**
-     * Renders a Thymeleaf HTML email template and sends it asynchronously.
+     * Renders a Thymeleaf HTML email template and sends it asynchronously. Pass plain values only, never JPA
+     * entities: they are read on the mail thread, after the caller's session is gone.
      */
     @Async
     public void sendTemplate(String to, String subject, String templateName, Map<String, Object> variables, String fallbackText) {

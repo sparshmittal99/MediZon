@@ -2,11 +2,15 @@ package com.medizon.service;
 
 import com.medizon.domain.Order;
 import com.medizon.domain.OrderStatus;
+import com.medizon.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.Map;
 
@@ -14,24 +18,49 @@ import java.util.Map;
  * Sends rich modern HTML emails for orders:
  * 1. Order confirmation on checkout
  * 2. Status updates (Confirmed, Shipped, Delivered, Cancelled)
+ *
+ * Orders are passed by id in an event and only read once the change has committed, in a transaction of their own on
+ * the mail thread. Handing the live entity to another thread let the template walk its collections while the request
+ * was still flushing them (ConcurrentModificationException on the admin's save) or after its session had closed
+ * (a lazy-load failure that sent the plain-text fallback instead of the HTML email).
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderEmailService {
 
+    /** An order was placed. */
+    public record Placed(Long orderId) {}
+
+    /** An order moved to {@code status}. */
+    public record StatusChanged(Long orderId, OrderStatus status) {}
+
     private final EmailService emailService;
+    private final OrderRepository orders;
 
     @Value("${medizon.base-url:http://localhost:8080}")
     private String baseUrl;
+
+    @Async
+    @TransactionalEventListener(fallbackExecution = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public void onPlaced(Placed e) {
+        orders.findById(e.orderId()).ifPresent(this::sendOrderConfirmation);
+    }
+
+    @Async
+    @TransactionalEventListener(fallbackExecution = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public void onStatusChanged(StatusChanged e) {
+        orders.findById(e.orderId()).ifPresent(o -> sendOrderStatusUpdate(o, e.status()));
+    }
 
     /**
      * Sent right after checkout is placed. Includes order number, store name, itemized list,
      * pricing breakdown, payment method, delivery address, and direct order view link.
      */
-    @Async
-    public void sendOrderConfirmation(Order order) {
-        if (order == null || order.getUser() == null || !order.getUser().isCustomer() || order.getUser().getEmail() == null) return;
+    private void sendOrderConfirmation(Order order) {
+        if (order.getUser() == null || !order.getUser().isCustomer() || order.getUser().getEmail() == null) return;
 
         String orderUrl = baseUrl.replaceAll("/+$", "") + "/orders/" + order.getId();
         String subject = "Order Placed: #" + order.getOrderNumber() + " | MediZon";
@@ -51,16 +80,14 @@ public class OrderEmailService {
                 + "Track your order here: " + orderUrl + "\n\n"
                 + "Thank you,\nMediZon Pharmacy";
 
-        emailService.sendTemplate(order.getUser().getEmail(), subject, "emails/order-confirmation", variables, fallbackText);
-        log.info("Order placed email queued for order {}", order.getOrderNumber());
+        send(order, subject, "emails/order-confirmation", variables, fallbackText);
     }
 
     /**
      * Sent when an order status changes (CONFIRMED, SHIPPED, DELIVERED, CANCELLED).
      */
-    @Async
-    public void sendOrderStatusUpdate(Order order, OrderStatus nextStatus) {
-        if (order == null || order.getUser() == null || !order.getUser().isCustomer() || order.getUser().getEmail() == null) return;
+    private void sendOrderStatusUpdate(Order order, OrderStatus nextStatus) {
+        if (order.getUser() == null || !order.getUser().isCustomer() || order.getUser().getEmail() == null) return;
 
         String orderUrl = baseUrl.replaceAll("/+$", "") + "/orders/" + order.getId();
         String invoiceUrl = baseUrl.replaceAll("/+$", "") + "/orders/" + order.getId() + "/invoice";
@@ -100,8 +127,18 @@ public class OrderEmailService {
                 + "View Order: " + orderUrl + "\n\n"
                 + "Regards,\nMediZon";
 
-        emailService.sendTemplate(order.getUser().getEmail(), subject, "emails/order-status", variables, fallbackText);
-        log.info("Order status update email ({}) queued for order {}", nextStatus, order.getOrderNumber());
+        send(order, subject, "emails/order-status", variables, fallbackText);
+    }
+
+    /** Renders here, while the order's session is open, so only finished strings leave this thread. */
+    private void send(Order order, String subject, String template, Map<String, Object> variables, String fallbackText) {
+        String to = order.getUser().getEmail();
+        try {
+            emailService.sendHtml(to, subject, emailService.render(template, variables), fallbackText);
+            log.info("Email '{}' queued for order {}", template, order.getOrderNumber());
+        } catch (RuntimeException ex) {
+            log.warn("Could not render '{}' for order {}; sending plain text", template, order.getOrderNumber(), ex);
+            emailService.send(to, subject, fallbackText);
+        }
     }
 }
-
