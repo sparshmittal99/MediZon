@@ -185,7 +185,7 @@ class CustomerFlowTests(unittest.TestCase):
         for question, expected in [("What is your return policy?", "7 days of delivery"),
                                    ("How do refunds work?", "5 to 7 working days"),
                                    ("What are the delivery charges?", "₹499"),
-                                   ("How can I pay?", "cash on delivery"),
+                                   ("How can I pay?", "pay on delivery"),
                                    ("Can I cancel my order?", "until it ships")]:
             with self.subTest(question=question):
                 out = Chat().send(question)

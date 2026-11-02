@@ -569,7 +569,8 @@ body *::-webkit-scrollbar { display: none; }
 .mz-pw-toggle { position: absolute; right: .35rem; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--mz-muted);
     padding: .25rem .45rem; border-radius: .4rem; }
 .mz-pw-toggle:hover { color: var(--mz-green); }
-.mz-pw .form-control.is-invalid { background-image: none; }
+/* Bootstrap's tick / warning icons would sit under the eye button; the messages below the field say it instead */
+.mz-pw .form-control.is-invalid, .mz-pw .form-control.is-valid { background-image: none; padding-right: 2.6rem; }
 .mz-pw ~ .invalid-feedback { display: none; }
 .mz-pw:has(.is-invalid) ~ .invalid-feedback { display: block; }
 @media (max-width: 991.98px) { .mz-account-nav { flex-direction: row; flex-wrap: wrap; } .mz-account-nav a { padding: .4rem .65rem; font-size: .9rem; } }
@@ -1333,6 +1334,18 @@ html.translated-ltr h1, html.translated-ltr h2, html.translated-ltr h3, html.tra
 .mz-pay-progress { height: .3rem; border-radius: 999px; background: var(--mz-mint); overflow: hidden; }
 .mz-pay-progress span { display: block; height: 100%; width: 0; background: var(--mz-green); animation: mz-pay-fill 3.2s linear forwards; }
 .mz-pay-overlay [data-mz-pay-done-title]:focus { outline: none; }
+
+/* Custom Overlay Alerts (modeled directly on Order Placed alert) */
+.mz-custom-alert-overlay { position: fixed; inset: 0; z-index: 2050; display: grid; place-items: center; padding: 1rem;
+    background: rgba(23, 48, 42, .45); backdrop-filter: blur(4px); animation: mz-pay-fade .2s ease; }
+.mz-custom-alert-overlay[hidden] { display: none !important; }
+.mz-custom-alert-card { width: min(24rem, 100%); padding: 2.25rem 1.75rem 1.75rem; text-align: center; background: #fff; border-radius: 1.25rem;
+    box-shadow: 0 24px 60px rgba(23, 48, 42, .25); animation: mz-pay-pop .3s cubic-bezier(.2, .9, .3, 1.2); }
+.mz-pay-cross { width: 4.5rem; height: 4.5rem; display: block; margin: 0 auto; }
+.mz-pay-cross circle { fill: #FEF2F2; stroke: #EF4444; stroke-width: 2.5; stroke-dasharray: 151; stroke-dashoffset: 151;
+    animation: mz-pay-draw .5s ease-out forwards; }
+.mz-pay-cross path { fill: none; stroke: #EF4444; stroke-width: 3.5; stroke-linecap: round;
+    stroke-dasharray: 40; stroke-dashoffset: 40; animation: mz-pay-draw .35s .45s ease-out forwards; }
 @keyframes mz-pay-fade { from { opacity: 0; } }
 @keyframes mz-pay-pop { from { opacity: 0; transform: translateY(12px) scale(.96); } }
 @keyframes mz-pay-spin { to { transform: rotate(360deg); } }
@@ -1450,3 +1463,13 @@ body.mz-upi-open { overflow: hidden; }
     .mz-upi, .mz-upi-sheet, .mz-upi-notif { animation: none; }
     .mz-upi-wait-mark::after { animation: none; }
 }
+
+/* Forgot password: "Resend code" link with its countdown, and the live "passwords match" badge */
+.mz-resend { font-size: .875rem; color: #0E6B57; font-variant-numeric: tabular-nums; }
+.mz-resend:disabled, .mz-resend.mz-resend-wait { color: #7B908A; opacity: 1; cursor: not-allowed; }
+.mz-pw-match { display: inline-flex; align-items: center; gap: .35rem; margin-top: .5rem; padding: .25rem .6rem;
+    border-radius: .5rem; font-size: .875rem; font-weight: 600; }
+.mz-pw-match[hidden] { display: none; }
+.mz-pw-match.ok { color: #0E6B57; background: #E6F5F0; border: 1px solid #A7F3D0; }
+.mz-pw-match.bad { color: #991B1B; background: #FEF2F2; border: 1px solid #FECACA; }
+.mz-code-input:not(:placeholder-shown) { letter-spacing: .35em; }

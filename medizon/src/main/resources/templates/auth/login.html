@@ -9,6 +9,7 @@
     <div class="mz-auth mz-panel">
         <h1 class="h3 mb-1">Sign in</h1>
         <p class="text-muted mb-4">Welcome back to MediZon.</p>
+
         <div th:if="${param.error}" class="alert alert-danger">That email and password don't match. Try again.</div>
         <div th:if="${param.locked}" class="alert alert-danger">Too many wrong passwords. Wait 15 minutes, then try again.</div>
         <div th:if="${param.disabled}" class="alert alert-danger">This account has been disabled. Contact MediZon support for help.</div>
@@ -17,13 +18,17 @@
             <i class="bi bi-bag-check me-1" aria-hidden="true"></i>
             Sign in to check out. The <span th:text="${cartCount}"></span> item(s) in your cart stay there.
         </div>
+
         <form th:action="@{/login}" method="post">
             <div class="mb-3">
                 <label class="form-label" for="email">Email</label>
                 <input class="form-control" id="email" name="email" type="email" autocomplete="username" required autofocus>
             </div>
             <div class="mb-3">
-                <label class="form-label" for="password">Password</label>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label mb-0" for="password">Password</label>
+                    <a th:href="@{/forgot-password}" class="small text-decoration-none">Forgot password?</a>
+                </div>
                 <div class="mz-pw">
                     <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required>
                     <button type="button" class="mz-pw-toggle" data-mz-pw-toggle aria-label="Show password"><i class="bi bi-eye"></i></button>
@@ -38,7 +43,25 @@
         <p class="small text-center mt-4 mb-0">New to MediZon? <a th:href="@{/register}">Create an account</a></p>
     </div>
 </main>
+
+<!-- Password changed pop-up: closes itself after a moment (password-reset.js) -->
+<div class="mz-custom-alert-overlay" id="mzSuccessModal" th:if="${passwordResetSuccess}" role="alertdialog" aria-modal="true" aria-labelledby="mzSuccessModalTitle">
+    <div class="mz-custom-alert-card">
+        <svg class="mz-pay-tick" viewBox="0 0 52 52" aria-hidden="true">
+            <circle cx="26" cy="26" r="24"/>
+            <path d="M15 27 l7 7 l15 -16"/>
+        </svg>
+        <h2 class="h4 mt-3 mb-1" id="mzSuccessModalTitle">Password Changed!</h2>
+        <p class="small text-muted mt-2 mb-2">
+            Your account password has been updated successfully.
+        </p>
+        <div class="small fw-semibold mt-3" style="color: #0E6B57;">Please sign in</div>
+    </div>
+</div>
+
 <footer th:replace="~{fragments/layout :: footer}"></footer>
 <th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+
+<script th:src="@{/js/password-reset.js}"></script>
 </body>
 </html>

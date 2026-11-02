@@ -138,7 +138,7 @@ public class OrderController {
 
     /** Order sections on the customer's Orders page. */
     private static final Map<String, Set<OrderStatus>> TABS = Map.of(
-            "pending", EnumSet.of(OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.SHIPPED),
+            "pending", EnumSet.of(OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY),
             "completed", EnumSet.of(OrderStatus.DELIVERED),
             "cancelled", EnumSet.of(OrderStatus.CANCELLED));
 

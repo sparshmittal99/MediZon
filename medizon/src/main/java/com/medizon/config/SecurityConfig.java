@@ -117,7 +117,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**").hasRole("ADMIN")
                 // Browsers report JavaScript errors and page load times, signed in or not
                 .requestMatchers("/api/monitoring/**").permitAll()
-                .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/register", "/login",
+                .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/register", "/login", "/forgot-password", "/verify-code", "/reset-password", "/resend-code", "/api/auth/**",
                         "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/error").permitAll()
                 // Site icons, also under their content-hashed names (favicon-3f9a….svg) from the resource chain
                 .requestMatchers("/favicon*", "/apple-touch-icon*").permitAll()
@@ -147,7 +147,7 @@ public class SecurityConfig {
                         "/stock-alerts/**", "/api/stock-alerts/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
             // sendBeacon can't send the CSRF header; these endpoints only record telemetry
-            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**"))
+            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**", "/api/auth/**"))
             // On top of Spring's defaults (nosniff, X-Frame-Options DENY, HSTS over HTTPS, no-store)
             .headers(headers -> headers
                 .addHeaderWriter((request, response) -> response.setHeader("Content-Security-Policy",

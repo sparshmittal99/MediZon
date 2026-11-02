@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>Welcome to MediZon</title>
+    <style>
+        @media only screen and (max-width: 520px) {
+            .mz-wrap { padding: 12px 6px !important; }
+            .mz-card { width: 100% !important; max-width: 100% !important; border-radius: 8px !important; }
+            .mz-header { padding: 22px 20px !important; }
+            .mz-body { padding: 22px 18px !important; }
+            .mz-footer { padding: 18px 20px !important; }
+            .mz-btn { display: block !important; width: 100% !important; box-sizing: border-box !important; text-align: center !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F6F9F7; font-family: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #17302A; line-height: 1.5; -webkit-font-smoothing: antialiased;">
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #F6F9F7; padding: 32px 16px;" class="mz-wrap">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" class="mz-card" style="max-width: 560px; background-color: #ffffff; border-radius: 12px; border: 1px solid #D3E3DB; overflow: hidden; box-shadow: 0 4px 12px rgba(23, 48, 42, 0.05);" cellspacing="0" cellpadding="0">
+                    
+                    <!-- Header -->
+                    <tr>
+                        <td class="mz-header" style="background-color: #0E6B57; padding: 28px 30px; text-align: center;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" style="display: inline-table; vertical-align: middle; margin: 0 auto;">
+                                <tr>
+                                    <td style="vertical-align: middle; padding-right: 11px; line-height: 0;">
+                                        <img src="cid:medizonLogo" width="36" height="36" alt="MediZon"
+                                             style="display: block; width: 36px; height: 36px; border: 0; outline: none; background: transparent;" />
+                                    </td>
+                                    <td style="vertical-align: middle; line-height: 1;">
+                                        <span style="font-size: 26px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; text-decoration: none; font-family: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: inline-block; vertical-align: middle; line-height: 1;">
+                                            MediZon
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                            <div style="font-size: 14px; color: #E6F2EC; margin-top: 8px;">Your Trusted Neighbourhood Pharmacy, Online</div>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td class="mz-body" style="padding: 30px;">
+                            <h1 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 700; color: #17302A;">
+                                Welcome to MediZon, <span th:text="${user.firstName}">Friend</span>! &#x1F389;
+                            </h1>
+                            <p style="margin: 0 0 24px 0; font-size: 15px; color: #5B716A; line-height: 1.6;">
+                                We're thrilled to have you with us. MediZon brings genuine medicines, fast local pharmacy delivery, and thoughtful healthcare tools right to your fingertips.
+                            </p>
+
+                            <!-- Features List -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+                                <tr>
+                                    <td style="padding: 8px 0; vertical-align: top; width: 28px; font-size: 18px;">&#x1F48A;</td>
+                                    <td style="padding: 8px 0 8px 8px; font-size: 14px; color: #17302A;">
+                                        <strong>100% Genuine Medicines</strong><br>
+                                        <span style="color: #5B716A;">Sourced straight from licensed, verified neighbourhood pharmacies.</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; vertical-align: top; width: 28px; font-size: 18px;">&#x23F0;</td>
+                                    <td style="padding: 8px 0 8px 8px; font-size: 14px; color: #17302A;">
+                                        <strong>Dose Reminders &amp; Auto-Refill</strong><br>
+                                        <span style="color: #5B716A;">Never miss a dose or run out of your essential maintenance medications.</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; vertical-align: top; width: 28px; font-size: 18px;">&#x1F4B0;</td>
+                                    <td style="padding: 8px 0 8px 8px; font-size: 14px; color: #17302A;">
+                                        <strong>Exclusive Savings</strong><br>
+                                        <span style="color: #5B716A;">Use code <strong>FIRST50</strong> on your first order for ₹50 off (orders ₹199+).</span>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- CTA Button -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td align="center">
+                                        <a th:href="${shopUrl}" target="_blank" class="mz-btn" style="display: inline-block; background-color: #0E6B57; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 13px 32px; border-radius: 8px; box-shadow: 0 2px 6px rgba(14, 107, 87, 0.25);">
+                                            Start Shopping &rarr;
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td class="mz-footer" style="background-color: #F6F9F7; border-top: 1px solid #D3E3DB; padding: 22px 30px; text-align: center; font-size: 12px; color: #5B716A;">
+                            <p style="margin: 0 0 6px 0;">Need any help getting started? Visit our <a th:href="${baseUrl} + '/help'" style="color: #0E6B57; text-decoration: underline;">Support Center</a>.</p>
+                            <p style="margin: 0; color: #7B908A;">MediZon Pharmacy &bull; Healthcare with Care</p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

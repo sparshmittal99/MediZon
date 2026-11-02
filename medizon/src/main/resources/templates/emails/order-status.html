@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>Order Status Update</title>
+    <style>
+        /* Responsive styles for mobile devices (Gmail app, Apple Mail, Outlook Mobile) */
+        @media only screen and (max-width: 520px) {
+            .mz-wrap { padding: 12px 6px !important; }
+            .mz-card { width: 100% !important; max-width: 100% !important; border-radius: 8px !important; }
+            .mz-header { padding: 18px 20px !important; }
+            .mz-body { padding: 22px 18px !important; }
+            .mz-footer { padding: 18px 20px !important; }
+            .header-col-brand { display: block !important; width: 100% !important; text-align: left !important; }
+            .header-col-badge { display: block !important; width: 100% !important; text-align: left !important; padding-top: 12px !important; }
+            .mz-meta-row td { display: block !important; width: 100% !important; text-align: left !important; padding: 5px 0 !important; }
+            .mz-meta-row td.text-end-sm { text-align: left !important; }
+            .mz-btn { display: block !important; width: 100% !important; margin: 6px 0 !important; box-sizing: border-box !important; text-align: center !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F6F9F7; font-family: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #17302A; line-height: 1.5; -webkit-font-smoothing: antialiased;">
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #F6F9F7; padding: 32px 16px;" class="mz-wrap">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" class="mz-card" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; border: 1px solid #D3E3DB; overflow: hidden; box-shadow: 0 4px 12px rgba(23, 48, 42, 0.05);" cellspacing="0" cellpadding="0">
+                    
+                    <!-- Header -->
+                    <tr>
+                        <td class="mz-header" style="background-color: #0E6B57; padding: 22px 30px; text-align: left;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="header-col-brand" valign="middle">
+                                        <table role="presentation" cellspacing="0" cellpadding="0" style="display: inline-table; vertical-align: middle;">
+                                            <tr>
+                                                <td style="vertical-align: middle; padding-right: 11px; line-height: 0;">
+                                                    <img src="cid:medizonLogo" width="34" height="34" alt="MediZon"
+                                                         style="display: block; width: 34px; height: 34px; border: 0; outline: none; background: transparent;" />
+                                                </td>
+                                                <td style="vertical-align: middle; line-height: 1;">
+                                                    <span style="font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; text-decoration: none; font-family: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: inline-block; vertical-align: middle; line-height: 1;">
+                                                        MediZon
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                    <td class="header-col-badge" align="right" valign="middle">
+                                        <!-- Dynamic Status Badge with baseline-aligned icons -->
+                                        <span th:if="${status.name() == 'CONFIRMED'}" style="display: inline-block; background-color: #E0F2FE; color: #0369A1; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; white-space: nowrap; line-height: 1; vertical-align: middle;">
+                                            <span style="display: inline-block; vertical-align: middle;">Confirmed</span><span style="display: inline-block; vertical-align: middle; margin-left: 5px; font-size: 13px; line-height: 1;">✓</span>
+                                        </span>
+                                        <span th:if="${status.name() == 'SHIPPED'}" style="display: inline-block; background-color: #E0F2FE; color: #0284C7; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; white-space: nowrap; line-height: 1; vertical-align: middle;">
+                                            <span style="display: inline-block; vertical-align: middle;">Shipped</span><span style="display: inline-block; vertical-align: middle; margin-left: 5px; font-size: 13px; line-height: 1; position: relative; top: -1px;">📦</span>
+                                        </span>
+                                        <span th:if="${status.name() == 'OUT_FOR_DELIVERY'}" style="display: inline-block; background-color: #FEF3C7; color: #B45309; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; white-space: nowrap; line-height: 1; vertical-align: middle;">
+                                            <span style="display: inline-block; vertical-align: middle;">Out for Delivery</span><span style="display: inline-block; vertical-align: middle; margin-left: 5px; font-size: 14px; line-height: 1; position: relative; top: -1px;">🚚</span>
+                                        </span>
+                                        <span th:if="${status.name() == 'DELIVERED'}" style="display: inline-block; background-color: #DCFCE7; color: #15803D; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; white-space: nowrap; line-height: 1; vertical-align: middle;">
+                                            <span style="display: inline-block; vertical-align: middle;">Delivered</span><span style="display: inline-block; vertical-align: middle; margin-left: 5px; font-size: 13px; line-height: 1; position: relative; top: -1px;">✅</span>
+                                        </span>
+                                        <span th:if="${status.name() == 'CANCELLED'}" style="display: inline-block; background-color: #FEE2E2; color: #B91C1C; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; white-space: nowrap; line-height: 1; vertical-align: middle;">
+                                            <span style="display: inline-block; vertical-align: middle;">Cancelled</span><span style="display: inline-block; vertical-align: middle; margin-left: 5px; font-size: 13px; line-height: 1;">✕</span>
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td class="mz-body" style="padding: 30px;">
+                            
+                            <h1 style="margin: 0 0 12px 0; font-size: 22px; font-weight: 700; color: #17302A;">
+                                <span th:if="${status.name() == 'CONFIRMED'}">Your order is confirmed!</span>
+                                <span th:if="${status.name() == 'SHIPPED'}">Your order has been shipped!</span>
+                                <span th:if="${status.name() == 'OUT_FOR_DELIVERY'}">Your order is out for delivery!</span>
+                                <span th:if="${status.name() == 'DELIVERED'}">Your order has been delivered!</span>
+                                <span th:if="${status.name() == 'CANCELLED'}">Your order has been cancelled</span>
+                            </h1>
+
+                            <p style="margin: 0 0 24px 0; font-size: 15px; color: #5B716A; line-height: 1.6;" th:text="${statusMessage}">
+                                Update on your order.
+                            </p>
+
+                            <!-- Order Summary Box -->
+                            <div style="background-color: #F6F9F7; border-radius: 8px; border: 1px solid #D3E3DB; padding: 16px; margin-bottom: 24px;">
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                    <tr class="mz-meta-row">
+                                        <td width="50%" style="padding: 4px 0; font-size: 13px; color: #5B716A; vertical-align: top;">
+                                            Order Number:<br>
+                                            <strong style="font-size: 15px; color: #17302A;" th:text="${order.orderNumber}">#MZ123456</strong>
+                                        </td>
+                                        <td width="50%" class="text-end-sm" style="padding: 4px 0; font-size: 13px; color: #5B716A; text-align: right; vertical-align: top;">
+                                            Total Amount:<br>
+                                            <strong style="font-size: 16px; color: #0E6B57;" th:text="'₹' + ${order.total}">₹120.00</strong>
+                                        </td>
+                                    </tr>
+                                    <tr th:if="${order.invoiceNumber != null}">
+                                        <td colspan="2" style="padding-top: 10px; font-size: 13px; color: #5B716A; border-top: 1px dashed #D3E3DB;">
+                                            GST Tax Invoice: <strong style="color: #17302A;" th:text="${order.invoiceNumber}">INV-2026-001</strong>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Items Summary -->
+                            <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 10px 0; color: #17302A;">Items in this order</h2>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; margin-bottom: 24px;">
+                                <tbody>
+                                    <tr th:each="item : ${order.items}" style="border-bottom: 1px solid #E6F2EC;">
+                                        <td style="padding: 8px 0; font-size: 14px; color: #17302A;" th:text="${item.medicineName}">Medicine Name</td>
+                                        <td style="padding: 8px 12px; font-size: 13px; color: #5B716A; text-align: center;" th:text="${item.quantity} + ' pack(s)'">1</td>
+                                        <td style="padding: 8px 0; font-size: 14px; font-weight: 600; color: #17302A; text-align: right;" th:text="'₹' + ${item.lineTotal}">₹120.00</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <!-- Delivery Address -->
+                            <div style="background-color: #F6F9F7; border-radius: 8px; border: 1px solid #D3E3DB; padding: 14px; margin-bottom: 28px;">
+                                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #5B716A; margin-bottom: 4px;">Delivering To</div>
+                                <div style="font-size: 13px; font-weight: 600; color: #17302A;" th:text="${order.receiverName != null} ? ${order.receiverName} : ${user.fullName}">Priya Verma</div>
+                                <div style="font-size: 13px; color: #5B716A;" th:text="${order.shippingAddress}">Shop 4, Bandra West, Mumbai</div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td align="center">
+                                        <a th:href="${orderUrl}" target="_blank" class="mz-btn" style="display: inline-block; background-color: #0E6B57; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 13px 26px; border-radius: 8px; margin: 4px; box-shadow: 0 2px 6px rgba(14, 107, 87, 0.25);">
+                                            View Order Details &rarr;
+                                        </a>
+                                        <a th:if="${order.invoiceNumber != null}" th:href="${invoiceUrl}" target="_blank" class="mz-btn" style="display: inline-block; background-color: #ffffff; color: #0E6B57; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 8px; border: 1px solid #0E6B57; margin: 4px;">
+                                            Download Invoice &#x1F4C4;
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td class="mz-footer" style="background-color: #F6F9F7; border-top: 1px solid #D3E3DB; padding: 22px 30px; text-align: center; font-size: 12px; color: #5B716A;">
+                            <p style="margin: 0 0 8px 0;">Questions about your delivery? We're here to help: <a th:href="${baseUrl} + '/help'" style="color: #0E6B57; text-decoration: underline;">Support & Help Desk</a></p>
+                            <p style="margin: 0; color: #7B908A;">MediZon Pharmacy &bull; Safe, Verified Medicines at your doorstep</p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

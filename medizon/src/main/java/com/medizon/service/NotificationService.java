@@ -29,8 +29,9 @@ public class NotificationService {
 
     private static final Set<NotificationType> EMAILED = EnumSet.of(
             NotificationType.DOSE_REMINDER, NotificationType.REORDER_ALERT,
-            NotificationType.AUTO_REORDER, NotificationType.PRESCRIPTION_UPDATE, NotificationType.EXPIRY_ALERT,
-            NotificationType.ERROR_ALERT, NotificationType.SUPPORT_UPDATE, NotificationType.BACK_IN_STOCK);
+            NotificationType.AUTO_REORDER, NotificationType.PRESCRIPTION_UPDATE, NotificationType.RETURN_UPDATE,
+            NotificationType.EXPIRY_ALERT, NotificationType.ERROR_ALERT, NotificationType.SUPPORT_UPDATE,
+            NotificationType.SUPPORT_TICKET, NotificationType.BACK_IN_STOCK);
 
     private static final Duration ALERT_WINDOW = Duration.ofMinutes(15);
 
@@ -63,11 +64,44 @@ public class NotificationService {
         trim(user);
         push.signal(user.getId());
 
-        if (EMAILED.contains(type)) {
-            String body = "Hi " + user.getFirstName() + ",\n\n" + message
-                    + (link != null ? "\n\nOpen MediZon: " + baseUrl + link : "")
+        // Send email for all notifications if the user has an email address.
+        // Dedicated order placement and status milestones are handled separately with rich templates by OrderEmailService.
+        boolean isDedicatedOrderEmail = (type == NotificationType.ORDER_UPDATE && title != null &&
+                (title.equalsIgnoreCase("Order placed") || title.equalsIgnoreCase("Orders placed") ||
+                 title.toLowerCase().startsWith("order ")));
+
+        // Email service is strictly for customers; admin and staff do not receive email alerts
+        if (!isDedicatedOrderEmail && user != null && user.isCustomer() && user.getEmail() != null && !user.getEmail().isBlank()) {
+            String actionUrl = (link != null && !link.isBlank()) ? baseUrl.replaceAll("/+$", "") + link : null;
+            String typeLabel = switch (type) {
+                case DOSE_REMINDER -> "Dose Reminder";
+                case REORDER_ALERT, AUTO_REORDER -> "Refill Alert";
+                case PRESCRIPTION_UPDATE -> "Prescription";
+                case RETURN_UPDATE -> "Return & Refund";
+                case EXPIRY_ALERT -> "Medicine Expiry";
+                case BACK_IN_STOCK -> "Back in Stock";
+                case SUPPORT_UPDATE, SUPPORT_TICKET -> "Support Desk";
+                case ERROR_ALERT -> "System Alert";
+                case ORDER_UPDATE -> "Order & Payment";
+                case INFO -> (title != null && title.toLowerCase().contains("password")) ? "Security Alert" : "Update";
+                default -> "Notification";
+            };
+
+            java.util.Map<String, Object> variables = java.util.Map.of(
+                    "user", user,
+                    "title", title != null ? title : "Notification",
+                    "message", message != null ? message : "",
+                    "typeLabel", typeLabel,
+                    "actionUrl", actionUrl != null ? actionUrl : "",
+                    "baseUrl", baseUrl
+            );
+
+            String fallback = "Hi " + (user.getFirstName() != null ? user.getFirstName() : "there") + ",\n\n"
+                    + (message != null ? message : "")
+                    + (actionUrl != null ? "\n\nOpen MediZon: " + actionUrl : "")
                     + "\n\n- MediZon";
-            email.send(user.getEmail(), "MediZon: " + title, body);
+
+            email.sendTemplate(user.getEmail(), "MediZon: " + title, "emails/notification", variables, fallback);
         }
         return n;
     }

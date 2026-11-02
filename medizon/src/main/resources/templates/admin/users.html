@@ -148,6 +148,7 @@
     <div class="modal fade" id="mzSetPassword" tabindex="-1" aria-labelledby="mzSetPasswordTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <form class="modal-content" method="post" data-mz-set-password>
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                 <div class="modal-header">
                     <h2 class="modal-title h5" id="mzSetPasswordTitle">Change password</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>

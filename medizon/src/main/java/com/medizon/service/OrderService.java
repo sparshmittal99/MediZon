@@ -51,6 +51,7 @@ public class OrderService {
     private final WalletService wallet;
     private final OrderSettingsService orderSettings;
     private final PaymentGateways gateways;
+    private final OrderEmailService orderEmails;
 
     /** One order line: packs of a medicine and how many packs each person gets. */
     /** @param othersPatient who the "Others" share is for, when known (from a prescription) */
@@ -180,6 +181,7 @@ public class OrderService {
                     "/orders");
         }
         placed.forEach(this::alertStore);
+        placed.forEach(orderEmails::sendOrderConfirmation);
         return placed;
     }
 
@@ -271,6 +273,7 @@ public class OrderService {
                 PaymentMethod.COD, coverage, OrderSource.AUTO_REORDER, refillAddress(plan), null).get(0);
         prescriptionService.finishUse(coverage.prescriptions());
         alertStore(o);
+        orderEmails.sendOrderConfirmation(o);
         return o;
     }
 
@@ -458,7 +461,7 @@ public class OrderService {
         o.setStatus(next);
         o.setUpdatedAt(LocalDateTime.now());
 
-        if (next == OrderStatus.SHIPPED) invoiceService.issue(o);
+        if (next == OrderStatus.SHIPPED || next == OrderStatus.OUT_FOR_DELIVERY) invoiceService.issue(o);
         if (next == OrderStatus.DELIVERED) {
             invoiceService.issue(o);   // no-op unless it skipped "shipped" before invoices existed
             o.setDeliveredAt(LocalDateTime.now());
@@ -485,8 +488,10 @@ public class OrderService {
                         + (onlineBack.signum() > 0 ? " ₹" + onlineBack + " is refunded to your " + o.getPaymentMethod().getLabel()
                                 + " (refund id " + o.getGatewayRefundId() + "); banks take up to 5-7 working days to show it." : "")
                         + (next == OrderStatus.SHIPPED ? " Your tax invoice " + o.getInvoiceNumber() + " is ready on the order page." : "")
+                        + (next == OrderStatus.OUT_FOR_DELIVERY ? " Our delivery partner is out for delivery with your package." : "")
                         + (next == OrderStatus.DELIVERED ? " Tell us how it went with a quick review." : ""),
                 "/orders/" + o.getId());
+        orderEmails.sendOrderStatusUpdate(o, next);
         return o;
     }
 

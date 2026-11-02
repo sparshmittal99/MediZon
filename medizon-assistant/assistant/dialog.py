@@ -725,7 +725,7 @@ POLICIES = [
     (r"\bdeliver|shipping|ship\b", "**Delivery:** free on orders of **₹499 or more**, otherwise ₹40. When it arrives "
                                    "depends on your PIN code; the cart and checkout show the expected date.",
      [chip("Track my order", "where is my order")]),
-    (r"\bpay|upi|card|cash|cod\b", "**Payment:** pay by **UPI**, **debit or credit card**, or **cash on delivery**. "
+    (r"\bpay|upi|card|cash|cod\b", "**Payment:** pay by **UPI**, **debit or credit card**, **net banking**, MediZon Money, or **pay on delivery** (cash, UPI and more). "
                                   "You choose at checkout.", [chip("Go to cart", href="/cart")]),
 ]
 

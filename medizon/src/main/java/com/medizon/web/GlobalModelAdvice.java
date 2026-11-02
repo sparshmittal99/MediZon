@@ -39,6 +39,8 @@ public class GlobalModelAdvice {
 
     @ModelAttribute
     public void common(Model model, HttpServletRequest request, HttpServletResponse response) {
+        model.addAttribute("showCatbar", false);
+        model.addAttribute("frontPage", false);
         model.addAttribute("seller", invoiceService.seller());
         model.addAttribute("freeDeliveryAbove", CartService.FREE_DELIVERY_ABOVE);
         Optional<User> signedIn = currentUser.find();

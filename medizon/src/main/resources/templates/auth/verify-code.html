@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Verify Code')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <div class="mz-auth mz-panel">
+        <h1 class="h3 mb-1">Verify code</h1>
+        <p class="text-muted mb-4">
+            We sent a 6-digit code to <span class="fw-semibold text-body" th:text="${email}">your email</span>. <a class="small" th:href="@{/forgot-password(email=${email})}">Change email</a>
+        </p>
+
+        <form id="verifyCodeForm" th:action="@{/verify-code}" method="post" autocomplete="off"
+              th:data-resend-url="@{/api/auth/resend-code}" th:data-code-sent="${codeSent != null}">
+            <input type="hidden" id="emailInput" name="email" th:value="${email}">
+
+            <div class="mb-4">
+                <label class="form-label" for="code">Verification code</label>
+                <!-- What's typed shows for a moment, then turns into a dot like a password; the real code goes in the hidden field -->
+                <input class="form-control mz-code-input" id="code" type="text"
+                       inputmode="numeric" maxlength="6" required autofocus
+                       placeholder="Enter 6-digit code"
+                       th:classappend="${error} ? 'is-invalid'"
+                       autocomplete="one-time-code" spellcheck="false">
+                <input type="hidden" id="codeValue" name="code">
+                <div class="d-flex justify-content-between align-items-center mt-2 small text-muted">
+                    <span>Valid for 15 minutes</span>
+                    <button type="button" id="resendBtn" class="btn btn-link p-0 text-decoration-none small fw-semibold mz-resend"
+                            th:data-cooldown="${cooldownSeconds}">
+                        Resend code
+                    </button>
+                </div>
+            </div>
+
+            <button class="btn btn-primary w-100" type="submit">Verify code</button>
+        </form>
+
+        <!-- Used if the resend API can't be reached -->
+        <form id="resendFallbackForm" th:action="@{/resend-code}" method="post" hidden>
+            <input type="hidden" name="email" th:value="${email}">
+        </form>
+
+        <p class="small text-center mt-4 mb-0">
+            Back to <a th:href="@{/login}">sign in</a>
+        </p>
+    </div>
+</main>
+
+<!-- Code sent pop-up: closes itself after a moment (password-reset.js) -->
+<div class="mz-custom-alert-overlay" id="mzCodeSentModal" th:hidden="${codeSent == null}" role="alertdialog" aria-modal="true" aria-labelledby="mzCodeSentTitle">
+    <div class="mz-custom-alert-card">
+        <svg class="mz-pay-tick" viewBox="0 0 52 52" aria-hidden="true">
+            <circle cx="26" cy="26" r="24"/>
+            <path d="M15 27 l7 7 l15 -16"/>
+        </svg>
+        <h2 class="h4 mt-3 mb-1" id="mzCodeSentTitle">Code Sent!</h2>
+        <p class="small text-muted mt-2 mb-2">
+            A 6-digit verification code has been sent to <span class="fw-semibold text-body" th:text="${email}">your email</span>.
+        </p>
+        <div class="small fw-semibold mt-3" style="color: #0E6B57;">Check your inbox</div>
+    </div>
+</div>
+
+<!-- Wrong code pop-up: closes itself after a moment (password-reset.js) -->
+<div class="mz-custom-alert-overlay" id="mzVerifyErrorModal" th:hidden="${error == null}" role="alertdialog" aria-modal="true" aria-labelledby="mzVerifyErrorTitle">
+    <div class="mz-custom-alert-card">
+        <svg class="mz-pay-cross" viewBox="0 0 52 52" aria-hidden="true">
+            <circle cx="26" cy="26" r="24"/>
+            <path d="M17 17 L35 35 M35 17 L17 35"/>
+        </svg>
+        <h2 class="h4 mt-3 mb-1" id="mzVerifyErrorTitle">Invalid Code</h2>
+        <p class="small text-muted mt-2 mb-2" id="mzVerifyErrorMsg" th:text="${error}">
+            Invalid verification code. Please check your email or request a new code.
+        </p>
+        <div class="small fw-semibold mt-3" style="color: #DC2626;">Try again</div>
+    </div>
+</div>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+
+<script th:src="@{/js/password-reset.js}"></script>
+</body>
+</html>

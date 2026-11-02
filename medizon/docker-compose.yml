@@ -35,6 +35,10 @@ services:
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
       MEDIZON_ADMIN_EMAIL: ${MEDIZON_ADMIN_EMAIL:-}
       MEDIZON_ADMIN_PASSWORD: ${MEDIZON_ADMIN_PASSWORD:-}
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       UPLOAD_DIR: /data/uploads
     volumes:
       - medizon-uploads:/data/uploads

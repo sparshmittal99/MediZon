@@ -114,6 +114,28 @@ public class DataSeeder implements CommandLineRunner {
         jdbc.execute("alter table if exists users drop constraint if exists users_role_check");
         jdbc.execute("alter table if exists app_errors drop constraint if exists app_errors_severity_check");
         jdbc.execute("alter table if exists prescription drop constraint if exists prescription_status_check");
+        jdbc.execute("alter table if exists orders drop constraint if exists orders_status_check");
+        jdbc.execute("alter table if exists orders drop constraint if exists order_status_check");
+        try {
+            jdbc.execute("""
+                do $$
+                declare
+                    r record;
+                begin
+                    for r in (
+                        select conname
+                        from pg_constraint c
+                        join pg_class t on c.conrelid = t.oid
+                        where t.relname = 'orders' and c.contype = 'c' and pg_get_constraintdef(c.oid) like '%status%'
+                    ) loop
+                        execute 'alter table orders drop constraint if exists ' || quote_ident(r.conname);
+                    end loop;
+                end $$;
+            """);
+        } catch (Exception e) {
+            log.warn("Could not dynamically drop orders status check constraints: {}", e.getMessage());
+        }
+        jdbc.execute("alter table if exists password_reset_tokens drop constraint if exists password_reset_tokens_token_key");
         jdbc.execute("alter table if exists orders drop constraint if exists orders_payment_method_check");
         jdbc.execute("alter table if exists return_requests drop constraint if exists return_requests_refund_mode_check");
         jdbc.execute("alter table if exists checkout_payments drop constraint if exists checkout_payments_method_check");
@@ -185,11 +207,24 @@ public class DataSeeder implements CommandLineRunner {
      * allowed several) is disabled; the admin can delete it or keep it switched off.
      */
     private void syncAdmin() {
+        // If an admin password is provided, ensure any existing admin account has its password synced to it and is enabled
+        if (!adminPassword.isBlank()) {
+            for (User a : users.findByRole(Role.ADMIN)) {
+                if (!encoder.matches(adminPassword, a.getPassword())) {
+                    a.setPassword(encoder.encode(adminPassword));
+                    a.setEnabled(true);
+                    users.save(a);
+                    log.info("Updated password to MEDIZON_ADMIN_PASSWORD for admin: {}", a.getEmail());
+                } else if (!a.isEnabled()) {
+                    a.setEnabled(true);
+                    users.save(a);
+                }
+            }
+        }
+
         if (adminEmail.isBlank() || adminPassword.isBlank()) {
             if (users.countByRole(Role.ADMIN) == 0) {
                 log.warn("No admin account exists. Set MEDIZON_ADMIN_EMAIL and MEDIZON_ADMIN_PASSWORD and restart to create one.");
-            } else {
-                log.warn("MEDIZON_ADMIN_EMAIL / MEDIZON_ADMIN_PASSWORD aren't set; the existing admin account is left as it is.");
             }
             return;
         }

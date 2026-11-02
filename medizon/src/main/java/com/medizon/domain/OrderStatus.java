@@ -3,7 +3,12 @@ package com.medizon.domain;
 import java.util.List;
 
 public enum OrderStatus {
-    PLACED("Placed"), CONFIRMED("Confirmed"), SHIPPED("Shipped"), DELIVERED("Delivered"), CANCELLED("Cancelled");
+    PLACED("Placed"),
+    CONFIRMED("Confirmed"),
+    SHIPPED("Shipped"),
+    OUT_FOR_DELIVERY("Out for delivery"),
+    DELIVERED("Delivered"),
+    CANCELLED("Cancelled");
 
     private final String label;
 
@@ -16,7 +21,8 @@ public enum OrderStatus {
         return switch (this) {
             case PLACED -> List.of(CONFIRMED, CANCELLED);
             case CONFIRMED -> List.of(SHIPPED, CANCELLED);
-            case SHIPPED -> List.of(DELIVERED);
+            case SHIPPED -> List.of(OUT_FOR_DELIVERY);
+            case OUT_FOR_DELIVERY -> List.of(DELIVERED);
             default -> List.of();
         };
     }
@@ -28,6 +34,7 @@ public enum OrderStatus {
             case PLACED -> "text-bg-secondary";
             case CONFIRMED -> "text-bg-info";
             case SHIPPED -> "text-bg-primary";
+            case OUT_FOR_DELIVERY -> "text-bg-warning";
             case DELIVERED -> "text-bg-success";
             case CANCELLED -> "text-bg-danger";
         };

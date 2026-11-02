@@ -172,12 +172,12 @@ public class Order {
 
     /** Progress steps shown on the order page (cancelled orders don't show the tracker). */
     public List<OrderStatus> getTrackSteps() {
-        return List.of(OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.DELIVERED);
+        return List.of(OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED);
     }
 
     /** The tax invoice is issued when the order ships. */
     public boolean isInvoiceAvailable() {
-        return status == OrderStatus.SHIPPED || status == OrderStatus.DELIVERED;
+        return status == OrderStatus.SHIPPED || status == OrderStatus.OUT_FOR_DELIVERY || status == OrderStatus.DELIVERED;
     }
 
     public int getItemCount() {

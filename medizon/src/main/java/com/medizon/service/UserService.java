@@ -31,6 +31,11 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final SessionRegistry sessionRegistry;
     private final StoreRepository stores;
+    private final NotificationService notificationService;
+    private final EmailService emailService;
+
+    @org.springframework.beans.factory.annotation.Value("${medizon.base-url:http://localhost:8080}")
+    private String baseUrl;
 
     @Transactional
     public User register(RegisterForm form) {
@@ -44,7 +49,9 @@ public class UserService {
         u.setPhone(form.getPhone());
         u.setPassword(passwordEncoder.encode(form.getPassword()));
         u.setRole(Role.CUSTOMER);
-        return users.save(u);
+        User saved = users.save(u);
+        sendWelcomeEmail(saved);
+        return saved;
     }
 
     @Transactional
@@ -107,6 +114,17 @@ public class UserService {
         }
         user.setPassword(passwordEncoder.encode(next));
         users.save(user);
+        try {
+            notificationService.notify(
+                user,
+                com.medizon.domain.NotificationType.INFO,
+                "Password changed",
+                "Your MediZon account password was recently changed. If you did not make this change, please contact support immediately.",
+                "/account"
+            );
+        } catch (Exception e) {
+            // non-fatal
+        }
         return signOutOtherSessions(user, keepSessionId);
     }
 
@@ -165,7 +183,9 @@ public class UserService {
             if (form.getStoreId() == null) throw new BusinessException("Choose the store this account works for.");
             u.setStore(stores.findById(form.getStoreId()).orElseThrow(() -> new BusinessException("That store doesn't exist.")));
         }
-        return users.save(u);
+        User saved = users.save(u);
+        sendWelcomeEmail(saved);
+        return saved;
     }
 
     /**
@@ -219,5 +239,20 @@ public class UserService {
 
     private static String emailOf(Object principal) {
         return principal instanceof UserDetails d ? d.getUsername() : String.valueOf(principal);
+    }
+
+    private void sendWelcomeEmail(User user) {
+        if (user == null || !user.isCustomer() || user.getEmail() == null || user.getEmail().isBlank()) return;
+        String shopUrl = baseUrl.replaceAll("/+$", "") + "/medicines";
+        java.util.Map<String, Object> variables = java.util.Map.of(
+                "user", user,
+                "shopUrl", shopUrl,
+                "baseUrl", baseUrl
+        );
+        String text = "Hi " + user.getFirstName() + ",\n\n"
+                + "Welcome to MediZon! Your account has been created.\n\n"
+                + "Start exploring genuine medicines and wellness products: " + shopUrl + "\n\n"
+                + "Warm regards,\nMediZon Pharmacy Team";
+        emailService.sendTemplate(user.getEmail(), "Welcome to MediZon, " + user.getFirstName() + "!", "emails/welcome", variables, text);
     }
 }

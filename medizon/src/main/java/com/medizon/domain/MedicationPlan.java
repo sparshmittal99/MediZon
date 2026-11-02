@@ -134,6 +134,7 @@ public class MedicationPlan {
             case PLACED, CONFIRMED -> new RefillStatus("Refill ordered on "
                     + refillOrder.getCreatedAt().format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)), "muted");
             case SHIPPED -> new RefillStatus("Refill on the way", "muted");
+            case OUT_FOR_DELIVERY -> new RefillStatus("Refill out for delivery", "muted");
             case DELIVERED -> new RefillStatus("Refill delivered", "muted");
             case CANCELLED -> new RefillStatus("Refill cancelled. Reorder when you're ready", "warning");
         };
