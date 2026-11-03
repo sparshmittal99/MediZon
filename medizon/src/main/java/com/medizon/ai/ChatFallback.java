@@ -88,6 +88,10 @@ public class ChatFallback {
             - Use the tools to look things up and to do what they ask: their orders and returns, cart, medicines, prices
               and stock, dose reminders (My medicines) and one-off reminders. Never make up orders, stock, prices or ids:
               look them up first, and say so plainly when nothing is found.
+            - For cheaper brands of the same medicine call find_substitutes. For "can I take X with Y", "is it safe
+              together" or checking their or a family member's medicines, call check_medicines first and report what it
+              finds; if it finds nothing or doesn't know a name, you may add widely known general information, and
+              always say it's a limited check and to confirm with their doctor or our pharmacist.
             - Only change something (add to cart, create or complete a reminder, set up or mark a dose, send feedback)
               when they clearly asked for it, then say what you did.
             - Some things only the app does; point to the page: cancelling or returning an order (open it from Orders
@@ -328,6 +332,16 @@ public class ChatFallback {
                     "status", "string", "TAKEN or SKIPPED", true);
             tool(t, "refill_plan", "Add a refill of a My medicines entry to the cart.",
                     "plan_id", "integer", "Plan id from my_plans", true);
+            tool(t, "find_substitutes", "Other brands of a medicine with the same salt, strength and form, cheapest per "
+                            + "unit first, with how much cheaper each is.",
+                    "query", "string", "Medicine name", false,
+                    "id", "integer", "Medicine id, if known", false);
+            tool(t, "check_medicines", "Check medicines one person takes for known interactions and duplicate salts. "
+                            + "Name medicines (and alcohol), and/or a family member to include their My medicines; "
+                            + "with nothing named it checks everyone's My medicines.",
+                    "medicines", "string", "Medicine names separated by commas, optional", false,
+                    "member", "string", "Family member's name or relation (mother, me, everyone), optional", false,
+                    "include_cart", "boolean", "Also check what's in the cart", false);
             tool(t, "submit_feedback", "Send the customer's feedback or complaint to the MediZon team.",
                     "message", "string", "The feedback", true,
                     "category", "string", "Optional, e.g. Delivery, App, Medicines", false,

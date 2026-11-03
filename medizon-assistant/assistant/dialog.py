@@ -160,6 +160,8 @@ def help_(ctx: Ctx, slots, step, answer) -> Reply:
                     "• **Dose reminders**: 'remind me to take metformin at 8 am and 8 pm'\n"
                     "• **Today's doses** and marking them taken\n"
                     "• **Refills** for medicines running low\n"
+                    "• **Cheaper brands** with the same salt: 'cheaper alternative to pantoprazole'\n"
+                    "• **Interaction check**: 'can I take ibuprofen with aspirin?' or 'check mom's medicines'\n"
                     "• **Order tracking**, **feedback** and other reminders\n"
                     "• **Store policies**: returns, refunds, delivery charges, payment, cancelling", CUSTOMER_CHIPS)
 
@@ -328,7 +330,8 @@ def medicine_info(ctx: Ctx, slots, step, answer) -> Reply:
                      "before starting, stopping or changing a medicine._")
         return say(ctx, "\n\n".join(parts),
                    [chip("Set a reminder for it", payload={"intent": "set_reminder", "medicine_id": m["id"],
-                                                            "medicine_name": m["name"]})],
+                                                            "medicine_name": m["name"]}),
+                    chip("Cheaper brands", payload={"intent": "substitutes", "medicine_id": m["id"]})],
                    cards=[medicine_card(m)], last_medicine={"id": m["id"], "name": m["name"], "in_stock": m.get("in_stock")})
     if not slots.get("query") and not slots.get("medicine_id"):
         last = ctx.state.get("last_medicine")
@@ -742,6 +745,174 @@ def policy(ctx: Ctx, slots, step, answer) -> Reply:
                 chip("Cancelling an order", "can i cancel my order"), more])
 
 
+# ---------------------------------------------------------------------- cheaper brands (same salt)
+
+_SUBSTITUTE_WORDS = re.compile(
+    r"\b(cheaper|cheapest|cheap|generic|generics|substitutes?|alternatives?|alternate|replacement|replace|equivalent|"
+    r"brands?|versions?|options?|salt|composition|other|similar|sasta|saste|sasti|jan|aushadhi|switch|instead|less|"
+    r"expensive|costly|lower|price|low|same|kam|daam|wala|wali)\b")
+
+
+def substitute_query(message: str) -> str:
+    """'any cheaper brand of dolo 650?' -> 'dolo 650'."""
+    return re.sub(r"\s+", " ", _SUBSTITUTE_WORDS.sub(" ", medicine_query(message))).strip()
+
+
+def substitutes(ctx: Ctx, slots, step, answer) -> Reply:
+    flow = "substitutes"
+    if answer is not None:
+        slots["query"] = substitute_query(answer) or answer.strip()
+        slots.pop("medicine_id", None)
+    if step == "done":
+        r = ctx.results.get("find_substitutes") or {}
+        if r.get("error"):
+            if slots.get("query"):          # maybe a symptom or category rather than a product: search for it
+                s = {"query": slots["query"], "category": symptom_category(slots["query"], ctx.categories) or ""}
+                return call(ctx, "search_medicine", s, "results", ("search_medicines", s))
+            return say(ctx, r["error"], [chip("Search the shop", href="/medicines")])
+        m, subs = r.get("medicine") or {}, r.get("substitutes") or []
+        unit = (m.get("unit") or "unit").replace("(s)", "")
+        salt = f" ({m['salt']})" if m.get("salt") else ""
+        keep = {"last_medicine": {"id": m.get("id"), "name": m.get("name"), "in_stock": m.get("in_stock")}}
+        if not subs:
+            why = "" if r.get("comparable", True) else " Its salt doesn't list a strength, so I can't match it safely."
+            return say(ctx, f"I couldn't find another brand of **{m.get('name')}**{salt} with the same salt, strength "
+                            f"and form sold near you.{why}", [chip("View cart", "show my cart")],
+                       cards=[medicine_card(m)], **keep)
+        cheaper = [s for s in subs if s.get("cheaper") and s.get("in_stock")]
+        if cheaper:
+            best = max(cheaper, key=lambda s: s.get("saving_percent") or 0)
+            head = (f"**{best['name']}** has the same salt as **{m.get('name')}**{salt} and is "
+                    f"**{best['saving_percent']}% cheaper**: {money(best.get('unit_price'))} per {unit} against "
+                    f"{money(m.get('unit_price'))}.")
+        else:
+            head = (f"Here are other brands with the same salt as **{m.get('name')}**{salt}. "
+                    f"At {money(m.get('unit_price'))} per {unit}, {m.get('name')} is already the best price near you.")
+        cards = []
+        for s in subs[:4]:
+            card = medicine_card(s)
+            pct = s.get("saving_percent") or 0
+            card["badge"] = f"{pct}% cheaper" if pct > 0 else ("same price" if pct == 0 else f"{-pct}% dearer")
+            cards.append(card)
+        return say(ctx, head + "\n\n" + (r.get("note") or ""), [chip("View cart", "show my cart"), chip("Go to checkout", "checkout")],
+                   cards=cards, last=remember(subs), **keep)
+    if not slots.get("query") and not slots.get("medicine_id"):
+        last = ctx.state.get("last_medicine")
+        if last and last.get("id"):
+            slots["medicine_id"] = last["id"]
+        else:
+            return ask(ctx, flow, slots, "query", "Which medicine should I find cheaper brands of?")
+    args = {"id": slots["medicine_id"]} if slots.get("medicine_id") else {"query": slots["query"]}
+    return call(ctx, flow, slots, "done", ("find_substitutes", args))
+
+
+# ---------------------------------------------------------------------- interactions and duplicate salts
+
+_RELATIONS = (r"mom|mum|mummy|mommy|mother|maa|mata|dad|daddy|papa|father|pita|wife|husband|hubby|son|daughter|"
+              r"beta|beti|brother|sister|bhai|behen|grand(?:ma|pa|mother|father)|granny|dadi|nani|dada|nana|"
+              r"uncle|aunt|aunty|chacha|chachi|mama|mami|child|kid|baby")
+_MEMBER = re.compile(rf"\b({_RELATIONS})('?s)?\b|\b(?!(?:what|it|that|there|here|let|he|she|who|where|how)'s)[a-z]+'s\b|\b(everyone|everybody|family|household|all of us)\b")
+_MY_MEDICINES = re.compile(r"\b(my|mine|me|myself|mere|meri|mera)\b.*\b(medicines?|meds|tablets|pills|dawa|dawai|"
+                           r"dawaiyan|schedule|plans?|prescriptions?)\b|\bwhat i (take|am taking)\b")
+_INTERACTION_SPLIT = re.compile(r"\s*(?:,|;|\+|&|\bwith\b|\band\b|\baur\b|\bor\b|\balong ?with\b|\bplus\b|\bsath\b|"
+                                r"\bsaath\b|\bbetween\b|\btogether\b|\bafter\b|\bbefore\b)\s*")
+_INTERACTION_WORDS = re.compile(
+    r"\b(safe|safely|together|interactions?|interact|interacting|clash|clashes|combine|combined|combination|mix|"
+    r"mixing|drink|drinking|duplicates?|duplicate|repeated|salts?|okay|fine|problem|problems|harmful|harm|risk|"
+    r"risky|danger|dangerous|kya|main|mai|sakta|sakti|sakte|hu|hoon|hai|mein|ke|ki|ka|le|lena|cart|is|it|ok|any|"
+    r"everyone|everybody|family|household|whole|our|their|his|her|current|regular|usual|also|"
+    rf"{_RELATIONS})('?s)?\b")
+
+
+def interaction_names(message: str) -> list[str]:
+    """'can I take dolo 650 with alcohol?' -> ['dolo 650', 'alcohol']; 'check mom's medicines' -> []."""
+    t = normalize(message).replace("’", "'")
+    t = re.sub(r"\b[a-z]+'s\b", " ", t)
+    names = []
+    for part in _INTERACTION_SPLIT.split(t):
+        q = medicine_query(_INTERACTION_WORDS.sub(" ", part))
+        q = re.sub(r"\s+", " ", _INTERACTION_WORDS.sub(" ", q)).strip()
+        if len(q) >= 3 and q not in names:
+            names.append(q)
+    return names[:6]
+
+
+def interaction_slots(message: str) -> dict:
+    t = normalize(message)
+    slots: dict[str, Any] = {"medicines": interaction_names(message)}
+    who = _MEMBER.search(t)
+    if who:
+        slots["member"] = message
+    elif _MY_MEDICINES.search(t):
+        slots["member"] = "me"
+    if re.search(r"\b(cart|basket|bag)\b", t):
+        slots["include_cart"] = True
+    return slots
+
+
+def check_interactions(ctx: Ctx, slots, step, answer) -> Reply:
+    flow = "check_interactions"
+    chips = [chip("Check my medicines", "check my medicines for interactions"),
+             chip("Check everyone's", "check my family's medicines for interactions"),
+             chip("Talk to a pharmacist", "talk to a pharmacist")]
+    if answer is not None:
+        slots.update(interaction_slots(answer))
+    if step == "done":
+        r = ctx.results.get("check_medicines") or {}
+        if r.get("error"):
+            people = r.get("people") or []
+            return say(ctx, r["error"] + (f" Your household: {join_words(people)}." if people else ""),
+                       [chip(f"Check {p}", f"check {'my' if p == 'Me' else p + chr(39) + 's'} medicines for interactions")
+                        for p in people[:4]])
+        findings, unknown, checked = r.get("findings") or [], r.get("unknown") or [], r.get("checked") or []
+        missing = (f"\n\nI couldn't check **{join_words(unknown)}**: "
+                   + ("it isn't" if len(unknown) == 1 else "they aren't") + " in our catalogue.") if unknown else ""
+        if r.get("empty") and not findings:
+            reply = say(ctx, "There's nothing to check yet. Name the medicines (for example 'can I take ibuprofen with "
+                             "aspirin?'), or add the medicines you take in My medicines and ask me again." + missing,
+                        [chip("Open My medicines", href="/plans")] + chips[2:])
+            reply.unresolved = bool(unknown)
+            return reply
+        several = len(checked) > 1
+        if not findings and all(len(c.get("medicines") or []) < 2 for c in checked):
+            only = join_words([m for c in checked for m in c.get("medicines") or []])
+            reply = say(ctx, f"I only had **{only}** to check, and an interaction needs two. Name both, for example "
+                             "'can I take ibuprofen with aspirin?', or ask me to check my medicines."
+                        + missing, [chip("Open My medicines", href="/plans")] + chips[2:])
+            reply.unresolved = True          # the LLM can still give general information about it
+            return reply
+        if findings:
+            lines = []
+            for f in findings[:6]:
+                a, b = (f.get("between") or ["", ""])[:2]
+                who = f" ({f['person']})" if several else ""
+                lines.append(f"• **{f.get('severity')}**{who}: {a} + {b}. {f.get('note')}")
+            more = f"\n• …and {len(findings) - 6} more." if len(findings) > 6 else ""
+            serious = any(f.get("severity") == "Serious" for f in findings)
+            head = ("I found something to check with your doctor or pharmacist before taking these together:" if serious
+                    else "I found a few things to be careful about:")
+            text = head + "\n" + "\n".join(lines) + more
+        else:
+            names = "; ".join(f"{c['person']}: {join_words(c.get('medicines') or [])}" if several
+                              else join_words(c.get("medicines") or []) for c in checked)
+            text = f"I didn't find any known interactions or repeated salts among {names}."
+        reply = say(ctx, text + missing + "\n\n_" + (r.get("note") or "") + "_", chips[2:] if findings else chips[1:])
+        # Names we couldn't look up (a brand we don't sell, "a glass of wine"): the LLM can add general information
+        reply.unresolved = bool(unknown) and not findings
+        return reply
+    # One name alone ("can I take it with alcohol?"): compare with the medicine just talked about. Otherwise it stays
+    # one name, and the reply hands the question to the LLM ("paracetamol during pregnancy" isn't an interaction)
+    if len(slots.get("medicines") or []) == 1 and not slots.get("member") and not slots.get("include_cart"):
+        last = ctx.state.get("last_medicine") or {}
+        if (last.get("name") and normalize(last["name"]) not in slots["medicines"]
+                and re.search(r"\b(it|this|that|these|those|ye|yeh|isko|ise)\b", normalize(ctx.message))):
+            slots["medicines"] = [last["name"]] + slots["medicines"]
+    args = {k: slots[k] for k in ("member", "include_cart") if slots.get(k)}
+    if slots.get("medicines"):
+        args["medicines"] = ", ".join(slots["medicines"])
+    return call(ctx, flow, slots, "done", ("check_medicines", args))
+
+
 # ====================================================================== admin intents
 
 ADMIN_CHIPS = [chip("What needs attention?", "what needs my attention"), chip("Analyze reviews", "analyze reviews"),
@@ -865,12 +1036,13 @@ HANDLERS: dict[str, Callable[..., Reply]] = {
     "checkout": checkout, "track_order": track_order, "set_reminder": set_reminder, "my_reminders": my_reminders,
     "todays_doses": todays_doses, "mark_dose": mark_dose, "refill": refill,
     "upload_prescription": upload_prescription, "feedback": feedback, "pharmacist": pharmacist, "policy": policy,
+    "substitutes": substitutes, "check_interactions": check_interactions,
     # admin
     "review_insights": review_insights, "store_tasks": store_tasks, "low_stock": low_stock, "stock_check": stock_check,
 }
 CUSTOMER_ONLY = {"search_medicine", "medicine_info", "add_to_cart", "view_cart", "checkout", "track_order",
                  "set_reminder", "my_reminders", "todays_doses", "mark_dose", "refill", "upload_prescription",
-                 "feedback", "pharmacist", "policy"}
+                 "feedback", "pharmacist", "policy", "substitutes", "check_interactions"}
 ADMIN_ONLY = {"review_insights", "store_tasks", "low_stock", "stock_check"}
 
 
@@ -899,6 +1071,14 @@ def extract(intent: str, ctx: Ctx) -> dict:
             lm = ctx.state.get("last_medicine") or (last[0] if len(last) == 1 else None)
             if lm and lm.get("id"):
                 slots.update(medicine_id=lm["id"], medicine_name=lm.get("name"))
+    if intent == "substitutes":
+        q = substitute_query(msg)
+        if q:
+            slots["query"] = q
+        elif re.search(r"\b(it|this|that|this one|that one)\b", t) and ctx.state.get("last_medicine"):
+            slots["medicine_id"] = ctx.state["last_medicine"].get("id")
+    if intent == "check_interactions":
+        slots.update(interaction_slots(msg))
     if intent == "set_reminder":
         times = parse_times(msg)
         if times:

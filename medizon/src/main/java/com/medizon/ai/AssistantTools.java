@@ -36,7 +36,7 @@ public class AssistantTools {
 
     private static final Set<String> CUSTOMER = Set.of("search_medicines", "medicine_details", "add_to_cart",
             "cart_summary", "my_orders", "my_returns", "my_plans", "todays_doses", "create_plan", "mark_dose", "refill_plan",
-            "submit_feedback", "create_reminder", "list_reminders", "complete_reminder");
+            "submit_feedback", "create_reminder", "list_reminders", "complete_reminder", "find_substitutes", "check_medicines");
     private static final Set<String> ADMIN = Set.of("search_medicines", "store_tasks", "review_data", "review_digest",
             "sales_report", "find_order", "create_reminder", "list_reminders", "complete_reminder");
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
@@ -70,6 +70,8 @@ public class AssistantTools {
     private final OrderRepository orderRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final FeedbackRepository feedbackRepository;
+    private final SubstituteService substituteService;
+    private final InteractionService interactions;
 
     public Object execute(String name, JsonNode args, User user) {
         if (user.isStaff() && !user.isAdmin() || !(user.isAdmin() ? ADMIN : CUSTOMER).contains(name)) {
@@ -118,6 +120,8 @@ public class AssistantTools {
                     args.path("days").asInt(DIGEST_DAYS));
             case "sales_report" -> salesReport(args);
             case "find_order" -> findOrder(args.path("order_number").asText(""));
+            case "find_substitutes" -> substitutes(args, pin);
+            case "check_medicines" -> checkMedicines(user, args, pin);
             default -> Map.of("error", "Unknown action " + name);
         };
     }
@@ -202,6 +206,159 @@ public class AssistantTools {
         out.put("form", m.getDosageForm());
         out.put("description", m.getDescription());
         return out;
+    }
+
+    // ------------------------------------------------------------------ substitutes and interactions
+
+    /** Other brands with the same salt and strength, cheapest per unit first, with what switching saves. */
+    private Object substitutes(JsonNode args, String pin) {
+        Medicine m;
+        if (args.hasNonNull("id") && args.get("id").asLong() > 0) {
+            m = medicineService.get(args.get("id").asLong());
+        } else {
+            String query = args.path("query").asText("").trim();
+            List<Medicine> hits = search(query, "", false, pin);
+            if (hits.isEmpty() && !query.isEmpty()) hits = find(query, "", true, pin);
+            if (hits.isEmpty()) return Map.of("error", "I couldn't find " + (query.isEmpty() ? "that" : query) + " in our catalogue.");
+            m = hits.get(0);
+        }
+        SubstituteService.Result r = substituteService.find(m, pin);
+        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, Object> original = summary(r.original(), false);
+        original.put("unit_price", r.unitPrice());
+        original.put("unit", m.getUnitLabel());
+        out.put("medicine", original);
+        out.put("comparable", Composition.of(m).isComparable());
+        out.put("substitutes", r.substitutes().stream().map(s -> {
+            Map<String, Object> row = summary(s.product(), false);
+            row.put("unit_price", s.unitPrice());
+            row.put("saving_percent", s.savingPercent());
+            row.put("saving_per_pack", s.savingPerPack());
+            row.put("cheaper", s.isCheaper());
+            return row;
+        }).toList());
+        out.put("note", "Same salt, strength and form. " + (m.isPrescriptionRequired()
+                ? "It's a prescription medicine: switch brands only if your doctor or our pharmacist agrees, and the "
+                + "prescription has to cover the brand you order."
+                : "Ask our pharmacist if you're unsure which suits you."));
+        return out;
+    }
+
+    private static final Map<String, String> RELATIONS = Map.ofEntries(Map.entry("mom", "mother"), Map.entry("mum", "mother"),
+            Map.entry("mummy", "mother"), Map.entry("mommy", "mother"), Map.entry("maa", "mother"), Map.entry("mata", "mother"),
+            Map.entry("dad", "father"), Map.entry("daddy", "father"), Map.entry("papa", "father"), Map.entry("pita", "father"),
+            Map.entry("granny", "grandmother"), Map.entry("grandma", "grandmother"), Map.entry("dadi", "grandmother"),
+            Map.entry("nani", "grandmother"), Map.entry("grandpa", "grandfather"), Map.entry("dada", "grandfather"),
+            Map.entry("nana", "grandfather"), Map.entry("hubby", "husband"), Map.entry("pati", "husband"),
+            Map.entry("patni", "wife"), Map.entry("beta", "son"), Map.entry("beti", "daughter"));
+    private static final Set<String> SELF_WORDS = Set.of("me", "my", "mine", "myself", "i", "self", "mera", "meri", "mujhe");
+    private static final Set<String> EVERYONE_WORDS = Set.of("everyone", "family", "all", "household", "everybody");
+
+    /**
+     * Interactions and doubled-up salts among the medicines one person takes: the ones named, that person's medicines
+     * in My medicines (everyone's, each person on their own, when nothing is named) and, if asked, the cart.
+     */
+    private Object checkMedicines(User user, JsonNode args, String pin) {
+        List<String> names = new ArrayList<>();
+        JsonNode given = args.path("medicines");
+        if (given.isArray()) given.forEach(n -> names.add(n.asText("")));
+        else names.addAll(Arrays.asList(given.asText("").split("\\s*(?:,|;|\\+|\\band\\b|\\bwith\\b|\\baur\\b)\\s*")));
+        names.replaceAll(String::trim);
+        names.removeIf(String::isBlank);
+        String who = args.path("member").asText("").trim();
+        boolean withCart = args.path("include_cart").asBoolean(false);
+        boolean withPlans = args.path("include_plans").asBoolean(names.isEmpty() && !withCart) || !who.isEmpty();
+
+        List<String> unknown = new ArrayList<>();
+        List<InteractionService.Item> asked = new ArrayList<>();
+        for (String n : names) {
+            Optional<InteractionService.Item> item = resolve(n, pin);
+            if (item.isPresent()) asked.add(item.get());
+            else unknown.add(n);
+        }
+
+        List<Member> people = memberService.people(user);
+        List<Member> chosen;
+        if (!who.isEmpty()) {
+            chosen = matchMembers(who, people);
+            if (chosen.isEmpty()) {
+                return Map.of("error", "I couldn't tell whose medicines to check from \"" + who + "\".",
+                        "people", people.stream().map(Member::getLabel).toList());
+            }
+        } else {
+            chosen = names.isEmpty() && withPlans ? people : List.of(memberService.self(user));
+        }
+        List<MedicationPlan> plans = withPlans ? planService.forUser(user).stream().filter(MedicationPlan::isActive).toList() : List.of();
+        List<CartItem> cartLines = withCart ? cartService.summary(user, pin).getItems() : List.of();
+
+        List<Map<String, Object>> checked = new ArrayList<>();
+        List<Map<String, Object>> findings = new ArrayList<>();
+        for (Member person : chosen) {
+            Map<Long, InteractionService.Item> items = new LinkedHashMap<>();
+            if (withPlans) {
+                plans.stream().filter(p -> p.getMember() != null && p.getMember().getId().equals(person.getId()))
+                        .forEach(p -> items.putIfAbsent(p.getMedicine().getId(), item(p.getMedicine(), null)));
+            }
+            for (CartItem line : cartLines) {
+                // Without My medicines the cart is checked as a whole; with them, each line goes to the people it's for
+                boolean forThem = !withPlans || line.getSortedMembers().stream().anyMatch(mb -> mb.getId().equals(person.getId()));
+                if (forThem) items.putIfAbsent(line.getMedicine().getId(), item(line.getMedicine(), "in cart"));
+            }
+            List<InteractionService.Item> all = new ArrayList<>(items.values());
+            asked.stream().filter(a -> all.stream().noneMatch(i -> i.label().equalsIgnoreCase(a.label()))).forEach(all::add);
+            if (all.isEmpty()) continue;
+            checked.add(Map.of("person", person.getLabel(), "medicines", all.stream().map(InteractionService.Item::label).toList()));
+            for (InteractionService.Finding f : interactions.check(all)) {
+                findings.add(Map.of("person", person.getLabel(), "severity", f.severity().getLabel(),
+                        "between", List.of(f.first(), f.second()), "note", f.note()));
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("checked", checked);
+        out.put("findings", findings);
+        out.put("unknown", unknown);
+        out.put("empty", checked.isEmpty());
+        out.put("note", InteractionService.DISCLAIMER);
+        return out;
+    }
+
+    private static InteractionService.Item item(Medicine m, String tag) {
+        List<String> names = Composition.of(m).names();
+        String label = m.getName() + (tag == null ? "" : " (" + tag + ")");
+        return new InteractionService.Item(label, names.isEmpty() ? List.of(m.getName().toLowerCase(Locale.ROOT)) : names);
+    }
+
+    /** A name the customer typed: a catalogue product (by its salt), or an ingredient the check knows by itself. */
+    private Optional<InteractionService.Item> resolve(String name, String pin) {
+        if (interactions.isAlcohol(name)) return Optional.of(new InteractionService.Item("alcohol", List.of("alcohol")));
+        List<Medicine> hits = find(name, "", true, pin);
+        if (!hits.isEmpty()) return Optional.of(item(hits.get(0), null));
+        if (interactions.knows(name)) return Optional.of(new InteractionService.Item(name.toLowerCase(Locale.ROOT), List.of(name)));
+        return Optional.empty();
+    }
+
+    /** "mom", "Asha", "my father's", "me", "everyone": the household members meant. */
+    static List<Member> matchMembers(String who, List<Member> people) {
+        Set<String> words = new HashSet<>();
+        for (String w : who.toLowerCase(Locale.ROOT).split("[^a-z]+")) {
+            if (w.isEmpty()) continue;
+            String base = w.endsWith("s") && w.length() > 3 ? w.substring(0, w.length() - 1) : w;
+            words.add(w);
+            words.add(base);
+            words.add(RELATIONS.getOrDefault(w, w));
+            words.add(RELATIONS.getOrDefault(base, base));
+        }
+        if (words.stream().anyMatch(EVERYONE_WORDS::contains)) return people;
+        List<Member> out = people.stream().filter(m -> !m.isSelf()).filter(m -> mentions(words, m.getName())
+                || mentions(words, m.getRelation()) || mentions(words, m.getPatientName())).toList();
+        if (!out.isEmpty()) return out;
+        return words.stream().anyMatch(SELF_WORDS::contains) ? people.stream().filter(Member::isSelf).toList() : List.of();
+    }
+
+    private static boolean mentions(Set<String> words, String field) {
+        if (field == null || field.isBlank()) return false;
+        for (String w : field.toLowerCase(Locale.ROOT).split("[^a-z]+")) if (w.length() > 1 && words.contains(w)) return true;
+        return false;
     }
 
     // ------------------------------------------------------------------ cart and orders

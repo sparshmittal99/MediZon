@@ -25,6 +25,7 @@ public class MedicineController {
     private final CurrentUser currentUser;
     private final MedicationPlanService planService;
     private final ReturnSettingsService returnSettings;
+    private final SubstituteService substitutes;
 
     @GetMapping("/medicines")
     public String list(@RequestParam(defaultValue = "") String q,
@@ -49,6 +50,8 @@ public class MedicineController {
         model.addAttribute("returnDays", returnSettings.get().getReturnWindowDays());
         // When it would arrive, from the store that would deliver it
         if (p.isInStock()) catalog.estimate(p.getOffer()).ifPresent(e -> model.addAttribute("delivery", e));
+        // Other brands with the same salt, strength and form, sold here, compared per tablet / ml
+        model.addAttribute("subs", substitutes.find(m, pin));
         // Dose reminders are offered once the medicine has been delivered for someone in the household (not "Others")
         currentUser.find().filter(u -> !u.isStaff())
                 .flatMap(u -> planService.suggestedMember(u, m.getId()))

@@ -81,6 +81,31 @@ class FakeStore:
                 {"rating": 5, "comment": "Great prices and fast checkout", "date": "2026-10-06"},
                 {"rating": 2, "comment": None, "date": "2026-10-07"},
             ], "feedback": [{"message": "delivery is too slow", "date": "2026-10-08"}]}
+        if name == "find_substitutes":
+            q = (args.get("query") or "").lower()
+            m = next((m for m in CATALOG if m["id"] == args.get("id") or (q and q.split()[0] in m["name"].lower())), None)
+            if not m:
+                return {"error": f"I couldn't find {q} in our catalogue."}
+            original = dict(m, unit_price=2.23, unit="tablet(s)")
+            subs = [dict(m, id=90, name="Calpol 650", unit_price=1.80, saving_percent=19, cheaper=True, in_stock=True),
+                    dict(m, id=91, name="Crocin 650", unit_price=2.50, saving_percent=-12, cheaper=False, in_stock=True)]
+            return {"medicine": original, "comparable": True, "substitutes": subs if m["id"] == 1 else [],
+                    "note": "Same salt, strength and form."}
+        if name == "check_medicines":
+            names = [n for n in (args.get("medicines") or "").split(", ") if n]
+            known = {"alcohol"} | {m["name"].split()[0].lower() for m in CATALOG}
+            items = [n for n in names if n.lower().split()[0] in known]
+            unknown = [n for n in names if n.lower().split()[0] not in known]
+            if args.get("member") == "me":
+                items = ["Metformin 500 mg"] + items
+            findings = []
+            if any("cetirizine" in i.lower() for i in items) and "alcohol" in items:
+                findings.append({"person": "Me", "severity": "Caution", "between": ["Cetirizine 10 mg", "alcohol"],
+                                 "note": "Alcohol adds to the drowsiness."})
+            if sum("paracetamol" in i for i in items) > 1:
+                findings.append({"person": "Me", "severity": "Duplicate", "between": items[:2], "note": "Both contain paracetamol."})
+            checked = [{"person": "Me", "medicines": items}] if items else []
+            return {"checked": checked, "findings": findings, "unknown": unknown, "empty": not items, "note": "Limited check."}
         return {"error": f"unknown tool {name}"}
 
 
@@ -336,6 +361,80 @@ class MonitoringTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SubstituteTests(unittest.TestCase):
+    def test_cheaper_brand(self):
+        chat = Chat()
+        out = chat.send("any cheaper alternative to paracetamol?")
+        self.assertEqual(out["intent"], "substitutes")
+        self.assertIn("find_substitutes", chat.store.calls)
+        self.assertIn("19% cheaper", out["reply"])
+        self.assertEqual(out["cards"][0]["badge"], "19% cheaper")
+        self.assertEqual(out["cards"][1]["badge"], "12% dearer")
+
+    def test_query_words_are_dropped(self):
+        self.assertEqual(dialog.substitute_query("is there a cheaper generic brand of dolo 650?"), "dolo 650")
+
+    def test_none_found(self):
+        self.assertIn("couldn't find another brand", Chat().send("generic substitute for metformin")["reply"])
+
+    def test_not_a_product_searches_instead(self):
+        chat = Chat()
+        chat.send("cheaper alternatives for fever")
+        self.assertIn("search_medicines", chat.store.calls)
+
+    def test_follows_the_last_medicine(self):
+        chat = Chat()
+        chat.send("tell me about paracetamol")
+        out = chat.send("is there a cheaper version of it")
+        self.assertIn("Calpol 650", out["reply"])
+
+
+class InteractionTests(unittest.TestCase):
+    def test_names_are_read(self):
+        self.assertEqual(dialog.interaction_names("Can I take Dolo 650 with alcohol?"), ["dolo 650", "alcohol"])
+        self.assertEqual(dialog.interaction_names("interaction between warfarin and aspirin"), ["warfarin", "aspirin"])
+        self.assertEqual(dialog.interaction_names("kya main dolo aur combiflam saath le sakta hoon"), ["dolo", "combiflam"])
+        self.assertEqual(dialog.interaction_names("check my mom's medicines for interactions"), [])
+
+    def test_whose_medicines(self):
+        self.assertEqual(dialog.interaction_slots("check my medicines for interactions")["member"], "me")
+        self.assertIn("mom", dialog.interaction_slots("check my mom's medicines for duplicates")["member"])
+        self.assertNotIn("member", dialog.interaction_slots("what's the interaction between warfarin and aspirin"))
+        self.assertTrue(dialog.interaction_slots("check my cart for duplicates")["include_cart"])
+
+    def test_routing(self):
+        m = model("customer")
+        for q in ["can I take ibuprofen with paracetamol", "do my medicines clash", "any duplicate medicines",
+                  "is it safe to take metformin and glimepiride together"]:
+            self.assertEqual(m.predict(q).name, "check_interactions", q)
+        self.assertEqual(m.predict("show my medicines").name, "my_reminders")
+        self.assertEqual(m.predict("remind me to take metformin with food at 8 am").name, "set_reminder")
+
+    def test_finding_is_reported(self):
+        out = Chat().send("can I take cetirizine with alcohol?")
+        self.assertIn("**Caution**", out["reply"])
+        self.assertIn("Limited check.", out["reply"])
+        self.assertFalse(out["unresolved"])
+
+    def test_nothing_found(self):
+        out = Chat().send("can I take cetirizine with metformin")
+        self.assertIn("didn't find any known interactions", out["reply"])
+
+    def test_it_means_the_last_medicine(self):
+        chat = Chat()
+        chat.send("tell me about cetirizine")
+        self.assertIn("**Caution**", chat.send("can I take it with alcohol")["reply"])
+
+    def test_one_medicine_alone_goes_to_the_llm(self):
+        out = Chat().send("is it safe to take paracetamol during pregnancy")
+        self.assertTrue(out["unresolved"])
+        self.assertNotIn("Metformin", out["reply"])
+
+    def test_unknown_name_goes_to_the_llm(self):
+        out = Chat().send("can I take crocin advance with combiflam")
+        self.assertTrue(out["unresolved"])
 
 
 class UnresolvedTests(unittest.TestCase):

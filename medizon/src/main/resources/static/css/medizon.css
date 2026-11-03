@@ -310,6 +310,22 @@ body *::-webkit-scrollbar { display: none; }
 
 .mz-rx-note { background: #FBEFEF; border: 1px solid #EFCFCF; border-radius: .7rem; padding: .8rem 1rem; color: #7A2626; }
 
+/* Same salt, other brands (product page) */
+.mz-subs { border: 1px solid var(--mz-line); border-radius: .9rem; background: #fff; padding: 1rem; }
+.mz-subs-save { display: flex; gap: .5rem; align-items: center; background: var(--mz-mint); color: var(--mz-green-ink);
+    border-radius: .6rem; padding: .55rem .75rem; font-size: .92rem; margin-bottom: .75rem; }
+.mz-subs-list { list-style: none; padding: 0; margin: 0; }
+.mz-subs-row { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .65rem 0; border-top: 1px solid var(--mz-line); }
+.mz-subs-row:first-child { border-top: 0; padding-top: 0; }
+.mz-subs-row a { color: var(--mz-ink); font-weight: 600; text-decoration: none; }
+.mz-subs-row a:hover { color: var(--mz-green); text-decoration: underline; }
+.mz-subs-price { text-align: right; white-space: nowrap; }
+.mz-subs-unit { font-size: .8rem; color: var(--mz-muted); }
+.mz-subs-tag { display: inline-block; font-size: .75rem; font-weight: 600; border-radius: 1rem; padding: .1rem .5rem; }
+.mz-subs-tag.is-cheaper { background: var(--mz-mint); color: var(--mz-green-ink); }
+.mz-subs-tag.is-dearer { background: var(--mz-paper); color: var(--mz-muted); }
+.mz-subs-tag.is-out { background: var(--mz-amber-soft); color: #8A5200; }
+
 /* ---------- Plans (my medicines) ---------- */
 .mz-plan { background: #fff; border: 1px solid var(--mz-line); border-radius: 1rem; padding: 1.25rem; height: 100%; display: flex; flex-direction: column; }
 .mz-plan.is-low { border-color: var(--mz-amber); box-shadow: inset 4px 0 0 var(--mz-amber); }

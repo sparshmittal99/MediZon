@@ -114,6 +114,44 @@
             <a sec:authorize="hasRole('STAFF')" th:href="@{/admin/medicines/{id}/edit(id=${m.id})}" class="btn btn-outline-primary mb-4">
                 <i class="bi bi-pencil me-1"></i>Edit in catalog</a>
 
+            <!-- Other brands with the same salt, strength and form, compared by the price of one tablet / ml -->
+            <section class="mz-subs mb-4" th:if="${subs != null and !subs.isEmpty()}"
+                     th:with="unit=${#strings.replace(m.unitLabel, '(s)', '')}" aria-labelledby="mzSubsTitle">
+                <h2 class="h6 mb-1" id="mzSubsTitle"><i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i>Same salt, other brands</h2>
+                <p class="small text-muted mb-2">
+                    Same ingredients, strength and form as <span th:text="${m.name}"></span>
+                    <th:block th:if="${subs.unitPrice() != null}">
+                        (<span th:text="'₹' + ${#numbers.formatDecimal(subs.unitPrice(), 1, 'COMMA', 2, 'POINT')} + ' per ' + ${unit}"></span>)</th:block>.
+                </p>
+                <div class="mz-subs-save" th:if="${subs.cheapest() != null}" th:with="c=${subs.cheapest()}">
+                    <i class="bi bi-piggy-bank" aria-hidden="true"></i>
+                    <span>Save <strong th:text="${c.savingPercent()} + '%'"></strong> with
+                        <strong th:text="${c.product().name}"></strong>:
+                        <span th:text="'about ₹' + ${#numbers.formatDecimal(c.savingPerPack(), 1, 'COMMA', 2, 'POINT')} + ' less for the same ' + ${m.packLabel}"></span></span>
+                </div>
+                <ul class="mz-subs-list">
+                    <li class="mz-subs-row" th:each="s : ${subs.substitutes()}" th:with="p=${s.product()}">
+                        <div class="min-w-0">
+                            <a th:href="@{/medicines/{id}(id=${p.id})}" th:text="${p.name}">Brand</a>
+                            <div class="small text-muted" th:text="${p.manufacturer != null ? p.manufacturer + ' · ' : ''} + 'Pack of ' + ${p.packLabel}">Maker · pack</div>
+                            <span th:if="${!p.inStock}" class="mz-subs-tag is-out">Out of stock</span>
+                        </div>
+                        <div class="mz-subs-price">
+                            <div class="mz-price" th:text="'₹' + ${#numbers.formatDecimal(p.price, 1, 'COMMA', 2, 'POINT')}">₹0</div>
+                            <div class="mz-subs-unit" th:text="'₹' + ${#numbers.formatDecimal(s.unitPrice(), 1, 'COMMA', 2, 'POINT')} + ' per ' + ${unit}"></div>
+                            <span th:if="${s.isCheaper()}" class="mz-subs-tag is-cheaper" th:text="${s.savingPercent()} + '% cheaper'"></span>
+                            <span th:if="${s.savingPercent() < 0}" class="mz-subs-tag is-dearer" th:text="${-s.savingPercent()} + '% dearer'"></span>
+                            <span th:if="${s.savingPercent() == 0}" class="mz-subs-tag is-dearer">Same price</span>
+                        </div>
+                    </li>
+                </ul>
+                <p class="small text-muted mt-2 mb-0" th:if="${m.prescriptionRequired}">
+                    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>Prescription medicine: switch brands only if your doctor
+                    or our pharmacist agrees, and the prescription has to cover the brand you order.</p>
+                <p class="small text-muted mt-2 mb-0" th:unless="${m.prescriptionRequired}">
+                    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>Not sure which suits you? Ask our pharmacist.</p>
+            </section>
+
             <h2 class="h6 mt-2">About this medicine</h2>
             <p th:text="${m.description}">Description</p>
 

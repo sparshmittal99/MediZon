@@ -58,6 +58,16 @@ class IntentModel:
             return "cancel"
         if re.search(r"\b(check ?out|place (my )?order|proceed to pay|pay now)\b", t) and self.role == "customer":
             return "checkout"
+        if self.role == "customer" and not re.search(r"\bremind", t):
+            if (re.search(r"\b(interacts?|interactions?|interacting|clash(es)?|duplicates?)\b", t)
+                    or re.search(r"\b(can|could|should|may) (i|we|he|she|they|my \w+) (take|have|drink|use|give|mix|combine)\b"
+                                 r".*\b(with|and|along|together|alongside|while|aur|saath|sath)\b", t)
+                    or re.search(r"\b(safe|okay|ok|fine) (to )?(take |use |have )?(together|with)\b|\btogether\b.*\bsafe\b", t)
+                    or re.search(r"\b(saath|sath) (le|lena|kha|khana|khaa)\b", t)):
+                return "check_interactions"
+            if re.search(r"\b(substitutes?|generics?|alternatives?|cheaper|sasta|saste|sasti|jan aushadhi|"
+                         r"other brands?|same (salt|composition))\b", t):
+                return "substitutes"
         if re.search(r"\bremind me\b|\breminder\b|\bremember to\b", t):
             if re.search(r"\b(show|list|what|which|my|pending|upcoming)\b.*\breminders\b", t) and not parse_times(t, False):
                 if self.role == "customer" and re.search(r"\bmedicine|tablet|dose", t):

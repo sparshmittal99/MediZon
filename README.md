@@ -19,6 +19,7 @@ The web app can also use **Google Gemini** for reading prescriptions, and **Groq
 
 ### For customers
 - **Shopping:** browse by category, search by name or salt, view product details (including expiry), add to cart, check out.
+- **Same salt, other brands:** a product page lists other brands with the same ingredients, strength and form (salt forms like "hydrochloride", units and ingredient order don't matter; SR and plain tablets are kept apart) sold near you. They're compared by the price of one tablet or ml, and the cheapest in stock is highlighted with what it saves on a pack. Medicines whose salt doesn't give a strength are never matched.
 - **Out of stock:** the home page shows only what can be ordered now. In the shop, out-of-stock products show **Notify me** instead of Add; the customer is told (bell, desktop and email) as soon as a store delivering to them has it again.
 - **Shop before signing in:** visitors can fill a cart; it moves into their account when they sign in, and "Sign in to checkout" brings them straight back to checkout.
 - **"Delivers to" location:** pick where you want delivery from the header (device location, a pin on the map, an address search or a PIN code, using OpenStreetMap) and see straight away whether MediZon delivers there.
@@ -92,6 +93,8 @@ Staff accounts run the shop only; they can't shop, order or set reminders.
 ### Chat assistant
 It's available on every page after sign-in.
 - **Customers** can find medicines by name, salt or symptom, add to cart, set reminders in plain language ("remind me to take metformin at 8 am and 8 pm"), see today's doses, refill, track orders and send feedback.
+- **Cheaper brands:** "any cheaper alternative to pantoprazole?" lists the same-salt brands with how much cheaper each is per tablet.
+- **Interaction and duplicate check:** "can I take ibuprofen with aspirin?", "check mom's medicines" or "check my cart for duplicates" checks those medicines, that person's My medicines or the cart against a built-in list of well-known interactions (blood thinners and painkillers, serotonin syndrome, nitrates with sildenafil, alcohol with metronidazole ...) and repeated salts (two paracetamol brands, two acid reducers). Each person is checked on their own. It's a limited check and always says so; names it doesn't know go to the LLM.
 - **Admins** can ask what needs attention, check stock and the low-stock list, get review insights, and set their own reminders.
 - **Emergencies** (chest pain, overdose, self-harm and so on) always get a "call 112" reply first.
 - **Hybrid:** the Python assistant answers first (it's free, instant and can act). Questions it can't answer, such as "can I take Dolo with alcohol?", go to Groq (or Gemini when Groq is down or out of quota), which gives general information with health guardrails (no diagnosis or dose changes, emergencies to 112) and replies in the customer's language, Hindi and Hinglish included. Groq can also act through the same actions as the Python assistant (orders, returns, cart, dose reminders and reminders), as the signed-in user, so chat keeps working while the Python service is asleep. Gemini can't act; it points to the right page.

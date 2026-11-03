@@ -48,7 +48,7 @@ CUSTOMER = {
         "paracetamol", "dolo 650", "need omega 3", "any medicine for loose motion", "do you stock ors",
         "find glucometer strips", "what medicines do you have for thyroid", "browse vitamins",
         "show me painkillers", "i have a fever what can i take", "i have a headache", "my stomach hurts",
-        "suggest something for sore throat", "alternatives to dolo", "cheapest paracetamol",
+        "suggest something for sore throat", "cheapest paracetamol",
     ],
     "medicine_info": [
         "what is paracetamol used for", "tell me about metformin", "side effects of cetirizine",
@@ -95,7 +95,7 @@ CUSTOMER = {
         "show my medicines", "my medication plans", "what medicines am i taking", "list my reminders for medicines",
         "my medicine schedule", "how many days of supply do i have", "which medicine is running low",
         "when will my tablets run out", "my plans", "how many tablets left", "show my dose schedule",
-        "which medicines do i take", "supply left",
+        "which medicines do i take", "supply left", "check my medicines", "check my medicine list",
     ],
     "todays_doses": [
         "what doses today", "today's doses", "what should i take today", "my doses for today",
@@ -141,6 +141,23 @@ CUSTOMER = {
         "how can i pay", "payment options", "do you accept upi", "can i pay cash on delivery", "do you take cards",
         "can i cancel my order", "how do i cancel an order", "cancel my order", "cancellation policy",
         "what are your policies", "store policy",
+    ],
+    "substitutes": [
+        "cheaper alternative to dolo", "is there a generic for crocin", "substitute for metformin",
+        "any cheaper brand of pantoprazole", "generic medicine for telmisartan", "alternatives to dolo",
+        "other brands of cetirizine", "is there a cheaper option for atorvastatin", "same salt cheaper medicine",
+        "cheaper version of this", "generic substitute", "find a cheaper substitute", "sasta option for amlodipine",
+        "jan aushadhi alternative", "same composition different brand", "can i get something cheaper with the same salt",
+        "replacement for glimepiride", "equivalent of azithromycin", "cheaper brand", "switch to a generic",
+    ],
+    "check_interactions": [
+        "can i take ibuprofen with paracetamol", "is it safe to take metformin and glimepiride together",
+        "drug interaction", "check interactions", "check my medicines for clashes", "check my mother's medicines for interactions",
+        "any duplicate medicines", "are my medicines safe together", "interaction between warfarin and aspirin",
+        "can i drink alcohol with metronidazole", "can i take cetirizine with alcohol", "check my cart for interactions",
+        "do my medicines clash", "duplicate salt check", "can these be taken together", "do these medicines interact",
+        "is it okay to take aspirin and clopidogrel", "kya main dolo aur combiflam saath le sakta hoon",
+        "check my family's medicines for duplicates", "does pantoprazole interact with clopidogrel", "safe to combine these",
     ],
     "pharmacist": [
         "talk to a pharmacist", "can i speak to someone", "contact support", "customer care number",
