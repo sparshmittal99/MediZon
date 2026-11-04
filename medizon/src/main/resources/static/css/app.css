@@ -47,22 +47,6 @@ body { animation: mz-app-in .18s ease-out both; }
 /* The app always keeps you signed in, so no "Keep me signed in" box */
 [data-mz-remember] { display: none !important; }
 
-/* "Dose alarms on this phone" card on My medicines and alert settings */
-.mz-app-alarms { display: flex; gap: .85rem; align-items: flex-start; padding: .9rem 1rem; margin-bottom: 1rem;
-    border-radius: 1rem; border: 1px solid var(--mz-line); background: #fff; }
-.mz-app-alarms > i { font-size: 1.5rem; line-height: 1; color: var(--mz-green); margin-top: .1rem; }
-.mz-app-alarms.is-off { background: var(--mz-amber-soft); border-color: #F3D19B; }
-.mz-app-alarms.is-off > i { color: #B26B0E; }
-.mz-app-alarms h2 { font-size: 1rem; font-weight: 700; margin: 0 0 .15rem; }
-.mz-app-alarms p { margin: 0; font-size: .875rem; color: var(--mz-muted); }
-.mz-app-alarms ul { margin: .35rem 0 0; padding-left: 1.1rem; font-size: .875rem; }
-.mz-app-alarms .mz-app-alarms-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .65rem; }
-
-/* Dark mode (App settings → Appearance) */
-html[data-theme="dark"] .mz-app-alarms { background: var(--mz-surface); }
-html[data-theme="dark"] .mz-app-alarms.is-off { background: #3A2A12; border-color: #5A4220; }
-html[data-theme="dark"] .mz-app-alarms.is-off > i { color: #F3CF96; }
-
 /* Header: upload prescription in place of the account menu */
 .mz-app-rx { margin: 0; }
 .mz-app-rx label { cursor: pointer; }

@@ -834,9 +834,14 @@
                 const other = !!medicine?.selectedOptions[0]?.dataset.other;
                 document.querySelectorAll('[data-mz-person-only]').forEach(el => { el.hidden = shelf; });
                 document.querySelectorAll('[data-mz-shelf-only]').forEach(el => { el.hidden = !shelf; });
-                // A typed-in medicine isn't sold here: no refills, and nothing to move from the shelf
-                document.querySelectorAll('[data-mz-catalog-only]').forEach(el => { if (other) el.hidden = true; });
+                // A typed-in medicine isn't sold here: no ordering (a low-supply alert only), nothing to move from the shelf
+                document.querySelectorAll('[data-mz-catalog-only]').forEach(el => { el.hidden = other; });
                 document.querySelectorAll('[data-mz-other-only]').forEach(el => { el.hidden = !other; });
+                if (other) {
+                    const auto = document.querySelector('[data-mz-reorder-mode][value="AUTO"]');
+                    const manual = document.querySelector('[data-mz-reorder-mode][value="MANUAL"]');
+                    if (auto && auto.checked && manual) { manual.checked = true; manual.dispatchEvent(new Event('change', { bubbles: true })); }
+                }
                 if (take && medicine) {
                     const opt = medicine.selectedOptions[0];
                     const units = Number(opt?.dataset.shelf || 0);

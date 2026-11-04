@@ -164,8 +164,10 @@
                 </div>
             </div>
 
-            <div class="row g-3 mt-1" data-mz-person-only data-mz-catalog-only>
-                <div class="col-12"><hr class="my-1"><h3 class="h6 mb-0 mt-2">Refills</h3></div>
+            <!-- An "Other" medicine keeps the low-supply alert but nothing about ordering (data-mz-catalog-only parts) -->
+            <div class="row g-3 mt-1" data-mz-person-only>
+                <div class="col-12"><hr class="my-1"><h3 class="h6 mb-0 mt-2"><span data-mz-catalog-only>Refills</span><span
+                        data-mz-other-only th:hidden="${!form.other}">Low supply alert</span></h3></div>
                 <div class="col-md-6">
                     <label class="form-label" for="reorderThresholdDays">Act when supply is down to</label>
                     <div class="input-group">
@@ -173,18 +175,21 @@
                         <span class="input-group-text">dose days</span>
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-6" data-mz-catalog-only>
                     <label class="form-label" for="reorderPacks">Packs per refill</label>
                     <input class="form-control" type="number" min="1" max="20" th:field="*{reorderPacks}" th:errorclass="is-invalid">
                 </div>
                 <div class="col-12">
                     <label class="form-label d-block">When supply runs low</label>
-                    <div class="form-check" th:each="mode : ${reorderModes}">
+                    <div class="form-check" th:each="mode : ${reorderModes}" th:attr="data-mz-catalog-only=${mode.name() == 'AUTO'} ? 'true' : null">
                         <input class="form-check-input" type="radio" th:field="*{reorderMode}" th:value="${mode}" data-mz-reorder-mode>
                         <label class="form-check-label" th:for="${#ids.prev('reorderMode')}">
-                            <span class="fw-semibold" th:text="${mode.label}"></span>
+                            <span class="fw-semibold" th:text="${mode.label}" data-mz-catalog-only></span>
+                            <span class="fw-semibold" th:text="${mode.name() == 'MANUAL'} ? 'Alert me' : 'No alerts'" data-mz-other-only
+                                  th:hidden="${!form.other}">Alert me</span>
                             <span class="small text-muted" th:switch="${mode.name()}">
-                                <span th:case="'MANUAL'">: we notify you and you reorder with one tap.</span>
+                                <span th:case="'MANUAL'"><span data-mz-catalog-only>: we notify you and you reorder with one tap.</span><span
+                                        data-mz-other-only th:hidden="${!form.other}">: we tell you when it's running low, so you can buy more.</span></span>
                                 <span th:case="'AUTO'">: we place a cash-on-delivery order to your saved address, for the same person. Rx medicines need an approved prescription on file.</span>
                                 <span th:case="*">: reminders only.</span>
                             </span>

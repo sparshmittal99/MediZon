@@ -62,7 +62,11 @@ public class ReorderService {
     }
 
     private void evaluate(MedicationPlan p) {
-        if (p.isCustom() || !p.isActive() || p.getReorderMode() == ReorderMode.OFF || !p.isRunningLow()) return;
+        if (!p.isActive() || p.getReorderMode() == ReorderMode.OFF || !p.isRunningLow()) return;
+        if (p.isCustom()) {               // typed in, not sold here: tell them once, never order
+            lowSupplyAlert(p);
+            return;
+        }
         if (p.isReorderPending()) {
             if (p.getRefillOrder() == null || p.getRefillOrder().getStatus() == OrderStatus.CANCELLED) findRefillOrder(p);
             // Already ordered (or the customer cancelled it), or only an alert was due: nothing more this cycle
@@ -105,6 +109,20 @@ public class ReorderService {
                             + "). Refill now so no dose is missed.", link, p.getMember());
         }
         p.setReorderPending(true);
+    }
+
+    /** "Running low" for a medicine bought elsewhere: once, until the supply is topped up (saving the plan re-arms it). */
+    private void lowSupplyAlert(MedicationPlan p) {
+        if (p.isReorderPending()) return;
+        String supply = p.getDaysLeftRounded() == 0
+                ? "less than a day"
+                : "about " + p.getDaysLeftRounded() + " day" + (p.getDaysLeftRounded() == 1 ? "" : "s");
+        p.setLastReorderAt(LocalDateTime.now());
+        p.setReorderPending(true);
+        notifications.notify(p.getUser(), NotificationType.REORDER_ALERT, "Running low on " + p.getTitle(),
+                "There's " + supply + " of " + p.getTitle() + " left (runs out around " + p.getRunOutDate()
+                        + "). Buy more so no dose is missed, then update the count in My medicines.",
+                MedicationPlanService.planLink(p), p.getMember());
     }
 
     /** An order with this medicine placed since the alert (e.g. by hand after it), preferring one that isn't cancelled. */

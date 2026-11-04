@@ -136,7 +136,7 @@ public class MedicationPlanService {
 
     /**
      * "Other": a medicine not bought here, typed in by name. It gets the same reminders, supply count and expiry,
-     * but no refills (there's nothing to reorder) and nothing moves from the common shelf.
+     * and the low-supply alert, but no ordering (it isn't sold here) and nothing moves from the common shelf.
      */
     private Saved saveOther(MedicationPlan p, Member member, PlanForm form) {
         String name = form.getCustomName() == null ? "" : form.getCustomName().trim().replaceAll("\\s+", " ");
@@ -151,7 +151,8 @@ public class MedicationPlanService {
         }
         p.setCustomName(name);
         p.setCustomUnit(PlanForm.CUSTOM_UNITS.contains(form.getCustomUnit()) ? form.getCustomUnit() : "unit(s)");
-        form.setReorderMode(ReorderMode.OFF);
+        // Not sold here, so never ordered; the low-supply alert ("Alert me") still works
+        if (form.getReorderMode() == ReorderMode.AUTO) form.setReorderMode(ReorderMode.MANUAL);
         form.setTakeFromCommon(false);
         if (member.isCommon()) return new Saved(saveShelfItem(p, member, null, form), 0);
         return applySchedule(p, member, null, form);

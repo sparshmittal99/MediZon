@@ -170,6 +170,13 @@
                         <span th:if="${p.expiryDate != null and !p.expired}" th:text="'Expires ' + ${#temporals.format(p.expiryDate, 'd MMM yyyy')}"></span>
                     </div>
 
+                    <div class="mz-mode mb-3" th:classappend="'mz-mode-' + ${p.reorderMode}" th:if="${p.dailyUnits > 0 and p.custom}">
+                        <i class="bi" th:classappend="${p.reorderMode.name() == 'OFF'} ? 'bi-bell-slash' : 'bi-bell'"></i>
+                        <span th:text="${p.reorderMode.name() == 'OFF'} ? 'No low-supply alert' : 'Alert me when low'"></span>
+                        <span th:if="${p.reorderMode.name() != 'OFF'}" class="text-muted fw-normal" th:text="'at ' + ${p.reorderThresholdDays} + ' days'"></span>
+                        <div th:if="${p.reorderPending and p.runningLow}" class="small fw-normal mt-1 text-warning-emphasis">
+                            <i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>Running low: buy more, then update the count</div>
+                    </div>
                     <div class="mz-mode mb-3" th:classappend="'mz-mode-' + ${p.reorderMode}" th:if="${p.dailyUnits > 0 and !p.custom}">
                         <i class="bi" th:classappend="${p.reorderMode.name() == 'AUTO'} ? 'bi-truck' : (${p.reorderMode.name() == 'MANUAL'} ? 'bi-bell' : 'bi-bell-slash')"></i>
                         <span th:text="${p.reorderMode.label}"></span>
