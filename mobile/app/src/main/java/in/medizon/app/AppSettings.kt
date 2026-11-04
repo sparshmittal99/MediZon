@@ -23,14 +23,24 @@ object AppSettings {
     fun ringPhone(c: Context) = p(c).getBoolean(K_RING, true)
     fun setRingPhone(c: Context, v: Boolean) = p(c).edit().putBoolean(K_RING, v).apply()
 
-    /** "tring" (bundled MediZon tring, the default) or a ringtone URI string. */
+    /** "celesta" (bundled Celesta, the default), "tring" (bundled MediZon tring) or a phone ringtone's URI. */
+    const val CELESTA = "celesta"
     const val TRING = "tring"
-    fun ringtoneSetting(c: Context): String = p(c).getString(K_RINGTONE, null)?.takeIf { it.isNotBlank() } ?: TRING
+    fun ringtoneSetting(c: Context): String = p(c).getString(K_RINGTONE, null)?.takeIf { it.isNotBlank() } ?: CELESTA
     fun setRingtoneSetting(c: Context, value: String) = p(c).edit().putString(K_RINGTONE, value).apply()
 
-    /** The chosen phone ringtone, or null when "MediZon tring" is selected. */
-    fun ringtoneUri(c: Context): Uri? = ringtoneSetting(c).takeIf { it != TRING }?.let { Uri.parse(it) }
+    /** The chosen phone ringtone, or null when one of the bundled sounds is selected. */
+    fun ringtoneUri(c: Context): Uri? =
+        ringtoneSetting(c).takeIf { it != TRING && it != CELESTA }?.let { Uri.parse(it) }
     fun tringUri(c: Context): Uri = Uri.parse("android.resource://${c.packageName}/${R.raw.tring}")
+    fun celestaUri(c: Context): Uri = Uri.parse("android.resource://${c.packageName}/${R.raw.celesta}")
+
+    /** What rings: the chosen sound first. */
+    fun chosenSoundUri(c: Context): Uri = when (ringtoneSetting(c)) {
+        CELESTA -> celestaUri(c)
+        TRING -> tringUri(c)
+        else -> ringtoneUri(c) ?: celestaUri(c)
+    }
 
     fun vibrate(c: Context) = p(c).getBoolean(K_VIBRATE, true)
     fun setVibrate(c: Context, v: Boolean) = p(c).edit().putBoolean(K_VIBRATE, v).apply()

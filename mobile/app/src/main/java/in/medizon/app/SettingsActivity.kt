@@ -62,8 +62,53 @@ class SettingsActivity : AppCompatActivity() {
         val data = res.data ?: return@registerForActivityResult
         if (res.resultCode != RESULT_OK) return@registerForActivityResult
         val uri = IntentCompat.getParcelableExtra(data, RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
-        if (uri != null) AppSettings.setRingtoneSetting(this, uri.toString())
-        refresh()
+            ?: data.data
+            ?: return@registerForActivityResult
+        // A sound stored on the phone (downloaded / added by the user) needs the audio files permission to play
+        if (needsAudioPermission(uri)) {
+            pendingRingtone = uri
+            audioPermission.launch(audioPermissionName())
+        } else {
+            useRingtone(uri)
+        }
+    }
+
+    private var pendingRingtone: Uri? = null
+
+    private val audioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val uri = pendingRingtone ?: return@registerForActivityResult
+        pendingRingtone = null
+        if (granted) useRingtone(uri)
+        else toast("Allow access to audio files to use that ringtone. Keeping ${ringtoneTitle()}.")
+    }
+
+    private fun audioPermissionName() =
+        if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
+
+    private fun needsAudioPermission(uri: Uri): Boolean =
+        uri.authority == "media" && uri.path?.contains("/external") == true &&
+            ContextCompat.checkSelfPermission(this, audioPermissionName()) != PackageManager.PERMISSION_GRANTED
+
+    /** Saves the ringtone only if it really plays; otherwise the alarm would quietly fall back to another sound. */
+    private fun useRingtone(uri: Uri) {
+        Thread {
+            val ok = try {
+                android.media.MediaPlayer().run {
+                    try { setDataSource(applicationContext, uri); prepare(); true } finally { release() }
+                }
+            } catch (e: Exception) {
+                false
+            }
+            runOnUiThread {
+                if (ok) {
+                    AppSettings.setRingtoneSetting(this, uri.toString())
+                    refresh()
+                    toast("Ringtone set: ${ringtoneTitle()}")
+                } else {
+                    toast("That ringtone can't be played. Keeping ${ringtoneTitle()}.")
+                }
+            }
+        }.start()
     }
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -295,7 +340,11 @@ class SettingsActivity : AppCompatActivity() {
     )
 
     private fun ringtoneTitle(): String {
-        val uri = AppSettings.ringtoneUri(this) ?: return "MediZon tring (default)"
+        when (AppSettings.ringtoneSetting(this)) {
+            AppSettings.CELESTA -> return "Celesta (default)"
+            AppSettings.TRING -> return "MediZon tring"
+        }
+        val uri = AppSettings.ringtoneUri(this) ?: return "Celesta (default)"
         return try {
             RingtoneManager.getRingtone(this, uri)?.getTitle(this) ?: "Custom ringtone"
         } catch (e: Exception) {
@@ -307,16 +356,19 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun pickRingtone() {
         if (!AppSettings.ringPhone(this)) return
-        val current = if (AppSettings.ringtoneUri(this) == null) 0 else 1
+        val current = when (AppSettings.ringtoneSetting(this)) {
+            AppSettings.CELESTA -> 0
+            AppSettings.TRING -> 1
+            else -> 2
+        }
         AlertDialog.Builder(this)
             .setTitle("Ringtone")
-            .setSingleChoiceItems(arrayOf("MediZon tring", "Choose a phone ringtone…"), current) { d, which ->
+            .setSingleChoiceItems(arrayOf("Celesta (default)", "MediZon tring", "Choose a phone ringtone…"), current) { d, which ->
                 d.dismiss()
-                if (which == 0) {
-                    AppSettings.setRingtoneSetting(this, AppSettings.TRING)
-                    refresh()
-                } else {
-                    openRingtonePicker()
+                when (which) {
+                    0 -> { AppSettings.setRingtoneSetting(this, AppSettings.CELESTA); refresh() }
+                    1 -> { AppSettings.setRingtoneSetting(this, AppSettings.TRING); refresh() }
+                    else -> openRingtonePicker()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -327,10 +379,11 @@ class SettingsActivity : AppCompatActivity() {
         val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
             putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_RINGTONE or RingtoneManager.TYPE_ALARM)
             putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Dose ringtone")
-            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            // No "Default ringtone" entry and nothing pre-selected: pressing OK straight away used to save the
+            // phone's default ringtone, so the alarm rang that instead of the sound the user meant
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, false)
             putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-            putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, Settings.System.DEFAULT_RINGTONE_URI)
-            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, AppSettings.ringtoneUri(this@SettingsActivity) ?: Settings.System.DEFAULT_RINGTONE_URI)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, AppSettings.ringtoneUri(this@SettingsActivity))
         }
         try { ringtonePicker.launch(intent) } catch (e: ActivityNotFoundException) { toast("No ringtone picker on this phone") }
     }

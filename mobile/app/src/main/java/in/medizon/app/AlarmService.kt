@@ -196,7 +196,8 @@ class AlarmService : Service() {
             requestFocus()
             // Chosen phone ringtone (if any) -> bundled "MediZon tring" -> phone ringtone / alarm sound.
             val candidates = listOfNotNull(
-                AppSettings.ringtoneUri(this),
+                AppSettings.chosenSoundUri(this),
+                AppSettings.celestaUri(this),
                 AppSettings.tringUri(this),
                 RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_RINGTONE),
                 Settings.System.DEFAULT_RINGTONE_URI,
