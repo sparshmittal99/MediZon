@@ -122,8 +122,12 @@ class PushService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val d = message.data
         if (d.isEmpty()) return
-        // The page shows it live when MediZon is open in front of the user.
-        if (MainActivity.foreground) return
+        // A medicine or reminder changed (on any device): fetch the schedule now so the alarms are right
+        if (d["type"] == "SYNC") {
+            Sync.syncNow(applicationContext)
+            return
+        }
+        // Shown on the phone whether MediZon is open or closed, like the in-app notification.
         val nid = d["nid"]?.takeIf { it.isNotBlank() } ?: (d["type"] + ":" + d["title"] + ":" + d["body"])
         Notifications.push(this, nid, d["title"] ?: "", d["body"] ?: "", d["link"] ?: "")
     }

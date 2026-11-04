@@ -20,6 +20,7 @@ public class ReminderService {
 
     private final ReminderRepository reminders;
     private final NotificationService notifications;
+    private final AppSyncSignal appSync;
 
     @Transactional
     public Reminder create(User user, String text, LocalDateTime dueAt) {
@@ -35,6 +36,7 @@ public class ReminderService {
         r.setUser(user);
         r.setText(t.length() > 300 ? t.substring(0, 300) : t);
         r.setDueAt(dueAt.withSecond(0).withNano(0));
+        appSync.scheduleChanged(user);          // the phone sets its alarm for it now
         return reminders.save(r);
     }
 
@@ -44,6 +46,7 @@ public class ReminderService {
     public Reminder complete(Long id, User user) {
         Reminder r = reminders.findByIdAndUser(id, user).orElseThrow(() -> new NotFoundException("Reminder not found."));
         r.setDone(true);
+        appSync.scheduleChanged(user);
         return r;
     }
 

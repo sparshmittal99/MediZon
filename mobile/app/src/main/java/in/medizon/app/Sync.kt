@@ -29,7 +29,10 @@ object Sync {
 
     private val network = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
-    /** Enqueue a sync right away (runs as soon as there is a network). */
+    /**
+     * Enqueue a sync right away (runs as soon as there is a network). A request while a sync is already running
+     * queues one more after it, so a medicine saved mid-sync still reaches the alarms.
+     */
     fun syncNow(c: Context, replace: Boolean = false) {
         if (!Store.isLinked(c)) return
         lastSyncRequest = SystemClock.elapsedRealtime()
@@ -38,13 +41,13 @@ object Sync {
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(c).enqueueUniqueWork(
-            WORK_NOW, if (replace) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP, req
+            WORK_NOW, if (replace) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.APPEND_OR_REPLACE, req
         )
     }
 
-    /** Same as [syncNow] but ignores calls within 30 s of the previous one. */
+    /** Same as [syncNow] but ignores calls within 5 s of the previous one (pages call it on every load). */
     fun syncNowThrottled(c: Context) {
-        if (SystemClock.elapsedRealtime() - lastSyncRequest < 30_000 && lastSyncRequest != 0L) return
+        if (SystemClock.elapsedRealtime() - lastSyncRequest < 5_000 && lastSyncRequest != 0L) return
         syncNow(c)
     }
 

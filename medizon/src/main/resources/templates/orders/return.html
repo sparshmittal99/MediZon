@@ -68,7 +68,7 @@
                 <div class="mz-qty-error small" data-mz-photo-error role="alert" hidden></div>
             </section>
 
-            <div class="alert alert-danger small" data-mz-step-error role="alert" hidden></div>
+            <div class="alert alert-danger small" data-mz-step-error data-mz-popup role="alert" hidden></div>
             <div class="d-flex gap-2" data-mz-step-nav hidden>
                 <button class="btn btn-primary" type="button" data-mz-step-next>Continue<i class="bi bi-arrow-right ms-1"></i></button>
                 <a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-outline-secondary">Cancel</a>
@@ -249,7 +249,7 @@
                 </th:block>
             </section>
 
-            <div class="alert alert-danger small" data-mz-submit-error role="alert" hidden></div>
+            <div class="alert alert-danger small" data-mz-submit-error data-mz-popup role="alert" hidden></div>
             <div class="d-flex gap-2">
                 <button class="btn btn-outline-secondary" type="button" data-mz-step-back hidden><i class="bi bi-arrow-left me-1"></i>Back</button>
                 <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Request return</button>

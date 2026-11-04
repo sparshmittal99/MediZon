@@ -40,6 +40,7 @@ public class MedicationPlanService {
     private final MemberService memberService;
     private final AddressService addressService;
     private final OrderRepository orders;
+    private final AppSyncSignal appSync;
 
     // ------------------------------------------------------------------ CRUD
 
@@ -96,6 +97,12 @@ public class MedicationPlanService {
 
     @Transactional
     public Saved saveReporting(User user, PlanForm form) {
+        Saved saved = saveForm(user, form);
+        appSync.scheduleChanged(user);          // the phone's alarms follow at once
+        return saved;
+    }
+
+    private Saved saveForm(User user, PlanForm form) {
         MedicationPlan p = form.getId() == null ? new MedicationPlan() : get(form.getId(), user);
         if (p.getId() == null) p.setUser(user);
 
@@ -294,6 +301,7 @@ public class MedicationPlanService {
 
     @Transactional
     public MedicationPlan toggleActive(Long id, User user) {
+        appSync.scheduleChanged(user);
         MedicationPlan p = get(id, user);
         if (p.isSetupRequired()) throw new BusinessException("Set the dose times for " + p.getMedicineName() + " first.");
         p.setActive(!p.isActive());
@@ -302,6 +310,7 @@ public class MedicationPlanService {
 
     @Transactional
     public void delete(Long id, User user) {
+        appSync.scheduleChanged(user);
         MedicationPlan p = get(id, user);
         doseLogs.deleteByPlan(p);
         plans.delete(p);
@@ -396,6 +405,7 @@ public class MedicationPlanService {
      */
     @Transactional
     public MedicationPlan respondAt(User user, Long planId, LocalDateTime at, DoseStatus status) {
+        appSync.scheduleChanged(user);          // an answered dose leaves the phone's alarms
         if (status == DoseStatus.PENDING) throw new BusinessException("Choose taken or skipped.");
         MedicationPlan p = get(planId, user);
         DoseLog log = doseLogs.findByPlanAndScheduledAt(p, at).orElseGet(() -> {

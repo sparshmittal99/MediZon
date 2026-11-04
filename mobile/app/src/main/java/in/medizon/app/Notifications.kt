@@ -84,7 +84,9 @@ object Notifications {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
-            .setSilent(true)
+            // Not setSilent(): that marks it a silent group alert, and Android then blocks both the heads-up and the
+            // full-screen popup. The "Medicine calls" channel has no sound; AlarmService plays the ringtone.
+            .setOnlyAlertOnce(true)
             .setWhen(first.atMillis)
             .setShowWhen(true)
             .setContentIntent(fullScreen)
@@ -118,7 +120,9 @@ object Notifications {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
-            .setSilent(true)
+            // Not setSilent(): that marks it a silent group alert, and Android then blocks both the heads-up and the
+            // full-screen popup. The "Medicine calls" channel has no sound; AlarmService plays the ringtone.
+            .setOnlyAlertOnce(true)
             .setWhen(first.atMillis)
             .setShowWhen(true)
             .setContentIntent(fullScreen)

@@ -75,6 +75,85 @@
         });
     }
 
+    // ---- Alerts as short pop-ups, like the "Code sent" one: a tick, cross or bell, gone in about two seconds ----
+    // Messages after an action (data-mz-popup), new-notification toasts and alert() all show this way in the app.
+    const POPUP_MS = 1800;
+    const queue = [];
+    let showing = false;
+    const ICONS = {
+        success: '<svg class="mz-pay-tick" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 27 l7 7 l15 -16"/></svg>',
+        error: '<svg class="mz-pay-cross" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M18 18 l16 16 M34 18 l-16 16"/></svg>',
+        info: '<span class="mz-pop-ico" aria-hidden="true"><i class="bi bi-bell-fill"></i></span>',
+        warning: '<span class="mz-pop-ico is-warn" aria-hidden="true"><i class="bi bi-exclamation-lg"></i></span>'
+    };
+    const TITLES = { success: 'Done!', error: 'Oops!', info: 'Heads up', warning: 'Heads up' };
+    const popup = (kind, message, title, link) => {
+        if (!message) return;
+        queue.push({ kind, message, title, link });
+        if (!showing) next();
+    };
+    function next() {
+        const item = queue.shift();
+        if (!item) { showing = false; return; }
+        showing = true;
+        const overlay = document.createElement('div');
+        overlay.className = 'mz-custom-alert-overlay mz-pop';
+        overlay.setAttribute('role', item.kind === 'error' ? 'alert' : 'status');
+        overlay.innerHTML = '<div class="mz-custom-alert-card">' + (ICONS[item.kind] || ICONS.info)
+            + '<h2 class="h4 mt-3 mb-1"></h2><p class="small text-muted mt-2 mb-0"></p></div>';
+        overlay.querySelector('h2').textContent = item.title || TITLES[item.kind] || TITLES.info;
+        overlay.querySelector('p').textContent = item.message;
+        document.body.appendChild(overlay);
+        let done = false;
+        const close = () => {
+            if (done) return;
+            done = true;
+            overlay.style.transition = 'opacity .2s ease';
+            overlay.style.opacity = '0';
+            setTimeout(() => { overlay.remove(); next(); }, 200);
+        };
+        // Long messages stay a little longer so they can be read; a tap closes it (or opens a notification's page)
+        setTimeout(close, Math.min(3200, POPUP_MS + Math.max(0, item.message.length - 70) * 25));
+        overlay.addEventListener('click', () => { close(); if (item.link) location.href = item.link; });
+    }
+    const kindOf = (el) => el.classList.contains('alert-success') ? 'success'
+        : el.classList.contains('alert-danger') ? 'error'
+        : el.classList.contains('alert-warning') ? 'warning' : 'info';
+    const textOf = (el) => (el.textContent || '').replace(/\s+/g, ' ').trim();
+
+    // Messages on the page: shown once as a pop-up, then taken off the page
+    const takePopups = (root) => root.querySelectorAll('[data-mz-popup]:not([hidden])').forEach(el => {
+        if (el.dataset.mzPopped === textOf(el)) return;
+        el.dataset.mzPopped = textOf(el);
+        popup(kindOf(el), textOf(el));
+        el.hidden = true;
+    });
+    takePopups(document);
+
+    // Shown later by the page: return-form errors, and the toast for a new notification
+    new MutationObserver((changes) => {
+        for (const c of changes) {
+            if (c.type === 'attributes' && c.target.matches('[data-mz-popup]')) {
+                if (!c.target.hidden) takePopups(c.target.parentElement || document);
+                else delete c.target.dataset.mzPopped;
+                continue;
+            }
+            c.addedNodes.forEach(n => {
+                if (!(n instanceof HTMLElement)) return;
+                if (n.matches('.mz-toasts .toast')) {
+                    const title = n.querySelector('strong')?.textContent || 'New notification';
+                    popup('info', n.querySelector('p')?.textContent || '', title, n.querySelector('a')?.getAttribute('href'));
+                    n.remove();
+                } else if (n.matches('[data-mz-popup]') || n.querySelector('[data-mz-popup]')) {
+                    takePopups(n.parentElement || document);
+                }
+            });
+        }
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+
+    // alert() from any page script: the same pop-up instead of the browser's box
+    window.alert = (message) => popup('info', String(message ?? ''));
+
     // Invoices: Android's print dialog, which can also save a PDF
     window.print = () => call('print', document.title);
 

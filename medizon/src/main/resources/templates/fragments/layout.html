@@ -223,11 +223,12 @@
             <a class="btn btn-sm btn-outline-primary" th:href="@{/notifications/settings}">Choose members</a>
         </form>
     </div>
-    <div th:if="${success}" class="alert alert-success alert-dismissible fade show mt-3" role="status">
+    <!-- data-mz-popup: in the Android app these show as a short pop-up instead (app.js) -->
+    <div th:if="${success}" class="alert alert-success alert-dismissible fade show mt-3" role="status" data-mz-popup>
         <i class="bi bi-check-circle me-2"></i><span th:text="${success}"></span>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
-    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show mt-3" role="alert" data-mz-popup>
         <i class="bi bi-exclamation-circle me-2"></i><span th:text="${error}"></span>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>

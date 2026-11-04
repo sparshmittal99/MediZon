@@ -92,3 +92,12 @@ html[data-theme="dark"] .mz-you-group a:active { background: #1D2A26; }
 /* Keyboard open: the tab bar and floating buttons stay under the keyboard, like native apps */
 html.mz-kb .mz-tabbar, html.mz-kb .mz-bot-launcher, html.mz-kb .mz-bot-teaser { display: none !important; }
 html.mz-kb body:has(.mz-tabbar) { padding-bottom: 0; }
+
+/* Short pop-ups for alerts (app.js): same card as the "Code sent" pop-up */
+.mz-pop { z-index: 2100; }
+.mz-pop .mz-custom-alert-card { width: min(21rem, 100%); padding: 1.9rem 1.5rem 1.6rem; }
+.mz-pop-ico { display: flex; align-items: center; justify-content: center; width: 4.5rem; height: 4.5rem; margin: 0 auto; border-radius: 50%;
+    background: var(--mz-mint); color: var(--mz-green); font-size: 1.9rem; border: 2.5px solid var(--mz-green); animation: mz-pay-pop .3s ease; }
+.mz-pop-ico.is-warn { background: var(--mz-amber-soft); color: #B26B0E; border-color: var(--mz-amber); }
+/* The toasts for new notifications become pop-ups too */
+.mz-toasts { display: none !important; }
