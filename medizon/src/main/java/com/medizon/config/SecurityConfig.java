@@ -119,7 +119,7 @@ public class SecurityConfig {
                 // Browsers report JavaScript errors and page load times, signed in or not
                 .requestMatchers("/api/monitoring/**").permitAll()
                 // The Android app's background sync and alarm screen: a bearer sync token, checked in AppApi
-                .requestMatchers("/api/app/schedule", "/api/app/doses").permitAll()
+                .requestMatchers("/api/app/schedule", "/api/app/doses", "/api/app/push-token").permitAll()
                 .requestMatchers("/api/app/link", "/api/app/unlink").hasRole("CUSTOMER")
                 .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/settings", "/register", "/login", "/forgot-password", "/verify-code", "/reset-password", "/resend-code", "/api/auth/**",
                         "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/error").permitAll()
@@ -151,7 +151,7 @@ public class SecurityConfig {
                         "/stock-alerts/**", "/api/stock-alerts/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
             // sendBeacon can't send the CSRF header (telemetry); the app's sync sends a bearer token and no cookies
-            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**", "/api/auth/**", "/api/app/schedule", "/api/app/doses"))
+            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**", "/api/auth/**", "/api/app/schedule", "/api/app/doses", "/api/app/push-token"))
             // On top of Spring's defaults (nosniff, X-Frame-Options DENY, HSTS over HTTPS, no-store)
             .headers(headers -> headers
                 .addHeaderWriter((request, response) -> response.setHeader("Content-Security-Policy",

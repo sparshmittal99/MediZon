@@ -56,7 +56,7 @@ class AppScheduleServiceTest {
         when(doseLogs.findByPlanUserAndScheduledAtBetween(any(), any(), any())).thenReturn(List.of());
         when(reminders.findByUserAndDoneFalseOrderByDueAtAsc(any())).thenReturn(List.of());
         service = new AppScheduleService(mock(NotificationDeviceRepository.class), plans, doseLogs, reminders,
-                mock(MedicationPlanService.class), mock(ReorderService.class), mock(MaintenanceService.class));
+                mock(MedicationPlanService.class), mock(ReorderService.class), mock(MaintenanceService.class), mock(PushService.class));
         device = new NotificationDevice();
         device.setUser(user);
     }

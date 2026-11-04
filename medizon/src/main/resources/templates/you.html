@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('You')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<!-- Android app only (YouController): the account menu, which the website shows in the header dropdown -->
+<main class="container mz-page mz-w-form mz-you">
+    <section class="mz-you-head" th:if="${me != null}">
+        <span class="mz-you-avatar" aria-hidden="true" th:text="${#strings.substring(me.firstName, 0, 1)}">S</span>
+        <div class="min-w-0">
+            <h1 class="mz-you-name" th:text="${me.fullName}">Name</h1>
+            <div class="mz-you-mail" th:text="${me.email}">email</div>
+        </div>
+    </section>
+
+    <div class="mz-you-group" sec:authorize="hasRole('CUSTOMER')">
+        <a th:href="@{/orders}"><i class="bi bi-box-seam"></i><span>Your orders</span><i class="bi bi-chevron-right"></i></a>
+        <a th:href="@{/plans}"><i class="bi bi-capsule-pill"></i><span>My medicines</span><i class="bi bi-chevron-right"></i></a>
+        <a th:href="@{/wallet}"><i class="bi bi-wallet2"></i><span>MediZon Money</span><i class="bi bi-chevron-right"></i></a>
+        <a th:href="@{/prescriptions}"><i class="bi bi-file-earmark-medical"></i><span>Prescriptions</span><i class="bi bi-chevron-right"></i></a>
+    </div>
+
+    <div class="mz-you-group">
+        <a th:href="@{/account}"><i class="bi bi-gear"></i><span>Account settings</span><i class="bi bi-chevron-right"></i></a>
+        <a th:href="@{/settings}" data-mz-settings-link><i class="bi bi-sliders2"></i><span>App settings</span><i class="bi bi-chevron-right"></i></a>
+        <a th:href="@{/account#password}" sec:authorize="!hasRole('ADMIN')"><i class="bi bi-key"></i><span>Change password</span><i class="bi bi-chevron-right"></i></a>
+        <a th:href="@{/profile}"><i class="bi bi-person"></i><span>Profile</span><i class="bi bi-chevron-right"></i></a>
+        <th:block sec:authorize="hasRole('CUSTOMER')">
+            <a th:href="@{/addresses}"><i class="bi bi-geo-alt"></i><span>Saved addresses</span><i class="bi bi-chevron-right"></i></a>
+            <a th:href="@{/billing-address}"><i class="bi bi-receipt"></i><span>Billing address</span><i class="bi bi-chevron-right"></i></a>
+            <a th:href="@{/members}"><i class="bi bi-people"></i><span>Family members</span><i class="bi bi-chevron-right"></i></a>
+        </th:block>
+    </div>
+
+    <div class="mz-you-group">
+        <a th:href="@{/notifications}"><i class="bi bi-bell"></i><span>Notifications</span><i class="bi bi-chevron-right"></i></a>
+        <a th:href="@{/notifications/settings}" sec:authorize="hasRole('CUSTOMER')"><i class="bi bi-sliders"></i><span>Alerts on this device</span><i class="bi bi-chevron-right"></i></a>
+    </div>
+
+    <div class="mz-you-group">
+        <a th:href="@{/support}" sec:authorize="hasRole('CUSTOMER')"><i class="bi bi-headset"></i><span>Help &amp; support</span><i class="bi bi-chevron-right"></i></a>
+        <a th:href="@{/help}"><i class="bi bi-question-circle"></i><span>Help &amp; FAQ</span><i class="bi bi-chevron-right"></i></a>
+    </div>
+
+    <form th:action="@{/logout}" method="post" class="mt-4">
+        <button type="submit" class="mz-you-signout"><i class="bi bi-box-arrow-right"></i>Sign out</button>
+    </form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

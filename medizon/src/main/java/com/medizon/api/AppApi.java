@@ -58,6 +58,20 @@ public class AppApi {
         return ResponseEntity.ok(app.schedule(device.get(), LocalDateTime.now().withNano(0)));
     }
 
+    public record PushToken(String token) {}
+
+    /** The app's Firebase token for phone notifications; an empty token turns them off for this phone. */
+    @PostMapping("/push-token")
+    public ResponseEntity<?> pushToken(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth,
+                                       @RequestBody PushToken req) {
+        Optional<NotificationDevice> device = app.device(bearer(auth));
+        if (device.isEmpty()) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Not linked."));
+        String token = req == null || req.token() == null ? "" : req.token().trim();
+        if (token.length() > 512) throw new BusinessException("That token is too long.");
+        app.setPushToken(device.get(), token.isEmpty() ? null : token);
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
     public record DoseAnswer(Long planId, String at, String status) {}
 
     @PostMapping("/doses")

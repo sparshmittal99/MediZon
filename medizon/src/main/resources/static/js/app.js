@@ -58,6 +58,23 @@
     window.mzApplyTheme = () => { if (applyTheme) applyTheme(); syncLanguage(); };
     syncLanguage();
 
+    // Keyboard open: hide the tab bar so it stays under the keyboard instead of riding on top of it
+    const typing = (el) => el && (el.tagName === 'TEXTAREA' || el.isContentEditable || el.tagName === 'SELECT'
+        || (el.tagName === 'INPUT' && !['checkbox', 'radio', 'file', 'button', 'submit', 'reset', 'range', 'color', 'hidden'].includes(el.type)));
+    const keyboard = () => document.documentElement.classList.toggle('mz-kb', typing(document.activeElement));
+    document.addEventListener('focusin', keyboard);
+    document.addEventListener('focusout', () => setTimeout(keyboard, 0));
+    // Closing the keyboard with Back keeps focus in the field: show the bar again when the viewport grows back
+    if (window.visualViewport) {
+        let tallest = window.visualViewport.height;
+        window.visualViewport.addEventListener('resize', () => {
+            const h = window.visualViewport.height;
+            tallest = Math.max(tallest, h);
+            if (h > tallest * 0.85) document.documentElement.classList.remove('mz-kb');
+            else if (typing(document.activeElement)) document.documentElement.classList.add('mz-kb');
+        });
+    }
+
     // Invoices: Android's print dialog, which can also save a PDF
     window.print = () => call('print', document.title);
 
@@ -66,6 +83,8 @@
     document.querySelectorAll('[data-mz-settings-link]').forEach(a => {
         a.dataset.mzAppSettings = '';
         a.setAttribute('href', '#');
+        const label = a.querySelector('span');
+        if (label) { label.textContent = 'App settings'; return; }      // a row on the "You" page
         const icon = a.querySelector('i');
         a.textContent = 'App settings';
         if (icon) a.prepend(icon);

@@ -5,17 +5,21 @@ import com.medizon.domain.Notification;
 import com.medizon.domain.NotificationDevice;
 import com.medizon.domain.NotificationType;
 import com.medizon.domain.User;
+import com.medizon.repository.NotificationDeviceRepository;
 import com.medizon.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -41,9 +45,37 @@ public class NotificationService {
     private final NotificationRepository notifications;
     private final EmailService email;
     private final NotificationPush push;
+    private final PushService phones;
+    private final NotificationDeviceRepository devices;
 
     @Value("${medizon.base-url:http://localhost:8080}")
     private String baseUrl;
+
+    /**
+     * The same notification as a phone notification on each Android app signed in to this account that follows the
+     * member it's about, once it's saved. Dose reminders are left out: the app rings those itself.
+     */
+    private void pushToPhones(Notification n) {
+        if (!phones.isEnabled() || n.getType() == NotificationType.DOSE_REMINDER || n.getUser() == null) return;
+        List<NotificationDevice> targets = devices.findByUserAndPushTokenIsNotNull(n.getUser()).stream()
+                .filter(d -> d.allows(n.getMember())).toList();
+        if (targets.isEmpty()) return;
+        Map<String, String> data = Map.of(
+                "nid", String.valueOf(n.getId()),
+                "type", n.getType().name(),
+                "title", n.getTitle() == null ? "MediZon" : n.getTitle(),
+                "body", n.getMessage() == null ? "" : n.getMessage(),
+                "link", n.getLink() == null ? "" : n.getLink());
+        Runnable send = () -> targets.forEach(d -> phones.send(d.getPushToken(), data));
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() { send.run(); }
+            });
+        } else {
+            send.run();
+        }
+    }
 
     @Transactional
     public Notification notify(User user, NotificationType type, String title, String message, String link) {
@@ -70,8 +102,12 @@ public class NotificationService {
                 (title.equalsIgnoreCase("Order placed") || title.equalsIgnoreCase("Orders placed") ||
                  title.toLowerCase().startsWith("order ")));
 
+        // Dose reminders aren't emailed: they come in the app, the browser and as phone alarms
+        boolean noEmail = isDedicatedOrderEmail || type == NotificationType.DOSE_REMINDER;
+        pushToPhones(n);
+
         // Email service is strictly for customers; admin and staff do not receive email alerts
-        if (!isDedicatedOrderEmail && user != null && user.isCustomer() && user.getEmail() != null && !user.getEmail().isBlank()) {
+        if (!noEmail && user != null && user.isCustomer() && user.getEmail() != null && !user.getEmail().isBlank()) {
             String actionUrl = (link != null && !link.isBlank()) ? baseUrl.replaceAll("/+$", "") + link : null;
             String typeLabel = switch (type) {
                 case DOSE_REMINDER -> "Dose Reminder";

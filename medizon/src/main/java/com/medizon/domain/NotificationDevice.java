@@ -49,6 +49,10 @@ public class NotificationDevice {
     private String appTokenHash;
 
     private LocalDateTime appLinkedAt;
+
+    /** Firebase Cloud Messaging token of the Android app on this device: phone notifications (PushService). */
+    @Column(length = 512)
+    private String pushToken;
     private LocalDateTime lastSeenAt = LocalDateTime.now();
 
     public boolean allows(Member member) {

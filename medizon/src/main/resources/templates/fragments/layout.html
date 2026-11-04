@@ -95,7 +95,17 @@
                               th:classappend="${unreadCount == null or unreadCount == 0} ? 'd-none'">0</span>
                     </a>
                 </li>
-                <li class="dropdown" sec:authorize="isAuthenticated()">
+                <!-- Android app, signed-in customers: an upload-prescription button here; the account menu is under the name in the tab bar -->
+                <li th:if="${inApp == true and me != null and me.customer}">
+                    <form th:action="@{/prescriptions}" method="post" enctype="multipart/form-data" class="mz-app-rx" data-mz-rx-quick>
+                        <label class="mz-icon-link mb-0" title="Upload prescription">
+                            <i class="bi bi-file-earmark-medical"></i>
+                            <span class="visually-hidden" data-mz-rx-quick-label>Upload prescription</span>
+                            <input type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" multiple class="visually-hidden">
+                        </label>
+                    </form>
+                </li>
+                <li class="dropdown" sec:authorize="isAuthenticated()" th:unless="${inApp == true and me != null and me.customer}">
                     <a class="mz-account" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"
                        th:attr="aria-label='Account menu for ' + ${me != null ? me.firstName : 'you'}">
                         <span class="mz-account-text">
@@ -628,8 +638,9 @@
     <th:block sec:authorize="hasRole('CUSTOMER')">
         <a th:href="@{/plans}" data-mz-tab="/plans"><i class="bi bi-capsule-pill" aria-hidden="true"></i><span>Medicines</span></a>
         <a th:href="@{/orders}" data-mz-tab="/orders"><i class="bi bi-box-seam" aria-hidden="true"></i><span>Orders</span></a>
-        <a th:href="@{/account}" data-mz-tab="/account /profile /addresses /members /prescriptions /billing-address /notifications">
-            <i class="bi bi-person" aria-hidden="true"></i><span>You</span></a>
+        <!-- In the Android app the tab carries the user's first name and opens the account menu (/you) -->
+        <a th:href="${inApp == true} ? @{/you} : @{/account}" data-mz-tab="/account /you /profile /addresses /members /prescriptions /billing-address /notifications">
+            <i class="bi bi-person" aria-hidden="true"></i><span th:text="${inApp == true and me != null} ? ${me.firstName} : 'You'">You</span></a>
     </th:block>
     <th:block sec:authorize="!isAuthenticated()">
         <a th:href="@{/help}" data-mz-tab="/help"><i class="bi bi-question-circle" aria-hidden="true"></i><span>Help</span></a>

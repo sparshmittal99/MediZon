@@ -43,6 +43,7 @@ public class AppScheduleService {
     private final MedicationPlanService planService;
     private final ReorderService reorderService;
     private final MaintenanceService maintenance;
+    private final PushService push;
 
     public record Alarm(String id, String kind, Long planId, Long reminderId, String at, String title, String body, String path) {}
 
@@ -63,12 +64,20 @@ public class AppScheduleService {
         return token;
     }
 
+    @Transactional
+    public void setPushToken(NotificationDevice device, String token) {
+        if (token != null) devices.findByPushToken(token).stream()       // a reinstalled app: the token moves here
+                .filter(d -> !d.getId().equals(device.getId())).forEach(d -> d.setPushToken(null));
+        devices.findById(device.getId()).ifPresent(d -> d.setPushToken(token));
+    }
+
     /** Signing out in the app: the token stops working. */
     @Transactional
     public void unlink(NotificationDevice device) {
         devices.findById(device.getId()).ifPresent(d -> {
             d.setAppTokenHash(null);
             d.setAppLinkedAt(null);
+            d.setPushToken(null);
         });
     }
 
@@ -114,7 +123,9 @@ public class AppScheduleService {
                     r.getDueAt().atZone(zone).format(AT), "Reminder", r.getText(), "/notifications"));
         }
         out.sort(Comparator.comparing(Alarm::at));
-        return new Schedule(now.atZone(zone).format(AT), out, notices());
+        // Phones that get push notifications already had the downtime notices pushed
+        boolean pushed = push.isEnabled() && device.getPushToken() != null;
+        return new Schedule(now.atZone(zone).format(AT), out, pushed ? List.of() : notices());
     }
 
     private List<Notice> notices() {
