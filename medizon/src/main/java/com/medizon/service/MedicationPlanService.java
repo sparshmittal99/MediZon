@@ -101,11 +101,12 @@ public class MedicationPlanService {
 
         Member member = memberService.get(form.getMemberId(), user);
         if (member.isOthers()) throw new BusinessException("Choose a family member or the common shelf.");
+        if (form.isOther()) return saveOther(p, member, form);
         Medicine m = medicines.findById(form.getMedicineId())
                 .orElseThrow(() -> new BusinessException("Choose a medicine."));
         // Only medicines that reached the household can be tracked; plans already saved keep working as they are
         boolean unchanged = p.getId() != null && p.getMember() != null && p.getMember().getId().equals(member.getId())
-                && p.getMedicine().getId().equals(m.getId());
+                && p.getMedicine() != null && p.getMedicine().getId().equals(m.getId());
         if (!unchanged && !canTrack(member, m.getId(), deliveredFor(user), memberService.common(user).getId())) {
             throw new BusinessException(member.isCommon()
                     ? m.getName() + " hasn't been delivered for common medicines yet. Order it for the common shelf first."
@@ -120,8 +121,38 @@ public class MedicationPlanService {
                     : m.getName() + " is already in " + member.getLabel() + "'s list. Edit that one instead.");
         }
 
+        p.setCustomName(null);
+        p.setCustomUnit(null);
         if (member.isCommon()) return new Saved(saveShelfItem(p, member, m, form), 0);
+        return applySchedule(p, member, m, form);
+    }
 
+    /**
+     * "Other": a medicine not bought here, typed in by name. It gets the same reminders, supply count and expiry,
+     * but no refills (there's nothing to reorder) and nothing moves from the common shelf.
+     */
+    private Saved saveOther(MedicationPlan p, Member member, PlanForm form) {
+        String name = form.getCustomName() == null ? "" : form.getCustomName().trim().replaceAll("\\s+", " ");
+        if (name.isEmpty()) throw new BusinessException("Type the medicine's name.");
+        if (name.length() > 100) throw new BusinessException("Keep the medicine's name under 100 characters.");
+        boolean duplicate = plans.findByMember(member).stream()
+                .anyMatch(o -> o.isCustom() && !o.getId().equals(p.getId()) && name.equalsIgnoreCase(o.getCustomName()));
+        if (duplicate) {
+            throw new BusinessException(member.isCommon() ? name + " is already on the common shelf. Edit that one instead."
+                    : member.isSelf() ? "You already have " + name + " in your list. Edit that one instead."
+                    : name + " is already in " + member.getLabel() + "'s list. Edit that one instead.");
+        }
+        p.setCustomName(name);
+        p.setCustomUnit(PlanForm.CUSTOM_UNITS.contains(form.getCustomUnit()) ? form.getCustomUnit() : "unit(s)");
+        form.setReorderMode(ReorderMode.OFF);
+        form.setTakeFromCommon(false);
+        if (member.isCommon()) return new Saved(saveShelfItem(p, member, null, form), 0);
+        return applySchedule(p, member, null, form);
+    }
+
+    /** Dose, times, days, supply and refill settings for a person's medicine ({@code m} null for "Other"). */
+    private Saved applySchedule(MedicationPlan p, Member member, Medicine m, PlanForm form) {
+        User user = p.getUser();
         SortedSet<LocalTime> times = parseTimes(form.getTimes());
         if (times.isEmpty()) throw new BusinessException("Add at least one reminder time.");
 
@@ -173,7 +204,7 @@ public class MedicationPlanService {
             p.setSetupRequired(false);
             p.setActive(true);
         }
-        int moved = form.isTakeFromCommon() ? moveFromShelf(user, p) : 0;
+        int moved = form.isTakeFromCommon() && !p.isCustom() ? moveFromShelf(user, p) : 0;
         if (!p.isRunningLow()) p.clearRefill();   // edited supply re-arms alerts
         return new Saved(plans.save(p), moved);
     }
@@ -225,7 +256,8 @@ public class MedicationPlanService {
     public Map<Long, Integer> shelfStock(User user) {
         Member shelf = memberService.common(user);
         Map<Long, Integer> out = new HashMap<>();
-        plans.findByMember(shelf).forEach(p -> out.merge(p.getMedicine().getId(), p.getUnitsRemaining(), Integer::sum));
+        plans.findByMember(shelf).stream().filter(p -> !p.isCustom())
+                .forEach(p -> out.merge(p.getMedicine().getId(), p.getUnitsRemaining(), Integer::sum));
         return out;
     }
 
@@ -263,7 +295,7 @@ public class MedicationPlanService {
     @Transactional
     public MedicationPlan toggleActive(Long id, User user) {
         MedicationPlan p = get(id, user);
-        if (p.isSetupRequired()) throw new BusinessException("Set the dose times for " + p.getMedicine().getName() + " first.");
+        if (p.isSetupRequired()) throw new BusinessException("Set the dose times for " + p.getMedicineName() + " first.");
         p.setActive(!p.isActive());
         return p;
     }
@@ -304,7 +336,7 @@ public class MedicationPlanService {
         DateTimeFormatter day = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
         for (MedicationPlan p : plans.findByExpiryDateBefore(today)) {
             String expired = p.getExpiryDate().format(day);
-            String what = p.getUnitsRemaining() + " " + p.getMedicine().getUnitLabel() + " of " + p.getTitle();
+            String what = p.getUnitsRemaining() + " " + p.getUnitLabel() + " of " + p.getTitle();
             boolean stockOnly = p.isOnCommonShelf() || p.isSetupRequired();
             String message = p.getUnitsRemaining() == 0
                     ? p.getTitle() + " passed its expiry date on " + expired + "."
@@ -355,9 +387,17 @@ public class MedicationPlanService {
     /** Customer marks today's dose taken or skipped, adjusting the supply count. */
     @Transactional
     public MedicationPlan respond(User user, Long planId, LocalTime time, DoseStatus status) {
+        return respondAt(user, planId, LocalDate.now().atTime(time), status);
+    }
+
+    /**
+     * Marks the dose scheduled at {@code at} taken or skipped. The Android app's alarm answers with the alarm's own
+     * time, which can be yesterday's when it's answered after midnight.
+     */
+    @Transactional
+    public MedicationPlan respondAt(User user, Long planId, LocalDateTime at, DoseStatus status) {
         if (status == DoseStatus.PENDING) throw new BusinessException("Choose taken or skipped.");
         MedicationPlan p = get(planId, user);
-        LocalDateTime at = LocalDate.now().atTime(time);
         DoseLog log = doseLogs.findByPlanAndScheduledAt(p, at).orElseGet(() -> {
             p.setUnitsRemaining(Math.max(0, p.getUnitsRemaining() - p.getDosePerIntake()));
             return new DoseLog(p, at);
@@ -398,7 +438,7 @@ public class MedicationPlanService {
 
                 Member who = p.getMember();
                 String forWhom = who == null || who.isSelf() || who.isCommon() ? "" : who.getName() + ": ";
-                String msg = forWhom + "take " + p.getDoseLabel() + " of " + p.getMedicine().getName()
+                String msg = forWhom + "take " + p.getDoseLabel() + " of " + p.getMedicineName()
                         + (p.getInstructions() != null && !p.getInstructions().isBlank() ? " (" + p.getInstructions() + ")" : "")
                         + ". Tap to mark it taken or skipped.";
                 notifications.notify(p.getUser(), NotificationType.DOSE_REMINDER,
@@ -420,7 +460,7 @@ public class MedicationPlanService {
         return s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
-    static String planLink(MedicationPlan p) {
+    public static String planLink(MedicationPlan p) {
         return p.getMember() == null ? "/plans" : "/plans?member=" + p.getMember().getId();
     }
 

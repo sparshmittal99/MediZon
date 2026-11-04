@@ -32,7 +32,7 @@ The web app can also use **Google Gemini** for reading prescriptions, and **Groq
 - **Promo codes:** an **Apply coupon** box at checkout, with cards for the promos on offer (greyed out when the cart is below the minimum or the code is used up for the day). A promo comes off the medicines, not delivery, and shows in the order summary, on the order and on the invoice with its code.
 - **Several stores, one checkout:** each product comes from the nearest store delivering to you that has it. A cart that ships from several stores becomes one order per store, paid for once.
 - **Orders:** track status (Placed → Confirmed → Shipped → Delivered), cancel before shipping, buy again, and review delivered orders.
-- **GST tax invoices:** available once an order ships, with the patient for each medicine and, for prescription medicines, the prescribing doctor and the prescription date. Print it or save it as PDF from the browser.
+- **GST tax invoices:** available once an order ships, with the patient for each medicine and, for prescription medicines, the prescribing doctor and the prescription date. Print it or save it as PDF from the browser. **Email invoice** (on the invoice and the order page) sends it as a PDF attachment to the account email, up to 3 times per order per day; the PDF is made on the server (`pdf/invoice.html` + OpenHTMLtoPDF, with Noto Sans embedded for the ₹ sign).
 - **Returns:** return part or all of a delivered order within the return window (7 days unless the admin changes it), in two steps:
   - **Items and reason:** the packs, a reason and 1 to 3 photos.
   - **Pickup and refund:** where to collect the packs (where the order was delivered, another saved address or a new one, if MediZon serves that PIN code), the pickup date, and where the refund goes: the original payment method or MediZon Money for prepaid orders; MediZon Money, a UPI ID or a bank account for cash on delivery.
@@ -44,7 +44,9 @@ The web app can also use **Google Gemini** for reading prescriptions, and **Groq
   - **Order part now, the rest later:** a prescription allows the packs prescribed, across any number of orders and automatic refills. When everything's ordered it's **Used up** and a new one is needed.
   - **Several prescriptions in one cart:** checkout takes each medicine from whichever approved prescription has it; nothing to choose. Medicines no prescription covers are named and blocked.
   - **Remove** any prescription, approved or not.
+  - **Files deleted after use:** a prescription's file is deleted as soon as it's used up, and a daily job (04:00) deletes files for prescriptions rejected or removed, returns rejected or refunded, and tickets closed more than a day ago. Pending and approved prescriptions, open returns and open tickets keep theirs; medicine images are never deleted. The record stays; once its file is gone the View/Open file link is hidden, and ticket and return photos show "Photo N was attached" without a link.
 - **Medication plans**, per family member:
+  - **Medicines bought here, or Other:** the list offers what was delivered for that person and the common shelf; **Other** lets you type the name and unit of a medicine bought elsewhere. It gets the same reminders, supply and expiry tracking, without refills.
   - **Schedules:** dose times, plus every day, certain days of the week, or specific dates; optional course end date.
   - **Dose reminders:** in-app (bell), as a desktop notification, and by email if mail is set up.
   - **Mark doses:** each dose can be marked taken or skipped.
@@ -55,10 +57,14 @@ The web app can also use **Google Gemini** for reading prescriptions, and **Groq
   - **Auto:** an order is placed automatically for the same family member, to the address chosen on that reminder (or your default address).
 - **Alerts on each device:** choose whether a browser pops up everyone's reminders or only some members' (for example, a parent's tablet shows only their own).
 - **One-off reminders**, e.g. "book a blood test on Friday at 9".
+- **Android app** ([`mobile/`](mobile)): the site in a native shell with a splash screen and app-style touches, and dose alarms that ring like an alarm clock even with the app closed. The phone links once (`/api/app/link`), then fetches the next 7 days of doses with a sync token (`/api/app/schedule`) and reports Taken / Skip from the alarm screen (`/api/app/doses`), so alarms ring even while the server sleeps. App-only styling is in `css/app.css` and `js/app.js`, loaded only when the user agent contains `MediZonApp`; the website itself is unchanged.
+- **Settings** (`/settings`): dark mode (a sun/moon switch, kept per browser; light mode is unchanged) and language. Signed-out visitors also get the dark mode switch in the footer next to the language picker. In the Android app, dark mode, language, text size and reduced motion are in the app's own settings instead, alongside ringing, ringtone, snooze and permissions.
+- **Staying signed in:** on the website, "Keep me signed in" lasts 14 days. The Android app has no checkbox: it stays signed in until the user signs out or clears the app's data (a Render restart without `REMEMBER_ME_KEY` also signs everyone out). "Sign out other devices" and password changes end remembered sign-ins on every other device too.
 - **Account settings:** change your password (current password first, then the new one twice; other devices are signed out) and sign out other devices.
 - **Help & support:** quick answers to common questions, then a support ticket (topic, description, an order, up to 3 photos) if still needed. A customer can have 5 open tickets and raise 10 a day.
 - **Delete account:** personal data is deleted; orders and invoices are kept without name, phone or address, as the accounts require.
 - **Notification centre**, profile, and feedback to the pharmacist.
+- **Scheduled downtime notices:** when the admin announces maintenance, customers get a short notification (bell, browser, Android phone notification) and an email, and every page shows a banner until it's over. A cancellation is announced the same way.
 
 ### For staff
 
@@ -66,7 +72,7 @@ There is exactly **one admin**, whose sign-in comes from `MEDIZON_ADMIN_EMAIL` /
 
 | Role | Can do |
 |---|---|
-| Admin | Everything: all stores, master catalogue, delivery areas, promos, return settings, users, reports, monitoring |
+| Admin | Everything: all stores, master catalogue, delivery areas, promos, return settings, users, reports, monitoring, scheduled maintenance notices |
 | Pharmacist | Review prescriptions |
 | Store | One store: its catalogue (stock, expiry, OTC prices), its orders, deliveries and returns |
 | Support | Support tickets, reviews and feedback; looks up orders and invoices |

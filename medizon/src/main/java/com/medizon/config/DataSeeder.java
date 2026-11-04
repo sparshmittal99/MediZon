@@ -152,6 +152,8 @@ public class DataSeeder implements CommandLineRunner {
         for (String column : new String[]{"stock", "expiry_date", "delivery_min_days", "delivery_max_days"}) {
             if (hasColumn("medicine", column)) jdbc.execute("alter table medicine alter column " + column + " drop not null");
         }
+        // "Other" medicines typed in by the customer have no catalogue medicine
+        if (hasColumn("medication_plan", "medicine_id")) jdbc.execute("alter table medication_plan alter column medicine_id drop not null");
     }
 
     /** Units per pack became text ("100 ml", "30 g"); schema updates don't change a column's type, so it's done here. */

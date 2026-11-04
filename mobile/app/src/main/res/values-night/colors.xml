@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mz_bg">#0F1715</color>
+    <color name="mz_surface">#17221F</color>
+    <color name="mz_text">#E6EFEB</color>
+    <color name="mz_text2">#9DB3AA</color>
+    <color name="mz_divider">#2A3833</color>
+    <color name="mz_accent">#3FB58F</color>
+    <color name="mz_navbar">#0F1715</color>
+    <color name="mz_switch_off">#9DB3AA</color>
+    <color name="mz_track_off">#2A3833</color>
+    <bool name="mz_light_nav">false</bool>
+</resources>

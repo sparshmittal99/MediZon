@@ -118,6 +118,7 @@ public class PlanController {
         model.addAttribute("medicineTakers", takers);
         model.addAttribute("members", members);
         model.addAttribute("reorderModes", ReorderMode.values());
+        model.addAttribute("customUnits", PlanForm.CUSTOM_UNITS);
         model.addAttribute("scheduleTypes", ScheduleType.values());
         model.addAttribute("weekDays", DayOfWeek.values());
         model.addAttribute("shelfStock", planService.shelfStock(currentUser.get()));
@@ -136,8 +137,8 @@ public class PlanController {
         MedicationPlan p = saved.plan();
         reorderService.evaluate(p.getId());
         String moved = saved.movedFromCommon() == 0 ? ""
-                : " " + saved.movedFromCommon() + " " + p.getMedicine().getUnitLabel() + " moved from common medicines.";
-        ra.addFlashAttribute("success", (p.isOnCommonShelf() ? p.getMedicine().getName() + " saved on the common shelf."
+                : " " + saved.movedFromCommon() + " " + p.getUnitLabel() + " moved from common medicines.";
+        ra.addFlashAttribute("success", (p.isOnCommonShelf() ? p.getMedicineName() + " saved on the common shelf."
                 : "Reminders saved for " + p.getTitle() + ".") + moved);
         return "redirect:/plans?member=" + p.getMember().getId();
     }
@@ -173,6 +174,7 @@ public class PlanController {
     public String reorder(@PathVariable Long id, HttpServletRequest request, RedirectAttributes ra) {
         User user = currentUser.get();
         MedicationPlan p = planService.get(id, user);
+        if (p.isCustom()) throw new BusinessException(p.getMedicineName() + " isn't sold on MediZon, so it can't be reordered here.");
         cartService.add(user, p.getMedicine().getId(), p.getReorderPacks(), List.of(p.getMember()), deliveryLocations.pincode(request));
         ra.addFlashAttribute("success", p.getReorderPacks() + " pack(s) of " + p.getTitle() + " added. Check out to place the refill.");
         return "redirect:/cart";

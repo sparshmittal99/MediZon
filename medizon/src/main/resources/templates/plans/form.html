@@ -37,11 +37,23 @@
                         <option th:each="m : ${medicines}" th:value="${m.id}"
                                 th:attr="data-shelf=${shelfStock.getOrDefault(m.id, 0)},data-unit=${m.unitLabel},data-members=${medicineTakers.get(m.id)}"
                                 th:text="${m.name} + ' (pack of ' + ${m.packLabel} + ')'"></option>
+                        <option value="0" data-other="true">Other (type the name)</option>
                     </select>
                     <div class="invalid-feedback" th:errors="*{medicineId}"></div>
-                    <div class="form-text" data-mz-plan-medicine-hint>Medicines delivered for this person, and the common (OTC) medicines at home.</div>
+                    <div class="form-text" data-mz-plan-medicine-hint>Medicines delivered for this person, and the common (OTC) medicines at home. For anything else, choose Other.</div>
                     <div class="form-text text-danger" data-mz-plan-medicine-none hidden>
-                        Nothing has been delivered for this person yet. Medicines you order for them show up here once they're delivered.</div>
+                        Nothing has been delivered for this person yet. Medicines you order for them show up here once they're delivered, or choose Other to type a name.</div>
+                </div>
+                <div class="col-md-8" data-mz-other-only th:hidden="${!form.other}">
+                    <label class="form-label" for="customName">Medicine name</label>
+                    <input class="form-control" th:field="*{customName}" maxlength="100" placeholder="e.g. Thyronorm 50 mcg" autocomplete="off">
+                    <div class="form-text">For a medicine not bought on MediZon: reminders and supply work the same, without refills.</div>
+                </div>
+                <div class="col-md-4" data-mz-other-only th:hidden="${!form.other}">
+                    <label class="form-label" for="customUnit">Unit</label>
+                    <select class="form-select" th:field="*{customUnit}">
+                        <option th:each="u : ${customUnits}" th:value="${u}" th:text="${u}"></option>
+                    </select>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="dosePerIntake">Dose each time</label>
@@ -152,7 +164,7 @@
                 </div>
             </div>
 
-            <div class="row g-3 mt-1" data-mz-person-only>
+            <div class="row g-3 mt-1" data-mz-person-only data-mz-catalog-only>
                 <div class="col-12"><hr class="my-1"><h3 class="h6 mb-0 mt-2">Refills</h3></div>
                 <div class="col-md-6">
                     <label class="form-label" for="reorderThresholdDays">Act when supply is down to</label>

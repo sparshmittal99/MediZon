@@ -106,7 +106,7 @@
                 <ol class="mz-dose-list" th:unless="${#lists.isEmpty(doses)}">
                     <li th:each="d, s : ${doses}" th:if="${s.index < 4}" class="mz-dose" th:classappend="'is-' + ${d.state}">
                         <span class="mz-bubble" aria-hidden="true">
-                            <i class="bi" th:classappend="${d.state == 'taken'} ? 'bi-check-lg' : (${d.state == 'skipped'} ? 'bi-dash-lg' : ${d.plan.medicine.icon})"></i>
+                            <i class="bi" th:classappend="${d.state == 'taken'} ? 'bi-check-lg' : (${d.state == 'skipped'} ? 'bi-dash-lg' : ${d.plan.medicineIcon})"></i>
                         </span>
                         <span class="mz-dose-text">
                             <span class="mz-slot-time" th:text="${#temporals.format(d.time, 'h:mm a')}">8:00 AM</span>

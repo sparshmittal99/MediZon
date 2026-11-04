@@ -1,0 +1,64 @@
+/*
+ * Only loaded inside the MediZon Android app (the layout adds it when the user agent has "MediZonApp").
+ * Small touches so pages feel like an Android app rather than a website; the website never loads this file.
+ */
+
+/* No grey flash on tap, no rubber-band scrolling (the app has its own pull-to-refresh), no long-press callouts on chrome */
+html { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+.mz-nav, .mz-tabbar, .mz-menu, .btn, .mz-tile, .mz-burger, .mz-loc, .dropdown-item, .nav-link, .form-check-label {
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+
+/* Pages fade in, like moving between app screens (opacity only: a transform would break fixed elements) */
+@keyframes mz-app-in { from { opacity: 0; } to { opacity: 1; } }
+body { animation: mz-app-in .18s ease-out both; }
+
+/* An app has no website footer */
+.mz-footer { display: none !important; }
+
+/* Bottom navigation, Material style: a pill behind the active icon */
+.mz-tabbar { border-top: 0; box-shadow: 0 -1px 0 var(--mz-line), 0 -6px 16px rgba(23, 48, 42, .05); }
+.mz-tabbar a { justify-content: center; gap: .2rem; padding: .45rem 0 .4rem; font-size: .7rem; letter-spacing: .01em; }
+.mz-tabbar a i { display: inline-flex; align-items: center; justify-content: center; width: 3.6rem; height: 1.95rem;
+    border-radius: 1rem; font-size: 1.2rem; transition: background-color .2s ease, color .2s ease; }
+.mz-tabbar a.active { box-shadow: none; color: var(--mz-green-ink); font-weight: 700; }
+.mz-tabbar a.active i { background: var(--mz-mint); color: var(--mz-green); }
+@media (max-width: 991.98px) {
+    body:has(.mz-tabbar) { padding-bottom: calc(4.3rem + env(safe-area-inset-bottom)); }
+}
+
+/* Touch feedback: things you tap give a little */
+.btn, .mz-tile, .mz-tabbar a, .mz-menu a, .dropdown-item, .list-group-item-action, .mz-loc-option {
+    transition: transform .12s ease, background-color .15s ease, opacity .12s ease;
+}
+.btn:active, .mz-tile:active, .mz-menu a:active, .mz-loc-option:active { transform: scale(.97); }
+.mz-tabbar a:active i { background: rgba(14, 107, 87, .12); }
+
+/* Rounder, roomier controls for fingers */
+.btn { border-radius: .8rem; }
+.btn-sm { border-radius: .65rem; }
+.form-control, .form-select { min-height: 2.75rem; border-radius: .7rem; }
+.modal-content, .offcanvas, .dropdown-menu { border-radius: 1.1rem; }
+.offcanvas-start { border-radius: 0 1.1rem 1.1rem 0; }
+.mz-panel { border-radius: 1rem; }
+
+/* Browser-only controls: the app rings its own alarms, and language and dark mode are in App settings */
+[data-mz-enable-alerts], .mz-lang, [data-mz-pref-dark] { display: none !important; }
+/* The app always keeps you signed in, so no "Keep me signed in" box */
+[data-mz-remember] { display: none !important; }
+
+/* "Dose alarms on this phone" card on My medicines and alert settings */
+.mz-app-alarms { display: flex; gap: .85rem; align-items: flex-start; padding: .9rem 1rem; margin-bottom: 1rem;
+    border-radius: 1rem; border: 1px solid var(--mz-line); background: #fff; }
+.mz-app-alarms > i { font-size: 1.5rem; line-height: 1; color: var(--mz-green); margin-top: .1rem; }
+.mz-app-alarms.is-off { background: var(--mz-amber-soft); border-color: #F3D19B; }
+.mz-app-alarms.is-off > i { color: #B26B0E; }
+.mz-app-alarms h2 { font-size: 1rem; font-weight: 700; margin: 0 0 .15rem; }
+.mz-app-alarms p { margin: 0; font-size: .875rem; color: var(--mz-muted); }
+.mz-app-alarms ul { margin: .35rem 0 0; padding-left: 1.1rem; font-size: .875rem; }
+.mz-app-alarms .mz-app-alarms-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .65rem; }
+
+/* Dark mode (App settings → Appearance) */
+html[data-theme="dark"] .mz-app-alarms { background: var(--mz-surface); }
+html[data-theme="dark"] .mz-app-alarms.is-off { background: #3A2A12; border-color: #5A4220; }
+html[data-theme="dark"] .mz-app-alarms.is-off > i { color: #F3CF96; }

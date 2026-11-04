@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!--
+  The tax invoice as a PDF (InvoicePdfService), for emailing. Same content as orders/invoice.html, laid out with plain
+  tables: the PDF renderer only understands CSS 2.1, and the markup must be well-formed XML.
+-->
+<html xmlns:th="http://www.thymeleaf.org" th:with="o=${inv.order}, s=${inv.seller}">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="'Invoice ' + ${o.invoiceNumber}">Invoice</title>
+    <style>
+        @page { size: A4; margin: 14mm 13mm 16mm; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Noto Sans', sans-serif; font-size: 8.6pt; line-height: 1.4; color: #17302A; }
+        table { border-collapse: collapse; width: 100%; }
+        td, th { vertical-align: top; }
+        .muted { color: #5B716A; }
+        .small { font-size: 7.8pt; }
+        .b { font-weight: bold; }
+        .r { text-align: right; }
+        .brand { font-size: 14pt; font-weight: bold; color: #0E6B57; }
+        .brand img { width: 20pt; height: 20pt; vertical-align: middle; margin-right: 5pt; }
+        .title { font-size: 17pt; font-weight: bold; letter-spacing: 1pt; text-align: right; margin: 0 0 6pt; }
+        .meta td { padding: 1pt 0 1pt 10pt; }
+        .meta td.k { color: #5B716A; }
+        .head { border-bottom: 1.6pt solid #17302A; }
+        .head > tbody > tr > td { padding-bottom: 10pt; }
+        h2 { margin: 0 0 3pt; font-size: 7.2pt; font-weight: bold; letter-spacing: .6pt; text-transform: uppercase; color: #5B716A; }
+        .parties td { padding: 10pt 10pt 10pt 0; width: 25%; }
+        .lines { margin-top: 4pt; }
+        .lines th { padding: 5pt 4pt; background-color: #F3F7F5; border-bottom: .8pt solid #D3E3DB; font-size: 7.4pt; font-weight: bold; color: #5B716A; text-align: left; }
+        .lines td { padding: 5pt 4pt; border-bottom: .6pt solid #D3E3DB; }
+        .lines th.r, .lines td.r { text-align: right; }
+        .foot { margin-top: 12pt; }
+        .foot > tbody > tr > td { padding: 0; }
+        .totals td { padding: 2.5pt 0; }
+        .grand td { padding-top: 6pt; border-top: 1.2pt solid #17302A; font-size: 11pt; font-weight: bold; }
+        .notes { margin-top: 16pt; padding-top: 8pt; border-top: .6pt solid #D3E3DB; color: #5B716A; font-size: 7.6pt; }
+        .notes p { margin: 0 0 4pt; }
+    </style>
+</head>
+<body>
+
+<table class="head">
+    <tr>
+        <td style="width: 58%;">
+            <div class="brand"><img th:if="${logo != null}" th:src="${logo}" alt=""/><span th:text="${s.name}">MediZon</span></div>
+            <div class="small" th:if="${!#strings.isEmpty(s.address)}" th:text="${s.address}"></div>
+            <div class="small" th:if="${!#strings.isEmpty(s.state)}"
+                 th:text="'State: ' + ${s.state} + (${s.stateCode} != null ? ' (' + ${s.stateCode} + ')' : '')"></div>
+            <div class="small" th:if="${!#strings.isEmpty(s.gstin)}"><span class="b">GSTIN:</span> <span th:text="${s.gstin}"></span></div>
+            <div class="small" th:if="${!#strings.isEmpty(s.drugLicense)}"><span class="b">Drug licence:</span> <span th:text="${s.drugLicense}"></span></div>
+            <div class="small" th:if="${!#strings.isEmpty(s.phone) or !#strings.isEmpty(s.email)}">
+                <span th:text="${s.phone}"></span><span th:if="${!#strings.isEmpty(s.phone) and !#strings.isEmpty(s.email)}"> · </span><span th:text="${s.email}"></span>
+            </div>
+        </td>
+        <td style="width: 42%;">
+            <div class="title">TAX INVOICE</div>
+            <table class="meta" style="width: auto; margin-left: auto;">
+                <tr><td class="k">Invoice no.</td><td class="b r" th:text="${o.invoiceNumber}"></td></tr>
+                <tr><td class="k">Invoice date</td><td class="b r" th:text="${#temporals.format(o.invoicedAt, 'd MMM yyyy')}"></td></tr>
+                <tr><td class="k">Order no.</td><td class="b r" th:text="${o.orderNumber}"></td></tr>
+                <tr><td class="k">Order date</td><td class="b r" th:text="${#temporals.format(o.createdAt, 'd MMM yyyy')}"></td></tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<table class="parties">
+    <tr>
+        <td>
+            <h2>Billing address</h2>
+            <div class="b" th:text="${o.billTo}"></div>
+            <div th:text="${o.billToAddress}"></div>
+            <div th:if="${o.billingGstin}"><span class="b">GSTIN:</span> <span th:text="${o.billingGstin}"></span></div>
+        </td>
+        <td>
+            <h2>Shipping address</h2>
+            <div class="b" th:text="${o.deliverTo}"></div>
+            <div th:text="${o.shippingAddress}"></div>
+            <div th:if="${o.contactPhone}" th:text="'Phone: ' + ${o.contactPhone}"></div>
+        </td>
+        <td>
+            <h2>Supply</h2>
+            <div><span class="b">Place of supply:</span> <span th:text="${inv.placeOfSupply}"></span></div>
+            <div th:text="${inv.interState} ? 'Inter-state supply (IGST)' : 'Intra-state supply (CGST + SGST)'"></div>
+            <div><span class="b">Payment:</span> <span th:text="${o.paymentLabel} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></span></div>
+            <div th:if="${inv.discounted}"><span class="b">Promo code:</span> <span th:text="${inv.couponCode}"></span></div>
+        </td>
+        <td>
+            <th:block th:if="${!#strings.isEmpty(inv.patients) or !#lists.isEmpty(inv.prescriptions) or o.doctorName != null}">
+                <h2>Patient &amp; prescription</h2>
+                <div th:if="${!#strings.isEmpty(inv.patients)}"><span class="b">Patient:</span> <span th:text="${inv.patients}"></span></div>
+                <div th:each="rx : ${inv.prescriptions}"><span class="b">Prescribed by:</span> <span th:text="${rx}"></span></div>
+                <th:block th:if="${#lists.isEmpty(inv.prescriptions)}">
+                    <div th:if="${o.doctorName != null}"><span class="b">Prescribed by:</span> <span th:text="'Dr. ' + ${o.doctorName}"></span></div>
+                    <div th:if="${o.prescriptionDate != null}"><span class="b">Prescription date:</span>
+                        <span th:text="${#temporals.format(o.prescriptionDate, 'd MMM yyyy')}"></span></div>
+                </th:block>
+            </th:block>
+        </td>
+    </tr>
+</table>
+
+<table class="lines">
+    <thead>
+    <tr>
+        <th>#</th><th>Item</th><th>HSN</th><th class="r">Qty</th><th class="r">Rate (incl. GST)</th>
+        <th th:if="${inv.discounted}" class="r">Discount</th>
+        <th class="r">Taxable value</th><th class="r">GST %</th>
+        <th:block th:unless="${inv.interState}"><th class="r">CGST</th><th class="r">SGST</th></th:block>
+        <th th:if="${inv.interState}" class="r">IGST</th>
+        <th class="r">Amount</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="l : ${inv.lines}">
+        <td th:text="${l.number}"></td>
+        <td><span th:text="${l.description}"></span>
+            <div th:if="${l.expiryDate != null}" class="small muted" th:text="'Exp. ' + ${#temporals.format(l.expiryDate, 'MM/yyyy')}"></div></td>
+        <td th:text="${#strings.isEmpty(l.hsnCode)} ? '-' : ${l.hsnCode}"></td>
+        <td class="r" th:text="${l.quantity}"></td>
+        <td class="r" th:text="${#numbers.formatDecimal(l.unitPrice, 1, 'COMMA', 2, 'POINT')}"></td>
+        <td th:if="${inv.discounted}" class="r" th:text="${l.discount.signum() > 0} ? '−' + ${#numbers.formatDecimal(l.discount, 1, 'COMMA', 2, 'POINT')} : '-'"></td>
+        <td class="r" th:text="${#numbers.formatDecimal(l.taxableValue, 1, 'COMMA', 2, 'POINT')}"></td>
+        <td class="r" th:text="${l.gstRate.toPlainString()} + '%'"></td>
+        <th:block th:unless="${inv.interState}">
+            <td class="r" th:text="${#numbers.formatDecimal(l.cgst, 1, 'COMMA', 2, 'POINT')}"></td>
+            <td class="r" th:text="${#numbers.formatDecimal(l.sgst, 1, 'COMMA', 2, 'POINT')}"></td>
+        </th:block>
+        <td th:if="${inv.interState}" class="r" th:text="${#numbers.formatDecimal(l.igst, 1, 'COMMA', 2, 'POINT')}"></td>
+        <td class="r b" th:text="${#numbers.formatDecimal(l.total, 1, 'COMMA', 2, 'POINT')}"></td>
+    </tr>
+    </tbody>
+</table>
+
+<table class="foot">
+    <tr>
+        <td style="width: 56%; padding-right: 18pt;">
+            <h2>Tax summary</h2>
+            <table class="lines" style="margin-top: 0;">
+                <thead><tr><th>GST %</th><th class="r">Taxable</th>
+                    <th:block th:unless="${inv.interState}"><th class="r">CGST</th><th class="r">SGST</th></th:block>
+                    <th th:if="${inv.interState}" class="r">IGST</th></tr></thead>
+                <tbody>
+                <tr th:each="t : ${inv.taxSummary}">
+                    <td th:text="${t.gstRate.toPlainString()} + '%'"></td>
+                    <td class="r" th:text="${#numbers.formatDecimal(t.taxableValue, 1, 'COMMA', 2, 'POINT')}"></td>
+                    <th:block th:unless="${inv.interState}">
+                        <td class="r" th:text="${#numbers.formatDecimal(t.cgst, 1, 'COMMA', 2, 'POINT')}"></td>
+                        <td class="r" th:text="${#numbers.formatDecimal(t.sgst, 1, 'COMMA', 2, 'POINT')}"></td>
+                    </th:block>
+                    <td th:if="${inv.interState}" class="r" th:text="${#numbers.formatDecimal(t.igst, 1, 'COMMA', 2, 'POINT')}"></td>
+                </tr>
+                </tbody>
+            </table>
+            <p style="margin: 6pt 0 0;"><span class="b">Amount in words:</span> <span th:text="${inv.amountInWords}"></span></p>
+        </td>
+        <td style="width: 44%;">
+            <table class="totals">
+                <th:block th:if="${inv.discounted}">
+                    <tr><td class="muted">Amount</td><td class="r" th:text="'₹' + ${#numbers.formatDecimal(inv.invoiceValue.add(inv.discountTotal), 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                    <tr><td class="muted" th:text="'Promo discount (' + ${inv.couponCode} + ')'">Promo discount</td>
+                        <td class="r" th:text="'− ₹' + ${#numbers.formatDecimal(inv.discountTotal, 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                </th:block>
+                <tr><td class="muted">Taxable value</td><td class="r" th:text="'₹' + ${#numbers.formatDecimal(inv.taxableTotal, 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                <th:block th:unless="${inv.interState}">
+                    <tr><td class="muted">CGST</td><td class="r" th:text="'₹' + ${#numbers.formatDecimal(inv.cgstTotal, 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                    <tr><td class="muted">SGST</td><td class="r" th:text="'₹' + ${#numbers.formatDecimal(inv.sgstTotal, 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                </th:block>
+                <tr th:if="${inv.interState}"><td class="muted">IGST</td><td class="r" th:text="'₹' + ${#numbers.formatDecimal(inv.igstTotal, 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                <tr th:if="${inv.rounded}"><td class="muted">Round off</td><td class="r" th:text="${inv.roundOffLabel}"></td></tr>
+                <tr class="grand"><td>Total</td><td class="r" th:text="'₹' + ${#numbers.formatDecimal(inv.grandTotal, 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                <th:block th:if="${o.paidWithWallet and o.paymentMethod.name() != 'WALLET'}">
+                    <tr><td class="muted">Paid with MediZon Money</td><td class="r" th:text="'₹' + ${#numbers.formatDecimal(o.walletUsed, 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                    <tr><td class="muted" th:text="${o.paymentMethod.label}">UPI</td><td class="r" th:text="'₹' + ${#numbers.formatDecimal(o.amountDue, 1, 'COMMA', 2, 'POINT')}"></td></tr>
+                </th:block>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<div class="notes">
+    <p>Prices include GST. Delivery charges are part of a composite supply and are taxed at the rate of the main item.
+        Tax is not payable on reverse charge basis.</p>
+    <p>This is a computer-generated invoice and doesn't need a signature.</p>
+</div>
+
+</body>
+</html>

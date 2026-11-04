@@ -1,0 +1,247 @@
+/*
+ * Dark mode, switched on in Settings (html[data-theme="dark"], set by theme.js before the page paints).
+ * Light mode is medizon.css untouched: every rule here only applies under html[data-theme="dark"].
+ * The "Generated" part maps medizon.css's fixed light colours to dark ones; regenerate it when medizon.css
+ * gains new light backgrounds. Printing always uses light colours.
+ */
+@media screen {
+
+/* ---------- Palette ---------- */
+html[data-theme="dark"] {
+    color-scheme: dark;
+    --mz-green: #2E9C7E;
+    --mz-green-ink: #8FDCC0;
+    --mz-mint: #183A31;
+    --mz-ink: #E6EFEB;
+    --mz-muted: #9DB3AA;
+    --mz-paper: #0F1715;
+    --mz-line: #2A3833;
+    --mz-amber-soft: #3A2A12;
+    --mz-red: #E07A7A;
+    --mz-surface: #17221F;
+
+    --bs-body-color: var(--mz-ink);
+    --bs-body-bg: var(--mz-paper);
+    --bs-emphasis-color: #F4F8F6;
+    --bs-secondary-color: var(--mz-muted);
+    --bs-secondary-bg: #1D2A26;
+    --bs-tertiary-bg: #1A2622;
+    --bs-border-color: var(--mz-line);
+    --bs-primary: var(--mz-green);
+    --bs-primary-rgb: 46, 156, 126;
+    --bs-link-color: #6FD1AE;
+    --bs-link-color-rgb: 111, 209, 174;
+    --bs-link-hover-color: #9BE3C8;
+    --bs-link-hover-color-rgb: 155, 227, 200;
+    --bs-focus-ring-color: rgba(111, 209, 174, .35);
+}
+html[data-theme="dark"] body { background-color: var(--mz-paper); }
+
+/* ---------- Buttons: the hover colour was the dark ink green, which is now a light text colour ---------- */
+html[data-theme="dark"] .btn-primary {
+    --bs-btn-color: #fff; --bs-btn-hover-color: #fff; --bs-btn-active-color: #fff;
+    --bs-btn-hover-bg: #258467; --bs-btn-hover-border-color: #258467;
+    --bs-btn-active-bg: #1F7059; --bs-btn-active-border-color: #1F7059;
+}
+html[data-theme="dark"] .btn-outline-primary {
+    --bs-btn-color: #6FD1AE; --bs-btn-border-color: #3E8F78;
+    --bs-btn-hover-color: #fff; --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: #1F7059; --bs-btn-active-border-color: #1F7059;
+}
+html[data-theme="dark"] .btn-outline-secondary { --bs-btn-color: #C9D6D1; --bs-btn-border-color: #3A4A44; --bs-btn-hover-bg: #26332F; --bs-btn-hover-border-color: #4A5B55; --bs-btn-hover-color: #fff; }
+html[data-theme="dark"] .mz-bot-launcher:hover, html[data-theme="dark"] .mz-upi-keypad .is-ok:hover { background: #258467; }
+
+/* ---------- Bootstrap pieces with fixed light colours ---------- */
+html[data-theme="dark"] .text-bg-light { color: var(--mz-ink) !important; background-color: #24322E !important; }
+html[data-theme="dark"] .bg-white { background-color: var(--mz-surface) !important; }
+html[data-theme="dark"] .form-control, html[data-theme="dark"] .form-select { background-color: #121C19; border-color: #33433D; color: var(--mz-ink); }
+html[data-theme="dark"] .form-control::placeholder { color: #71857D; }
+html[data-theme="dark"] .form-control:disabled, html[data-theme="dark"] .form-select:disabled { background-color: #1A2420; }
+html[data-theme="dark"] .input-group-text { background-color: #1D2A26; border-color: #33433D; color: var(--mz-muted); }
+html[data-theme="dark"] .modal-content, html[data-theme="dark"] .offcanvas, html[data-theme="dark"] .dropdown-menu,
+html[data-theme="dark"] .popover, html[data-theme="dark"] .toast { background-color: var(--mz-surface); }
+html[data-theme="dark"] .dropdown-item:hover, html[data-theme="dark"] .dropdown-item:focus { background-color: #22302B; }
+html[data-theme="dark"] .table { --bs-table-bg: transparent; --bs-table-color: var(--mz-ink); --bs-table-striped-bg: rgba(255,255,255,.03); --bs-table-hover-bg: rgba(255,255,255,.05); }
+html[data-theme="dark"] .alert-warning { --bs-alert-bg: #3A2A12; --bs-alert-color: #F3CF96; --bs-alert-border-color: #5A4220; }
+html[data-theme="dark"] .alert-success { --bs-alert-bg: #143229; --bs-alert-color: #9BE3C8; --bs-alert-border-color: #1F4A3D; }
+html[data-theme="dark"] .alert-danger { --bs-alert-bg: #3A1A1A; --bs-alert-color: #F2B8B8; --bs-alert-border-color: #5A2A2A; }
+html[data-theme="dark"] .alert-info { --bs-alert-bg: #142C33; --bs-alert-color: #A8DDEA; --bs-alert-border-color: #1F434C; }
+html[data-theme="dark"] .text-danger { color: #F08A8A !important; }
+html[data-theme="dark"] .text-success { color: #6FD1AE !important; }
+html[data-theme="dark"] .text-warning-emphasis { color: #F3CF96 !important; }
+html[data-theme="dark"] .btn-close:not(.btn-close-white) { filter: invert(1) grayscale(100%) brightness(200%); }
+html[data-theme="dark"] :focus-visible { outline-color: rgba(111, 209, 174, .55); }
+
+/* ---------- Site parts painted with the ink colour, which is light in dark mode ---------- */
+html[data-theme="dark"] .mz-subnav, html[data-theme="dark"] .mz-footer { background: #0A1210; }
+html[data-theme="dark"] .mz-nav { background: #0A2A23; }
+html[data-theme="dark"] img { opacity: .95; }
+
+/* The search button keeps its bright mint fill, so its icon stays dark */
+html[data-theme="dark"] .mz-search button { color: #0A4E40; }
+
+/* Scheduled downtime banner */
+html[data-theme="dark"] .mz-maint { background: #3A2A12; border-bottom-color: #5A4220; color: #F3CF96; }
+
+/* ---------- Generated from medizon.css ---------- */
+html[data-theme="dark"] .mz-loc-option { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-loc-result.is-off { background-color: color-mix(in srgb, #FBE9E9 13%, #0F1715); color: color-mix(in srgb, #7A2222 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-panel { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-panel-flush { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-hero { background: linear-gradient(180deg, var(--mz-surface) 0%, var(--mz-paper) 100%); }
+html[data-theme="dark"] .mz-hero-search { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-chip { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-pack { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-strip { background: repeating-linear-gradient(135deg, color-mix(in srgb, #EEF4F1 13%, #0F1715) 0 6px, color-mix(in srgb, #F5F9F7 13%, #0F1715) 6px 12px); }
+html[data-theme="dark"] .mz-slot { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-bubble { background: radial-gradient(circle at 35% 30%, var(--mz-surface) 0 20%, color-mix(in srgb, #E3EEE9 13%, #0F1715) 60%, color-mix(in srgb, #D2E3DB 13%, #0F1715) 100%); border: 1px solid color-mix(in srgb, #C6DACF 30%, #0F1715); }
+html[data-theme="dark"] .mz-slot.is-skipped .mz-bubble { background-color: color-mix(in srgb, #F0F2F1 13%, #0F1715); }
+html[data-theme="dark"] .mz-slot.is-pending .mz-bubble, html[data-theme="dark"] .mz-slot.is-due .mz-bubble { color: color-mix(in srgb, #8A5300 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-med { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-med:hover { border-color: color-mix(in srgb, #A9C9BB 30%, #0F1715); }
+html[data-theme="dark"] .mz-qty-stepper { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-ai-hint { color: color-mix(in srgb, #5B4BB7 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-ai-banner { background-color: color-mix(in srgb, #F3F0FF 13%, #0F1715); border: 1px solid color-mix(in srgb, #DCD4FF 30%, #0F1715); }
+html[data-theme="dark"] .mz-ai-banner > .bi { color: color-mix(in srgb, #5B4BB7 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-rx-fast { border-color: color-mix(in srgb, #9ED3B5 30%, #0F1715); }
+html[data-theme="dark"] .mz-rx-score { background-color: color-mix(in srgb, #F8FAF9 13%, #0F1715); }
+html[data-theme="dark"] .mz-rx-checks .is-no i { color: color-mix(in srgb, #C0392B 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-ai-badge { background-color: color-mix(in srgb, #F3F0FF 13%, #0F1715); color: color-mix(in srgb, #5B4BB7 40%, #EAF2EE); border: 1px solid color-mix(in srgb, #DCD4FF 30%, #0F1715); }
+html[data-theme="dark"] .mz-rx-thumb { background-color: color-mix(in srgb, #F8FAF9 13%, #0F1715); }
+html[data-theme="dark"] .mz-rx { background-color: var(--mz-surface); border: 1px solid color-mix(in srgb, #E8C4C4 30%, #0F1715); }
+html[data-theme="dark"] .mz-delivery { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-delivery-ico.is-off { background-color: color-mix(in srgb, #FBEFEF 13%, #0F1715); }
+html[data-theme="dark"] .mz-delivery-head.is-fast { color: color-mix(in srgb, #8A5300 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-delivery-cutoff { color: color-mix(in srgb, #B86E00 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-rx-note { background-color: color-mix(in srgb, #FBEFEF 13%, #0F1715); border: 1px solid color-mix(in srgb, #EFCFCF 30%, #0F1715); color: color-mix(in srgb, #7A2626 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-subs { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-plan { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-meter { background-color: color-mix(in srgb, #E8EFEC 13%, #0F1715); }
+html[data-theme="dark"] .mz-mode-MANUAL { color: color-mix(in srgb, #8A5300 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-low-banner { border: 1px solid color-mix(in srgb, #F3CF96 30%, #0F1715); }
+html[data-theme="dark"] .mz-track li::before { background-color: var(--mz-surface); }
+html[data-theme="dark"] .table thead th { background-color: color-mix(in srgb, #FAFCFB 13%, #0F1715); }
+html[data-theme="dark"] .mz-order-tab-count { background-color: color-mix(in srgb, #E8EFEC 13%, #0F1715); }
+html[data-theme="dark"] .mz-stat { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-confirm-icon { background-color: color-mix(in srgb, #FBEFEF 13%, #0F1715); }
+html[data-theme="dark"] .mz-note:hover { background-color: color-mix(in srgb, #FAFCFB 13%, #0F1715); }
+html[data-theme="dark"] .mz-note.is-unread { background-color: color-mix(in srgb, #F2F8F5 13%, #0F1715); }
+html[data-theme="dark"] .mz-note-EXPIRY_ALERT .mz-note-icon { background-color: color-mix(in srgb, #FBEFEF 13%, #0F1715); }
+html[data-theme="dark"] .mz-bot-teaser { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-bot-msg.is-bot { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-bot-card { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-bot-chip { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-bot-form { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-bot-input:focus { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-panel-soft { background-color: color-mix(in srgb, #FBFDFC 13%, #0F1715); }
+html[data-theme="dark"] .mz-expiry.is-soon { color: color-mix(in srgb, #8A5300 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-shelf-item { background-color: color-mix(in srgb, #FFFDF8 13%, #0F1715); border-color: color-mix(in srgb, #F3DDB8 30%, #0F1715); }
+html[data-theme="dark"] .mz-shelf-note { border: 1px solid color-mix(in srgb, #F3CF96 30%, #0F1715); }
+html[data-theme="dark"] .mz-setup { border: 1px solid color-mix(in srgb, #F3CF96 30%, #0F1715); }
+html[data-theme="dark"] .mz-setup-icon { color: color-mix(in srgb, #8A5300 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-setup-row { background-color: var(--mz-surface); border: 1px solid color-mix(in srgb, #F3DDB8 30%, #0F1715); }
+html[data-theme="dark"] .mz-pick > span { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-pick:hover > span { border-color: color-mix(in srgb, #A9C9BB 30%, #0F1715); }
+html[data-theme="dark"] .mz-pick-common input:checked + span::before { color: color-mix(in srgb, #8A5300 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-day { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-day:hover { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-account-nav { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-alloc-opt { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-alloc-opt:hover { border-color: color-mix(in srgb, #A9C9BB 30%, #0F1715); }
+html[data-theme="dark"] .mz-alloc-opt.mz-pick-common.is-on .mz-alloc-pick { color: color-mix(in srgb, #6B4100 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-alloc-opt.mz-pick-common.is-on .mz-alloc-pick::before { color: color-mix(in srgb, #8A5300 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-alloc-opt.mz-pick-others.is-on { background-color: color-mix(in srgb, #EEEEFC 13%, #0F1715); }
+html[data-theme="dark"] .mz-alloc-opt.mz-pick-others.is-on .mz-alloc-pick { color: color-mix(in srgb, #33337A 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-alloc-opt.mz-pick-others.is-on .mz-alloc-pick::before { color: color-mix(in srgb, #5B5BD6 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-alloc-step button { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-steps li::before { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-addr-card { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-choice > span { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-choice:hover > span { border-color: color-mix(in srgb, #A9C9BB 30%, #0F1715); }
+html[data-theme="dark"] .mz-addr-pick { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-promo-card { border: 1px dashed color-mix(in srgb, #A9C9BB 30%, #0F1715); background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-pick-others input:checked + span { background-color: color-mix(in srgb, #EEEEFC 13%, #0F1715); color: color-mix(in srgb, #33337A 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-pick-others input:checked + span::before { color: color-mix(in srgb, #5B5BD6 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-device-prompt { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-invoice { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-stack { background-color: color-mix(in srgb, #F3F6F4 13%, #0F1715); }
+html[data-theme="dark"] .mz-num-table tfoot td { background-color: color-mix(in srgb, #FAFCFB 13%, #0F1715); }
+html[data-theme="dark"] .mz-search { background-color: var(--mz-surface); }
+html[data-theme="dark"] body.mz-home { background-color: color-mix(in srgb, #EAF1ED 13%, #0F1715); }
+html[data-theme="dark"] .mz-banner-btn { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-art-tag { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-card { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-tile:hover .mz-tile-img { background-color: color-mix(in srgb, #D6EBE1 13%, #0F1715); }
+html[data-theme="dark"] .mz-dose.is-pending .mz-bubble, html[data-theme="dark"] .mz-dose.is-due .mz-bubble { color: color-mix(in srgb, #8A5300 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-promo-art { background: linear-gradient(135deg, var(--mz-mint), color-mix(in srgb, #D4ECF7 13%, #0F1715)); }
+html[data-theme="dark"] .mz-promo-art span { border: 1px solid color-mix(in srgb, #E8C4C4 30%, #0F1715); background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-rail-arrow { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-footer-trust { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-lang .form-select:focus { border-color: color-mix(in srgb, #7CE0B4 30%, #0F1715); }
+html[data-theme="dark"] .mz-lang option, html[data-theme="dark"] .mz-lang optgroup { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-tabbar { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-help-hero { background: linear-gradient(180deg, var(--mz-surface) 0%, var(--mz-paper) 100%); }
+html[data-theme="dark"] .mz-faq { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-contact-row { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-quick-ask { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-raise { background: linear-gradient(135deg, var(--mz-surface) 60%, var(--mz-mint)); }
+html[data-theme="dark"] .mz-ticket-row:hover { background-color: color-mix(in srgb, #FAFCFB 13%, #0F1715); }
+html[data-theme="dark"] .mz-topic-card { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-msg-body { background-color: color-mix(in srgb, #F1F5F3 13%, #0F1715); }
+html[data-theme="dark"] .mz-pick-results { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-health-card.is-degraded { border-color: color-mix(in srgb, #E9C46A 30%, #0F1715); }
+html[data-theme="dark"] .mz-min-order { border: 1px solid color-mix(in srgb, #f3d38a 30%, #0F1715); background-color: color-mix(in srgb, #fff8e6 13%, #0F1715); }
+html[data-theme="dark"] .mz-min-order .progress { background-color: color-mix(in srgb, #f6e7c1 13%, #0F1715); }
+html[data-theme="dark"] .mz-pay-card { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-pay-wallet:has(input:checked) { background: linear-gradient(90deg, var(--mz-mint), var(--mz-surface) 70%); }
+html[data-theme="dark"] .mz-pay-option { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-pay-option:hover { border-color: color-mix(in srgb, #A9C9BB 30%, #0F1715); }
+html[data-theme="dark"] .mz-pay-option:has(input:checked) { background-color: color-mix(in srgb, #FAFDFB 13%, #0F1715); }
+html[data-theme="dark"] .mz-pay-radio { border: 2px solid color-mix(in srgb, #A9C9BB 30%, #0F1715); }
+html[data-theme="dark"] .mz-pay-error { background-color: color-mix(in srgb, #FBEDED 13%, #0F1715); border: 1px solid color-mix(in srgb, #EBC3C3 30%, #0F1715); }
+html[data-theme="dark"] .mz-pay-bar { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-pay-overlay-card { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-custom-alert-card { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-pay-cross circle { stroke: color-mix(in srgb, #EF4444 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-pay-cross path { stroke: color-mix(in srgb, #EF4444 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-upi-sheet { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-upi-head { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-upi-app { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-upi-field { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-upi-handles button { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-upi-qr { border: 1px dashed color-mix(in srgb, #A9C9BB 30%, #0F1715); }
+html[data-theme="dark"] .mz-upi-notif { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-upi-keypad button:active { background-color: color-mix(in srgb, #CFE6DA 13%, #0F1715); }
+html[data-theme="dark"] .mz-resend { color: color-mix(in srgb, #0E6B57 40%, #EAF2EE); }
+html[data-theme="dark"] .mz-pw-match.ok { color: color-mix(in srgb, #0E6B57 40%, #EAF2EE); background-color: color-mix(in srgb, #E6F5F0 13%, #0F1715); border: 1px solid color-mix(in srgb, #A7F3D0 30%, #0F1715); }
+html[data-theme="dark"] .mz-pw-match.bad { color: color-mix(in srgb, #991B1B 40%, #EAF2EE); background-color: color-mix(in srgb, #FEF2F2 13%, #0F1715); border: 1px solid color-mix(in srgb, #FECACA 30%, #0F1715); }
+
+}
+
+/*
+ * Printing in dark mode: the rules above are screen-only, but Bootstrap's own dark theme (data-bs-theme="dark") would
+ * still print light text on white paper, e.g. invoice tables. Put Bootstrap's colours back to MediZon's light ones.
+ * theme.js also drops dark mode on "beforeprint"; this covers printing that doesn't fire it (the Android app).
+ */
+@media print {
+    html[data-bs-theme="dark"] {
+        color-scheme: light;
+        --bs-body-color: #17302A; --bs-body-color-rgb: 23, 48, 42;
+        --bs-body-bg: #fff; --bs-body-bg-rgb: 255, 255, 255;
+        --bs-emphasis-color: #000; --bs-emphasis-color-rgb: 0, 0, 0;
+        --bs-secondary-color: #5B716A; --bs-secondary-color-rgb: 91, 113, 106;
+        --bs-secondary-bg: #e9ecef; --bs-secondary-bg-rgb: 233, 236, 239;
+        --bs-tertiary-color: rgba(33, 37, 41, .5); --bs-tertiary-color-rgb: 33, 37, 41;
+        --bs-tertiary-bg: #f8f9fa; --bs-tertiary-bg-rgb: 248, 249, 250;
+        --bs-heading-color: inherit;
+        --bs-link-color: #0E6B57; --bs-link-color-rgb: 14, 107, 87;
+        --bs-link-hover-color: #0A4E40; --bs-link-hover-color-rgb: 10, 78, 64;
+        --bs-code-color: #d63384;
+        --bs-border-color: #D3E3DB; --bs-border-color-translucent: rgba(0, 0, 0, .175);
+    }
+    html[data-bs-theme="dark"] body { background: #fff; color: #17302A; }
+    html[data-bs-theme="dark"] .table {
+        --bs-table-color: #17302A; --bs-table-bg: #fff; --bs-table-border-color: #D3E3DB;
+        --bs-table-striped-color: #17302A; --bs-table-hover-color: #17302A; --bs-table-active-color: #17302A;
+    }
+}

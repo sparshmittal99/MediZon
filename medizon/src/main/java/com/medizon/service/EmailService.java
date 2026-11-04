@@ -117,6 +117,36 @@ public class EmailService {
         }
     }
 
+    /**
+     * HTML email with a file attached (an invoice PDF). Render the body and the file on the calling thread; this
+     * only sends them. Fire-and-forget (@Async).
+     */
+    @Async
+    public void sendHtmlWithAttachment(String to, String subject, String htmlBody, String textBody,
+                                       String fileName, byte[] file, String contentType) {
+        JavaMailSender sender = mailSender.getIfAvailable();
+        if (!enabled || sender == null) {
+            log.info("[mail disabled] to={} subject='{}' attachment={} ({} bytes)", to, subject, fileName, file.length);
+            return;
+        }
+        try {
+            MimeMessage msg = sender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
+            helper.setFrom(resolveFrom());
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(textBody == null || textBody.isBlank() ? subject : textBody, htmlBody);
+            if (htmlBody != null && htmlBody.contains("cid:medizonLogo") && LOGO_BYTES.length > 0) {
+                helper.addInline("medizonLogo", new org.springframework.core.io.ByteArrayResource(LOGO_BYTES), "image/png");
+            }
+            helper.addAttachment(fileName, new org.springframework.core.io.ByteArrayResource(file), contentType);
+            sender.send(msg);
+            log.info("Email with attachment sent to={} subject='{}' file={}", to, subject, fileName);
+        } catch (Exception e) {
+            log.warn("Could not send email with attachment to {}: {}", to, e.getMessage());
+        }
+    }
+
     /** Renders a Thymeleaf HTML email template on the calling thread. */
     public String render(String templateName, Map<String, Object> variables) {
         Context context = new Context();

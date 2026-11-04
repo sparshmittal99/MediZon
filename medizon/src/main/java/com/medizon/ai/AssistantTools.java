@@ -90,7 +90,7 @@ public class AssistantTools {
             case "todays_doses" -> planService.todaysDoses(user).stream().map(s -> Map.of(
                     "plan_id", s.getPlan().getId(),
                     "time", s.getTime().format(HH_MM),
-                    "medicine", s.getPlan().getMedicine().getName(),
+                    "medicine", s.getPlan().getMedicineName(),
                     "dose", s.getPlan().getDoseLabel(),
                     "status", s.getState())).toList();
             case "create_plan" -> createPlan(user, args);
@@ -296,7 +296,7 @@ public class AssistantTools {
         for (Member person : chosen) {
             Map<Long, InteractionService.Item> items = new LinkedHashMap<>();
             if (withPlans) {
-                plans.stream().filter(p -> p.getMember() != null && p.getMember().getId().equals(person.getId()))
+                plans.stream().filter(p -> !p.isCustom() && p.getMember() != null && p.getMember().getId().equals(person.getId()))
                         .forEach(p -> items.putIfAbsent(p.getMedicine().getId(), item(p.getMedicine(), null)));
             }
             for (CartItem line : cartLines) {
@@ -398,8 +398,9 @@ public class AssistantTools {
     private Map<String, Object> plan(MedicationPlan p) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", p.getId());
-        out.put("medicine", p.getMedicine().getName());
-        out.put("medicine_id", p.getMedicine().getId());
+        out.put("medicine", p.getMedicineName());
+        if (!p.isCustom()) out.put("medicine_id", p.getMedicine().getId());
+        else out.put("not_sold_here", true);
         out.put("for", p.getMember() == null ? "Me" : p.getMember().getLabel());
         out.put("needs_setup", p.isSetupRequired());
         out.put("active", p.isActive());
@@ -415,7 +416,7 @@ public class AssistantTools {
         Member self = memberService.self(user);
         boolean exists = planService.forUser(user).stream()
                 .anyMatch(p -> p.getMember() != null && p.getMember().getId().equals(self.getId())
-                        && p.getMedicine().getId().equals(m.getId()));
+                        && !p.isCustom() && p.getMedicine().getId().equals(m.getId()));
         if (exists) {
             return Map.of("error", "You already have reminders for " + m.getName()
                     + ". You can change the times in My medicines.");
@@ -444,12 +445,13 @@ public class AssistantTools {
         DoseStatus status = "SKIPPED".equalsIgnoreCase(args.path("status").asText()) ? DoseStatus.SKIPPED : DoseStatus.TAKEN;
         MedicationPlan p = planService.respond(user, args.path("plan_id").asLong(), time, status);
         reorderService.evaluate(p.getId());
-        return Map.of("ok", true, "medicine", p.getMedicine().getName(), "time", time.format(HH_MM),
+        return Map.of("ok", true, "medicine", p.getMedicineName(), "time", time.format(HH_MM),
                 "units_left", p.getUnitsRemaining());
     }
 
     private Object refill(User user, long planId, String pin) {
         MedicationPlan p = planService.get(planId, user);
+        if (p.isCustom()) return Map.of("error", p.getMedicineName() + " isn't sold on MediZon, so it can't be reordered.");
         cartService.add(user, p.getMedicine().getId(), p.getReorderPacks(), List.of(p.getMember()), pin);
         return Map.of("ok", true, "added", p.getReorderPacks() + " pack(s) of " + p.getTitle(),
                 "cart_count", cartService.count(user));

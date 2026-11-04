@@ -62,7 +62,7 @@ public class ReorderService {
     }
 
     private void evaluate(MedicationPlan p) {
-        if (!p.isActive() || p.getReorderMode() == ReorderMode.OFF || !p.isRunningLow()) return;
+        if (p.isCustom() || !p.isActive() || p.getReorderMode() == ReorderMode.OFF || !p.isRunningLow()) return;
         if (p.isReorderPending()) {
             if (p.getRefillOrder() == null || p.getRefillOrder().getStatus() == OrderStatus.CANCELLED) findRefillOrder(p);
             // Already ordered (or the customer cancelled it), or only an alert was due: nothing more this cycle

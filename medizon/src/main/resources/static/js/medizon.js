@@ -812,15 +812,17 @@
         const take = document.querySelector('[data-mz-take-common]');
         // Medicines on offer depend on who takes them: each option lists the member ids it was delivered for.
         // Options are rebuilt rather than hidden, since Safari ignores hidden <option>s.
-        const allMedicines = medicine ? [...medicine.options].filter(o => o.value) : [];
+        // "Other" (type the name) is always offered, last
+        const otherOption = medicine ? medicine.querySelector('option[data-other]') : null;
+        const allMedicines = medicine ? [...medicine.options].filter(o => o.value && !o.dataset.other) : [];
         const syncMedicines = () => {
             if (!medicine || !member) return;
             const who = member.value;
             const chosen = medicine.value;
             const fits = allMedicines.filter(o => (o.dataset.members || '').split(' ').includes(who));
-            [...medicine.options].forEach(o => { if (o.value) o.remove(); });
-            fits.forEach(o => medicine.add(o));
-            medicine.value = fits.some(o => o.value === chosen) ? chosen : '';
+            [...medicine.options].forEach(o => { if (o.value && !o.dataset.other) o.remove(); });
+            fits.forEach(o => medicine.add(o, otherOption));
+            medicine.value = fits.some(o => o.value === chosen) || (otherOption && chosen === otherOption.value) ? chosen : '';
             document.querySelector('[data-mz-plan-medicine-none]').hidden = fits.length > 0;
             document.querySelector('[data-mz-plan-medicine-hint]').hidden = fits.length === 0;
         };
@@ -829,12 +831,16 @@
             syncMedicines();
             const syncMember = () => {
                 const shelf = member.selectedOptions[0]?.dataset.common === 'true';
+                const other = !!medicine?.selectedOptions[0]?.dataset.other;
                 document.querySelectorAll('[data-mz-person-only]').forEach(el => { el.hidden = shelf; });
                 document.querySelectorAll('[data-mz-shelf-only]').forEach(el => { el.hidden = !shelf; });
+                // A typed-in medicine isn't sold here: no refills, and nothing to move from the shelf
+                document.querySelectorAll('[data-mz-catalog-only]').forEach(el => { if (other) el.hidden = true; });
+                document.querySelectorAll('[data-mz-other-only]').forEach(el => { el.hidden = !other; });
                 if (take && medicine) {
                     const opt = medicine.selectedOptions[0];
                     const units = Number(opt?.dataset.shelf || 0);
-                    take.hidden = shelf || units <= 0;
+                    take.hidden = shelf || other || units <= 0;
                     take.querySelector('[data-mz-take-common-text]').textContent = units > 0
                         ? `${units} ${opt.dataset.unit} on the common shelf. We'll move what this course needs, or all of it for an ongoing medicine.`
                         : '';
@@ -1512,10 +1518,11 @@
     // ---- language: the footer picker translates the whole site through Google's website translator ----
     // The choice lives in Google's own "googtrans" cookie; its script is only loaded once a language other than English is picked.
     (function () {
-        const picker = document.querySelector('[data-mz-lang]');
+        // The footer picker and the one on the Settings page
+        const pickers = document.querySelectorAll('[data-mz-lang]');
         const match = document.cookie.match(/(?:^|;\s*)googtrans=\/[^/;]*\/([^;]+)/);
         const lang = match ? decodeURIComponent(match[1]) : 'en';
-        if (picker) {
+        pickers.forEach(picker => {
             picker.value = [...picker.options].some(o => o.value === lang) ? lang : 'en';
             picker.addEventListener('change', () => {
                 const host = location.hostname;
@@ -1526,7 +1533,7 @@
                 if (picker.value !== 'en') document.cookie = 'googtrans=/en/' + picker.value + '; path=/; max-age=31536000; samesite=lax';
                 location.reload();
             });
-        }
+        });
         if (lang === 'en') return;
         const holder = document.createElement('div');
         holder.id = 'mzTranslate';
@@ -1567,6 +1574,34 @@
                 shown += inGroup;
             });
             if (empty) empty.hidden = shown > 0;
+        });
+    })();
+
+    // ---- Dark mode switches: Settings, and the footer for signed-out visitors (saved by theme.js in this browser) ----
+    (() => {
+        const switches = [...document.querySelectorAll('[data-mz-pref-dark]')];
+        if (!switches.length || !window.mzPrefs) return;
+        const show = () => {
+            const dark = document.documentElement.dataset.theme === 'dark';
+            switches.forEach(s => { s.checked = dark; });
+        };
+        switches.forEach(s => s.addEventListener('change', () => { window.mzPrefs.save({ theme: s.checked ? 'dark' : 'light' }); show(); }));
+        window.addEventListener('storage', show);
+        show();
+    })();
+
+    // ---- Scheduled downtime banner: shown until it's over, unless closed for this downtime ----
+    (() => {
+        const banner = document.querySelector('[data-mz-maint]');
+        if (!banner) return;
+        const key = 'mz_maint_closed';
+        let closed = null;
+        try { closed = localStorage.getItem(key); } catch (e) { /* private mode */ }
+        if (closed === banner.dataset.mzMaint) return;
+        banner.hidden = false;
+        banner.querySelector('[data-mz-maint-close]').addEventListener('click', () => {
+            banner.hidden = true;
+            try { localStorage.setItem(key, banner.dataset.mzMaint); } catch (e) { /* this page only */ }
         });
     })();
 })();

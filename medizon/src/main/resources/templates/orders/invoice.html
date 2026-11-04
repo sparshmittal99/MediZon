@@ -10,7 +10,13 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 mz-no-print">
         <a th:href="${adminView} ? @{/admin/orders/{id}(id=${o.id})} : @{/orders/{id}(id=${o.id})}" class="small">
             <i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
-        <button type="button" class="btn btn-primary" data-mz-print><i class="bi bi-printer me-1"></i>Print or save as PDF</button>
+        <div class="d-flex flex-wrap gap-2">
+            <form th:unless="${adminView}" th:action="@{/orders/{id}/invoice/email(id=${o.id})}" method="post">
+                <button type="submit" class="btn btn-outline-primary" th:title="'Send this invoice as a PDF to ' + ${me != null ? me.email : 'your email'}">
+                    <i class="bi bi-envelope me-1"></i>Email invoice</button>
+            </form>
+            <button type="button" class="btn btn-primary" data-mz-print><i class="bi bi-printer me-1"></i>Print or save as PDF</button>
+        </div>
     </div>
 
     <div th:if="${adminView and !s.complete}" class="alert alert-warning small mz-no-print">

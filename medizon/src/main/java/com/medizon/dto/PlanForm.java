@@ -23,8 +23,22 @@ public class PlanForm {
     @NotNull(message = "Choose who takes it")
     private Long memberId;
 
+    /** "Other" in the medicine list: a medicine not bought here, typed in as {@link #customName}. */
+    public static final long OTHER = 0L;
+
+    /** Units offered for a typed-in medicine. */
+    public static final List<String> CUSTOM_UNITS =
+            List.of("tablet(s)", "capsule(s)", "ml", "drop(s)", "puff(s)", "sachet(s)", "injection(s)", "unit(s)");
+
     @NotNull(message = "Choose a medicine")
     private Long medicineId;
+
+    /** Name of an "Other" medicine. */
+    private String customName;
+
+    private String customUnit = "tablet(s)";
+
+    public boolean isOther() { return medicineId != null && medicineId == OTHER; }
 
     @Min(value = 1, message = "Dose is at least 1")
     private int dosePerIntake = 1;
@@ -97,7 +111,9 @@ public class PlanForm {
         PlanForm f = new PlanForm();
         f.setId(p.getId());
         f.setMemberId(p.getMember() == null ? null : p.getMember().getId());
-        f.setMedicineId(p.getMedicine().getId());
+        f.setMedicineId(p.isCustom() ? OTHER : p.getMedicine().getId());
+        f.setCustomName(p.getCustomName());
+        if (p.isCustom()) f.setCustomUnit(p.getUnitLabel());
         f.setDosePerIntake(p.getDosePerIntake());
         List<String> t = new ArrayList<>();
         p.getReminderTimes().forEach(lt -> t.add(lt.toString()));

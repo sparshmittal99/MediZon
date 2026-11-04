@@ -25,6 +25,7 @@
                 <a href="#password" th:unless="${me.admin}"><i class="bi bi-key" aria-hidden="true"></i>Change password</a>
                 <a href="#devices"><i class="bi bi-laptop" aria-hidden="true"></i>Signed-in devices</a>
                 <a th:href="@{/profile}"><i class="bi bi-person" aria-hidden="true"></i>Profile</a>
+                <a th:href="@{/settings}" data-mz-settings-link><i class="bi bi-sliders2" aria-hidden="true"></i>Settings</a>
                 <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/addresses}"><i class="bi bi-geo-alt" aria-hidden="true"></i>Saved addresses</a>
                 <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/billing-address}"><i class="bi bi-receipt" aria-hidden="true"></i>Billing address</a>
                 <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/members}"><i class="bi bi-people" aria-hidden="true"></i>Family members</a>

@@ -26,10 +26,14 @@
                     th:text="${x.orderNumber}"></a><span th:if="${x.store != null}" th:text="' (' + ${x.store.name} + ')'"></span><span th:unless="${s.last}">, </span></th:block>
             </p>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
             <a th:if="${o.invoiceAvailable}" class="btn btn-sm btn-outline-primary"
                th:href="${adminView} ? @{/admin/orders/{id}/invoice(id=${o.id})} : @{/orders/{id}/invoice(id=${o.id})}">
                 <i class="bi bi-receipt me-1"></i>Tax invoice</a>
+            <form th:if="${o.invoiceAvailable and !adminView}" th:action="@{/orders/{id}/invoice/email(id=${o.id})}" method="post" class="d-inline">
+                <input type="hidden" name="from" value="order">
+                <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-envelope me-1"></i>Email invoice</button>
+            </form>
             <span class="badge fs-6" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
         </div>
     </div>

@@ -43,6 +43,12 @@ public class NotificationDevice {
     private boolean configured;
 
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /** SHA-256 (hex) of the Android app's sync token, which fetches dose alarms without a browser session. */
+    @Column(length = 64, unique = true)
+    private String appTokenHash;
+
+    private LocalDateTime appLinkedAt;
     private LocalDateTime lastSeenAt = LocalDateTime.now();
 
     public boolean allows(Member member) {

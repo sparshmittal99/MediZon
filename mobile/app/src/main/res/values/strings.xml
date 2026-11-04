@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MediZon</string>
+    <string name="wordmark">MediZon</string>
+    <string name="offline_title">You\'re offline</string>
+    <string name="offline_body">Check your internet connection and try again.</string>
+    <string name="unreachable_title">Couldn\'t reach MediZon</string>
+    <string name="unreachable_body">The server may be waking up. This can take up to a minute.</string>
+    <string name="try_again">Try again</string>
+    <string name="taken">Taken</string>
+    <string name="skip">Skip</string>
+    <string name="snooze">Snooze 10 min</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="open">Open</string>
+    <string name="ok">OK</string>
+    <string name="settings">Settings</string>
+    <string name="channel_calls">Medicine calls</string>
+    <string name="channel_calls_desc">Rings like an incoming call when a medicine dose or reminder is due.</string>
+    <string name="channel_reminders">Medicine reminders</string>
+    <string name="channel_reminders_desc">Notification only (when Ring phone is off in Settings).</string>
+    <string name="channel_announcements">Announcements</string>
+    <string name="channel_announcements_desc">MediZon news such as scheduled downtime.</string>
+    <string name="channel_missed">Missed alarms</string>
+    <string name="channel_missed_desc">Alarms that rang without an answer.</string>
+</resources>

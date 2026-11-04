@@ -1,13 +1,16 @@
 package com.medizon.web;
 
+import com.medizon.config.MediZonRememberMeServices;
 import com.medizon.domain.User;
 import com.medizon.service.AccountDeletionService;
 import com.medizon.service.CurrentUser;
 import com.medizon.service.UserService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +28,7 @@ public class AccountController {
     private final UserService userService;
     private final AccountDeletionService accountDeletion;
     private final CurrentUser currentUser;
+    private final MediZonRememberMeServices rememberMe;
 
     @GetMapping
     public String view(Model model) {
@@ -36,8 +40,10 @@ public class AccountController {
 
     @PostMapping("/password")
     public String changePassword(@RequestParam String currentPassword, @RequestParam String newPassword,
-                                 @RequestParam String confirmPassword, HttpSession session, RedirectAttributes ra) {
+                                 @RequestParam String confirmPassword, HttpSession session, HttpServletRequest request,
+                                 HttpServletResponse response, RedirectAttributes ra) {
         int others = userService.changePassword(currentUser.get(), currentPassword, newPassword, confirmPassword, session.getId());
+        rememberMe.reissue(request, response, SecurityContextHolder.getContext().getAuthentication());
         ra.addFlashAttribute("success", "Password changed." + (others > 0
                 ? " You were signed out on " + others + " other device" + (others == 1 ? "." : "s.") : ""));
         return "redirect:/account";
@@ -56,8 +62,9 @@ public class AccountController {
     }
 
     @PostMapping("/sign-out-others")
-    public String signOutOthers(HttpSession session, RedirectAttributes ra) {
+    public String signOutOthers(HttpSession session, HttpServletRequest request, HttpServletResponse response, RedirectAttributes ra) {
         int n = userService.signOutOtherSessions(currentUser.get(), session.getId());
+        rememberMe.reissue(request, response, SecurityContextHolder.getContext().getAuthentication());
         ra.addFlashAttribute("success", n == 0 ? "You're not signed in anywhere else."
                 : "Signed out on " + n + " other device" + (n == 1 ? "." : "s."));
         return "redirect:/account";

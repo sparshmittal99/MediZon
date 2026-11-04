@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Settings')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<!-- Dark mode (js/theme.js, kept in this browser) and the site language (the same Google Translate choice as the footer) -->
+<main class="container mz-page mz-w-form">
+    <h1 class="mz-page-title mb-1">Settings</h1>
+    <p class="text-muted mb-4">Changes apply straight away.</p>
+
+    <section class="mz-set-group" aria-labelledby="setAppearance">
+        <h2 class="mz-set-title" id="setAppearance">Appearance</h2>
+        <div class="mz-set-list">
+            <div class="mz-set-row">
+                <span class="mz-set-ico" aria-hidden="true"><i class="bi bi-moon-stars"></i></span>
+                <span class="mz-set-text">
+                    <label class="mz-set-label" for="setDark">Dark mode</label>
+                    <span class="mz-set-hint">Easier on the eyes in low light</span>
+                </span>
+                <label class="mz-theme-switch">
+                    <input type="checkbox" id="setDark" role="switch" data-mz-pref-dark>
+                    <span class="mz-theme-track" aria-hidden="true">
+                        <i class="bi bi-sun-fill"></i><i class="bi bi-moon-fill"></i>
+                        <span class="mz-theme-knob"></span>
+                    </span>
+                </label>
+            </div>
+        </div>
+    </section>
+
+    <section class="mz-set-group" aria-labelledby="setLanguage">
+        <h2 class="mz-set-title" id="setLanguage">Language</h2>
+        <div class="mz-set-list">
+            <div class="mz-set-row mz-set-row-stack notranslate" translate="no">
+                <span class="mz-set-ico" aria-hidden="true"><i class="bi bi-translate"></i></span>
+                <span class="mz-set-text">
+                    <label class="mz-set-label" for="setLang">Language</label>
+                    <span class="mz-set-hint">Translates the whole site</span>
+                </span>
+                <select id="setLang" class="form-select mz-set-select" data-mz-lang>
+                    <th:block th:replace="~{fragments/layout :: langOptions}"></th:block>
+                </select>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

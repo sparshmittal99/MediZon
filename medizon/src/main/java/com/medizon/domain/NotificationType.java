@@ -15,6 +15,8 @@ public enum NotificationType {
     SUPPORT_TICKET("bi-headset"),
     /** A product the customer asked to hear about is in stock again. */
     BACK_IN_STOCK("bi-bell"),
+    /** Scheduled downtime announced by the admin. */
+    MAINTENANCE("bi-tools"),
     INFO("bi-info-circle");
 
     private final String icon;

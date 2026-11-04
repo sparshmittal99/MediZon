@@ -36,6 +36,7 @@ public class GlobalModelAdvice {
     private final CatalogService catalog;
     private final StockAlertService stockAlerts;
     private final LiveUpdates liveUpdates;
+    private final MaintenanceService maintenance;
 
     @ModelAttribute
     public void common(Model model, HttpServletRequest request, HttpServletResponse response) {
@@ -43,6 +44,8 @@ public class GlobalModelAdvice {
         model.addAttribute("frontPage", false);
         model.addAttribute("seller", invoiceService.seller());
         model.addAttribute("freeDeliveryAbove", CartService.FREE_DELIVERY_ABOVE);
+        model.addAttribute("inApp", isApp(request));
+        model.addAttribute("maintenance", maintenance.current().map(MaintenanceBanner::of).orElse(null));
         Optional<User> signedIn = currentUser.find();
         // Shop by category: the header's category bar and the "All" menu
         // Shop by category: what the stores delivering to the shopper sell
@@ -99,5 +102,24 @@ public class GlobalModelAdvice {
         RequestContextUtils.getOutputFlashMap(request).put("error", e.getMessage());
         String referer = request.getHeader("Referer");
         return "redirect:" + (referer != null ? referer : "/");
+    }
+
+    /** Opened in the MediZon Android app (its WebView adds "MediZonApp" to the user agent): app-only styling and alarms. */
+    public static boolean isApp(HttpServletRequest request) {
+        String ua = request.getHeader("User-Agent");
+        return ua != null && ua.contains("MediZonApp");
+    }
+
+    /** The scheduled-downtime banner: what's coming, or what's underway. */
+    public record MaintenanceBanner(Long id, String text) {
+        static MaintenanceBanner of(com.medizon.domain.MaintenanceWindow w) {
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            String text = w.isUnderway(now)
+                    ? "Maintenance is underway until " + w.getEndsAt().format(java.time.format.DateTimeFormatter.ofPattern(
+                            w.getEndsAt().toLocalDate().equals(now.toLocalDate()) ? "h:mm a" : "EEE d MMM, h:mm a"))
+                      + ". Some things may not work."
+                    : "Scheduled downtime " + MaintenanceService.when(w) + ". MediZon may not work during this time.";
+            return new MaintenanceBanner(w.getId(), text);
+        }
     }
 }

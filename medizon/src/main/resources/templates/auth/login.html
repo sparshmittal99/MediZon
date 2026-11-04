@@ -34,7 +34,8 @@
                     <button type="button" class="mz-pw-toggle" data-mz-pw-toggle aria-label="Show password"><i class="bi bi-eye"></i></button>
                 </div>
             </div>
-            <div class="form-check mb-4">
+            <!-- Hidden in the Android app, which always keeps you signed in (MediZonRememberMeServices) -->
+            <div class="form-check mb-4" data-mz-remember>
                 <input class="form-check-input" type="checkbox" id="remember" name="remember-me">
                 <label class="form-check-label" for="remember">Keep me signed in</label>
             </div>

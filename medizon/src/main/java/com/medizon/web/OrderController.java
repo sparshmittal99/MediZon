@@ -43,6 +43,7 @@ public class OrderController {
     private final ReturnSettingsService returnSettings;
     private final OrderSettingsService orderSettings;
     private final PaymentService paymentService;
+    private final InvoiceEmailService invoiceEmailService;
 
     /** The promo code applied at checkout, kept in the session until the order is placed or it's removed. */
     public static final String COUPON = "mzCoupon";
@@ -201,6 +202,16 @@ public class OrderController {
         model.addAttribute("inv", invoiceService.forOrder(o));
         model.addAttribute("adminView", false);
         return "orders/invoice";
+    }
+
+    /** Emails the tax invoice, as a PDF, to the customer's account email. */
+    @PostMapping("/orders/{id}/invoice/email")
+    public String emailInvoice(@PathVariable Long id, @RequestParam(defaultValue = "invoice") String from, RedirectAttributes ra) {
+        User user = currentUser.get();
+        Order o = orderService.getForUser(id, user);
+        String to = invoiceEmailService.send(o, user);
+        ra.addFlashAttribute("success", "Invoice " + o.getInvoiceNumber() + " is on its way to " + to + " as a PDF.");
+        return "redirect:/orders/" + id + ("order".equals(from) ? "" : "/invoice");
     }
 
     @PostMapping("/orders/{id}/cancel")

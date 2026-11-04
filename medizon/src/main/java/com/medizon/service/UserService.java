@@ -135,6 +135,11 @@ public class UserService {
 
     /** Ends every session of this user except the given one (the browser they're using). */
     public int signOutOtherSessions(User u, String keepSessionId) {
+        // Remembered sign-ins too ("Keep me signed in", the Android app); the caller re-issues this device's
+        users.findById(u.getId()).ifPresent(fresh -> {
+            fresh.setRememberEpoch(fresh.getRememberEpoch() + 1);
+            users.save(fresh);
+        });
         List<SessionInformation> others = sessionsOf(u.getEmail()).stream()
                 .filter(si -> !si.getSessionId().equals(keepSessionId)).toList();
         others.forEach(SessionInformation::expireNow);

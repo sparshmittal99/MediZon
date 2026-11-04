@@ -1,5 +1,6 @@
 package com.medizon.config;
 
+import com.medizon.repository.UserRepository;
 import com.medizon.service.CartService;
 import com.medizon.service.UserService;
 import jakarta.servlet.FilterChain;
@@ -106,7 +107,7 @@ public class SecurityConfig {
                                            SessionRegistry sessionRegistry, @Lazy UserService userService,
                                            @Lazy CartService cartService, LoginThrottle loginThrottle,
                                            @Value("${medizon.monitoring.token:}") String monitoringToken,
-                                           @Value("${medizon.security.remember-me-key:}") String rememberMeKey) throws Exception {
+                                           MediZonRememberMeServices rememberMeServices) throws Exception {
         http
             // Refuses sign-in while an email or address is locked out for too many wrong passwords
             .addFilterBefore(loginThrottleFilter(loginThrottle), UsernamePasswordAuthenticationFilter.class)
@@ -117,7 +118,10 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**").hasRole("ADMIN")
                 // Browsers report JavaScript errors and page load times, signed in or not
                 .requestMatchers("/api/monitoring/**").permitAll()
-                .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/register", "/login", "/forgot-password", "/verify-code", "/reset-password", "/resend-code", "/api/auth/**",
+                // The Android app's background sync and alarm screen: a bearer sync token, checked in AppApi
+                .requestMatchers("/api/app/schedule", "/api/app/doses").permitAll()
+                .requestMatchers("/api/app/link", "/api/app/unlink").hasRole("CUSTOMER")
+                .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/settings", "/register", "/login", "/forgot-password", "/verify-code", "/reset-password", "/resend-code", "/api/auth/**",
                         "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/error").permitAll()
                 // Site icons, also under their content-hashed names (favicon-3f9a….svg) from the resource chain
                 .requestMatchers("/favicon*", "/apple-touch-icon*").permitAll()
@@ -146,8 +150,8 @@ public class SecurityConfig {
                         "/prescriptions/**", "/support", "/support/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**",
                         "/stock-alerts/**", "/api/stock-alerts/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
-            // sendBeacon can't send the CSRF header; these endpoints only record telemetry
-            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**", "/api/auth/**"))
+            // sendBeacon can't send the CSRF header (telemetry); the app's sync sends a bearer token and no cookies
+            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**", "/api/auth/**", "/api/app/schedule", "/api/app/doses"))
             // On top of Spring's defaults (nosniff, X-Frame-Options DENY, HSTS over HTTPS, no-store)
             .headers(headers -> headers
                 .addHeaderWriter((request, response) -> response.setHeader("Content-Security-Policy",
@@ -171,10 +175,10 @@ public class SecurityConfig {
                 // The "Delivers to" location belongs to whoever picked it: signing out goes back to "Select location"
                 .deleteCookies("mz_pin", "mz_loc", "mz_addr", "mz_loc_by")
                 .permitAll())
+            // Website: the "Keep me signed in" box, 14 days. Android app: always, until the user signs out
             .rememberMe(rm -> rm
-                .key(rememberMeKey(rememberMeKey))
-                .userDetailsService(userDetailsService)
-                .tokenValiditySeconds(14 * 24 * 3600))
+                .rememberMeServices(rememberMeServices)
+                .key(rememberMeServices.getKey()))
             .requestCache(cache -> cache.requestCache(pageVisitsOnly()))
             .sessionManagement(session -> session
                 .maximumSessions(-1)            // no limit on concurrent sessions per account
@@ -275,6 +279,12 @@ public class SecurityConfig {
      * database backup) could forge a sign-in cookie. Without REMEMBER_ME_KEY a random key is made at startup, which is
      * safe but signs everyone's "Keep me signed in" out on every restart.
      */
+    @Bean
+    public MediZonRememberMeServices rememberMeServices(AppUserDetailsService userDetailsService, UserRepository users,
+                                                        @Value("${medizon.security.remember-me-key:}") String key) {
+        return new MediZonRememberMeServices(rememberMeKey(key), userDetailsService, users);
+    }
+
     private static String rememberMeKey(String configured) {
         if (!configured.isBlank()) return configured;
         log.warn("REMEMBER_ME_KEY isn't set: using a random key, so \"Keep me signed in\" ends when the app restarts");

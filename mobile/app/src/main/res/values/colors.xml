@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mz_header">#0B3B31</color>
+    <color name="mz_green">#0E6B57</color>
+    <color name="mz_green_dark">#0A4E40</color>
+    <color name="mz_mint">#E6F2EC</color>
+    <color name="mz_mint_icon">#BFE6D3</color>
+    <color name="mz_page">#F6F9F7</color>
+    <color name="mz_ink">#17302A</color>
+    <color name="mz_amber">#E89A2C</color>
+    <color name="mz_red">#B83A3A</color>
+    <color name="mz_white">#FFFFFF</color>
+    <color name="mz_white_80">#CCFFFFFF</color>
+    <color name="mz_ink_muted">#5B6F69</color>
+
+    <!-- Theme-dependent colours (dark values in values-night/colors.xml) -->
+    <color name="mz_bg">#F6F9F7</color>
+    <color name="mz_surface">#F6F9F7</color>
+    <color name="mz_text">#17302A</color>
+    <color name="mz_text2">#5B6F69</color>
+    <color name="mz_divider">#14000000</color>
+    <color name="mz_accent">#0E6B57</color>
+    <color name="mz_navbar">#FFFFFF</color>
+    <color name="mz_switch_off">#F4F4F4</color>
+    <color name="mz_track_off">#33000000</color>
+    <bool name="mz_light_nav">true</bool>
+</resources>

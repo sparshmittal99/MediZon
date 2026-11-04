@@ -38,8 +38,17 @@ public class MedicationPlan {
     @ManyToOne
     private Member member;
 
-    @ManyToOne(optional = false)
+    /** The catalogue medicine; null for one the customer typed in ("Other"), which has {@link #customName} instead. */
+    @ManyToOne
     private Medicine medicine;
+
+    /** Name of a medicine not bought here, typed in by the customer. */
+    @Column(length = 100)
+    private String customName;
+
+    /** Unit of a typed-in medicine: "tablet(s)", "ml" ... */
+    @Column(length = 20)
+    private String customUnit;
 
     /** Units (tablets / ml ...) per intake. */
     private int dosePerIntake = 1;
@@ -253,8 +262,26 @@ public class MedicationPlan {
         return (int) Math.min(100, Math.round(d / 30.0 * 100));
     }
 
+    /** Typed in by the customer, not bought here: no product page, refills or shelf moves. */
+    public boolean isCustom() { return medicine == null; }
+
+    public String getMedicineName() { return medicine != null ? medicine.getName() : customName; }
+
+    public String getUnitLabel() {
+        if (medicine != null) return medicine.getUnitLabel();
+        return customUnit == null || customUnit.isBlank() ? "unit(s)" : customUnit;
+    }
+
+    public String getMedicineIcon() {
+        if (medicine != null) return medicine.getIcon();
+        String u = getUnitLabel();
+        if (u.startsWith("ml") || u.startsWith("drop")) return "bi-droplet-half";
+        if (u.startsWith("capsule")) return "bi-capsule";
+        return "bi-capsule-pill";
+    }
+
     public String getDoseLabel() {
-        return dosePerIntake + " " + medicine.getUnitLabel();
+        return dosePerIntake + " " + getUnitLabel();
     }
 
     /** "Every day", "Mon, Wed, Fri" or "12 Oct, 19 Oct and 3 more". */
@@ -275,6 +302,6 @@ public class MedicationPlan {
 
     /** Medicine name plus whose it is, for alerts: "Metformin (Asha)". */
     public String getTitle() {
-        return medicine.getName() + (member == null ? "" : member.getSuffix());
+        return getMedicineName() + (member == null ? "" : member.getSuffix());
     }
 }

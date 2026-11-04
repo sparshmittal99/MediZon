@@ -20,6 +20,10 @@ public class User {
     @Column(nullable = false)
     private String fullName;
 
+    /** Bumped by "Sign out other devices" and password changes: ends every remembered sign-in (MediZonRememberMeServices). */
+    @Column(columnDefinition = "integer default 0 not null")
+    private int rememberEpoch;
+
     @Column(nullable = false, unique = true)
     private String email;
 

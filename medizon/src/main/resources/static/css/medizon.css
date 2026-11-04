@@ -1489,3 +1489,61 @@ body.mz-upi-open { overflow: hidden; }
 .mz-pw-match.ok { color: #0E6B57; background: #E6F5F0; border: 1px solid #A7F3D0; }
 .mz-pw-match.bad { color: #991B1B; background: #FEF2F2; border: 1px solid #FECACA; }
 .mz-code-input:not(:placeholder-shown) { letter-spacing: .35em; }
+
+/* ---------- Settings page (/settings): dark mode and language ---------- */
+/* Text size and reduced motion come from the Android app's settings (js/theme.js) */
+html[data-text="sm"] { font-size: 93.75%; }
+html[data-text="lg"] { font-size: 112.5%; }
+html[data-text="xl"] { font-size: 125%; }
+html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-motion="reduce"] *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important; scroll-behavior: auto !important;
+}
+
+.mz-set-group { margin-bottom: 1.6rem; }
+.mz-set-title { margin: 0 0 .5rem .3rem; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--mz-muted); }
+.mz-set-list { background: var(--mz-surface, #fff); border: 1px solid var(--mz-line); border-radius: 1rem; overflow: hidden; }
+.mz-set-row { display: flex; align-items: center; gap: .9rem; padding: .85rem 1rem; margin: 0; }
+.mz-set-row + .mz-set-row { border-top: 1px solid var(--mz-line); }
+.mz-set-ico { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 2.3rem; height: 2.3rem;
+    border-radius: .75rem; background: var(--mz-mint); color: var(--mz-green); font-size: 1.1rem; }
+.mz-set-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .05rem; }
+.mz-set-label { margin: 0; font-weight: 600; color: var(--mz-ink); cursor: pointer; }
+.mz-set-hint { font-size: .85rem; color: var(--mz-muted); }
+.mz-set-select { flex: none; width: auto; min-width: 14rem; max-width: 100%; border-radius: .7rem; }
+@media (max-width: 575.98px) {
+    .mz-set-row-stack { flex-wrap: wrap; }
+    .mz-set-select { flex: 1 1 100%; min-width: 0; }
+}
+
+/* Dark mode switch: sun and moon in the track, the knob slides under the one that's on */
+.mz-theme-switch { position: relative; flex: none; margin: 0; cursor: pointer; }
+.mz-theme-switch input { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.mz-theme-track { position: relative; display: flex; align-items: center; justify-content: space-between; width: 4.3rem; height: 2.25rem;
+    padding: 0 .62rem; border: 1px solid #F3CF96; border-radius: 2rem; background: #FDF1DE; transition: background-color .25s ease, border-color .25s ease; }
+.mz-theme-track i { position: relative; z-index: 1; font-size: .95rem; line-height: 1; transition: color .25s ease; }
+.mz-theme-track .bi-sun-fill { color: #E89A2C; }
+.mz-theme-track .bi-moon-fill { color: #B9A98A; }
+.mz-theme-knob { position: absolute; top: .18rem; left: .2rem; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 4px rgba(23, 48, 42, .25); transition: transform .28s cubic-bezier(.4, 0, .2, 1), background-color .25s ease; }
+.mz-theme-switch input:checked + .mz-theme-track { background: #0B3B31; border-color: #0B3B31; }
+.mz-theme-switch input:checked + .mz-theme-track .mz-theme-knob { transform: translateX(2.05rem); background: #1D3A33; }
+.mz-theme-switch input:checked + .mz-theme-track .bi-moon-fill { color: #FDE68A; }
+.mz-theme-switch input:checked + .mz-theme-track .bi-sun-fill { color: rgba(255, 255, 255, .4); }
+.mz-theme-switch input:focus-visible + .mz-theme-track { outline: 3px solid rgba(14, 107, 87, .45); outline-offset: 2px; }
+/* Smaller, in the footer next to the language picker (signed out only) */
+.mz-theme-switch-sm { margin-left: .6rem; }
+.mz-theme-switch-sm .mz-theme-track { width: 3.6rem; height: 1.95rem; padding: 0 .5rem; border-color: rgba(255,255,255,.25); background: rgba(255,255,255,.08); }
+.mz-theme-switch-sm .mz-theme-track i { font-size: .8rem; }
+.mz-theme-switch-sm .bi-sun-fill { color: #FDE68A; }
+.mz-theme-switch-sm .bi-moon-fill { color: rgba(255,255,255,.55); }
+.mz-theme-switch-sm .mz-theme-knob { top: .16rem; left: .18rem; width: 1.55rem; height: 1.55rem; background: rgba(255,255,255,.22); box-shadow: none; }
+.mz-theme-switch-sm input:checked + .mz-theme-track .mz-theme-knob { transform: translateX(1.62rem); }
+@media (max-width: 575.98px) { .mz-lang .form-select { flex: 1; } }
+
+/* ---------- Scheduled downtime banner (MaintenanceService) ---------- */
+.mz-maint { background: var(--mz-amber-soft); border-bottom: 1px solid #F3CF96; color: #6B4100; font-size: .88rem; }
+.mz-maint .container { display: flex; align-items: center; gap: .6rem; padding-top: .5rem; padding-bottom: .5rem; }
+.mz-maint > .container > i { font-size: 1rem; flex: none; }
+.mz-maint > .container > span { flex: 1; min-width: 0; font-weight: 600; }
+.mz-maint .btn-close { flex: none; font-size: .65rem; }

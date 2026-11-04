@@ -83,6 +83,7 @@ public class NotificationService {
                 case SUPPORT_UPDATE, SUPPORT_TICKET -> "Support Desk";
                 case ERROR_ALERT -> "System Alert";
                 case ORDER_UPDATE -> "Order & Payment";
+                case MAINTENANCE -> "Scheduled Maintenance";
                 case INFO -> (title != null && title.toLowerCase().contains("password")) ? "Security Alert" : "Update";
                 default -> "Notification";
             };

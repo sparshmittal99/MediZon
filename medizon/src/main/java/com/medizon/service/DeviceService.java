@@ -104,6 +104,7 @@ public class DeviceService {
     /** "Chrome on Windows" from a User-Agent header; good enough to tell a family's devices apart. */
     static String describe(String ua) {
         if (ua == null) return "This device";
+        if (ua.contains("MediZonApp")) return "MediZon app on Android";
         String browser = ua.contains("Edg/") ? "Edge" : ua.contains("OPR/") ? "Opera" : ua.contains("Firefox/") ? "Firefox"
                 : ua.contains("Chrome/") ? "Chrome" : ua.contains("Safari/") ? "Safari" : "Browser";
         String os = ua.contains("Android") ? "Android" : ua.contains("iPhone") ? "iPhone" : ua.contains("iPad") ? "iPad"
