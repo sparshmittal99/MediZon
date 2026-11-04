@@ -154,6 +154,50 @@
     // alert() from any page script: the same pop-up instead of the browser's box
     window.alert = (message) => popup('info', String(message ?? ''));
 
+    // ---- Feedback the moment a page is requested ----
+    // The app's own loading bar only starts once the server begins answering; for a form (Sign in, Save...) the
+    // whole wait showed nothing, so it looked frozen. Show a bar at once, and a spinner on the button that was used.
+    let busyBar = null;
+    const busy = (button) => {
+        if (!busyBar) {
+            busyBar = document.createElement('div');
+            busyBar.className = 'mz-app-busy';
+            busyBar.setAttribute('role', 'progressbar');
+            busyBar.setAttribute('aria-label', 'Loading');
+            document.body.appendChild(busyBar);
+        }
+        busyBar.hidden = false;
+        clearTimeout(busy.timer);
+        busy.timer = setTimeout(idle, 30000);   // a download, or a page that never came: don't leave it spinning
+        if (button && !button.classList.contains('is-busy')) {
+            button.classList.add('is-busy');
+            button.insertAdjacentHTML('afterbegin', '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>');
+        }
+    };
+    const idle = () => {
+        if (busyBar) busyBar.hidden = true;
+        document.querySelectorAll('.is-busy').forEach(b => { b.classList.remove('is-busy'); b.querySelector('.spinner-border')?.remove(); });
+    };
+    // Forms that really navigate (not ones a script handles itself, or that open in a new window)
+    document.addEventListener('submit', (e) => {
+        const form = e.target;
+        setTimeout(() => {
+            if (e.defaultPrevented || form.target === '_blank' || form.closest('[data-mz-no-busy]')) return;
+            busy(e.submitter || form.querySelector('button[type=submit], button:not([type])'));
+        }, 0);
+    });
+    // Links to another page of the site
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest('a[href]');
+        if (!a || e.defaultPrevented || a.target === '_blank' || a.hasAttribute('download') || a.dataset.bsToggle) return;
+        const url = new URL(a.href, location.href);
+        if (url.origin !== location.origin || (url.pathname === location.pathname && url.search === location.search)) return;
+        setTimeout(() => { if (!e.defaultPrevented) busy(null); }, 0);
+    });
+    // Back from the next page (or a form that didn't navigate after all): clear it
+    window.addEventListener('pageshow', idle);
+    window.addEventListener('mzIdle', idle);
+
     // Invoices: Android's print dialog, which can also save a PDF
     window.print = () => call('print', document.title);
 

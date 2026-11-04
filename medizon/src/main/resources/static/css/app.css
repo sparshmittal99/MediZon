@@ -85,3 +85,10 @@ html.mz-kb body:has(.mz-tabbar) { padding-bottom: 0; }
 .mz-pop-ico.is-warn { background: var(--mz-amber-soft); color: #B26B0E; border-color: var(--mz-amber); }
 /* The toasts for new notifications become pop-ups too */
 .mz-toasts { display: none !important; }
+
+/* Loading bar at the top the moment a page is requested (app.js), and the tapped button stays put */
+.mz-app-busy { position: fixed; top: 0; left: 0; right: 0; z-index: 3000; height: 3px; overflow: hidden; background: rgba(124, 224, 180, .25); }
+.mz-app-busy::before { content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 40%; background: #7CE0B4;
+    animation: mz-app-busy 1s ease-in-out infinite; }
+@keyframes mz-app-busy { from { left: -40%; } to { left: 100%; } }
+.is-busy { pointer-events: none; opacity: .85; }
