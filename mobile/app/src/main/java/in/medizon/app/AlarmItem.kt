@@ -18,6 +18,19 @@ data class AlarmItem(
 ) {
     val isDose: Boolean get() = kind == "DOSE" && planId != null
 
+    /** The dose's scheduled instant (from `at`), or null for test alarms / bad data. */
+    val doseInstant: Long?
+        get() = if (at.isBlank()) null else try {
+            OffsetDateTime.parse(at).toInstant().toEpochMilli()
+        } catch (e: Exception) {
+            null
+        }
+
+    /** Sort key: newest scheduled time first everywhere (snoozed copies keep their dose time). */
+    val sortKey: Long get() = doseInstant ?: atMillis
+
+    fun isSameDose(planId: Long, instant: Long): Boolean = this.planId == planId && doseInstant == instant
+
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
         put("kind", kind)

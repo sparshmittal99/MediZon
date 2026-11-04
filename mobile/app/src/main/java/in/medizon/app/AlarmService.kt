@@ -47,10 +47,62 @@ class AlarmService : Service() {
         private fun due(c: Context): MutableList<AlarmItem> {
             dueCache?.let { return it }
             val cutoff = System.currentTimeMillis() - DUE_MAX_AGE_MS
-            return Store.dueAlarms(c).filter { it.atMillis > cutoff }.toMutableList().also { dueCache = it }
+            return Store.dueAlarms(c).filter { it.atMillis > cutoff }.sortedByDescending { it.sortKey }
+                .toMutableList().also { dueCache = it }
         }
 
         private fun saveDue(c: Context) = Store.saveDueAlarms(c, due(c))
+
+        /** Doses answered (here or on another device) in this process; AlarmActivity hides them. */
+        private val dismissedDoses = mutableSetOf<String>()
+
+        fun isDismissed(item: AlarmItem): Boolean {
+            val planId = item.planId ?: return false
+            val t = item.doseInstant ?: return false
+            return "$planId@$t" in dismissedDoses
+        }
+
+        /**
+         * A dose was answered (Taken/Skipped) on this phone, another phone or the website: remove every
+         * copy of it everywhere: due/ringing list, snoozes, future alarm, notifications, popup.
+         * Reads everything from the stores, so it works in a freshly started process. Main thread.
+         */
+        fun dismissDose(c: Context, planId: Long, at: String) {
+            val t = try { java.time.OffsetDateTime.parse(at).toInstant().toEpochMilli() } catch (e: Exception) { return }
+            dismissedDoses += "$planId@$t"
+            val removed = mutableListOf<AlarmItem>()
+
+            val list = due(c)
+            removed += list.filter { it.isSameDose(planId, t) }
+            if (list.removeAll { it.isSameDose(planId, t) }) saveDue(c)
+
+            Store.oneOffs(c).filter { it.isSameDose(planId, t) }.forEach {
+                AlarmScheduler.cancel(c, it.id)
+                Store.removeOneOff(c, it.id)
+                removed += it
+            }
+
+            synchronized(Store.lock) {
+                val schedule = Store.schedule(c)
+                val hit = schedule.filter { it.isSameDose(planId, t) }
+                if (hit.isNotEmpty()) {
+                    hit.forEach { AlarmScheduler.cancel(c, it.id) }
+                    Store.saveSchedule(c, schedule.filter { !it.isSameDose(planId, t) })
+                    removed += hit
+                }
+            }
+
+            removed.forEach { Notifications.cancelReminder(c, it) }
+            Notifications.cancelDoseNotifications(c, planId, t)
+
+            val svc = instance
+            if (svc != null) {
+                svc.afterRemove() // stops ringing when nothing is left, else refreshes the notification
+            } else {
+                showPendingOrCancel(c)
+                listener?.invoke()
+            }
+        }
 
         /** Alarms that went off and are not answered yet (ringing or silenced). */
         fun activeAlarms(c: Context): List<AlarmItem> = due(c).toList()
@@ -130,7 +182,7 @@ class AlarmService : Service() {
         if (item != null) {
             list.removeAll { it.id == item.id }
             list.add(item)
-            list.sortBy { it.atMillis }
+            list.sortByDescending { it.sortKey } // newest scheduled dose first
             saveDue(this)
         }
         if (item == null || list.isEmpty()) {

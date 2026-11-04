@@ -27,6 +27,22 @@ object Notifications {
 
     fun reminderNotificationId(item: AlarmItem) = ("rem-" + item.id).hashCode()
 
+    private const val EXTRA_PLAN_ID = "in.medizon.app.planId"
+    private const val EXTRA_DOSE_AT = "in.medizon.app.doseAt"
+
+    /** Cancels notification-only reminders for this dose, found by the extras they carry. */
+    fun cancelDoseNotifications(c: Context, planId: Long, instant: Long) {
+        val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        try {
+            nm.activeNotifications.forEach { sbn ->
+                val x = sbn.notification.extras
+                if (x.getLong(EXTRA_PLAN_ID, -1L) == planId && x.getLong(EXTRA_DOSE_AT, -1L) == instant) {
+                    nm.cancel(sbn.tag, sbn.id)
+                }
+            }
+        } catch (e: Exception) { /* best effort */ }
+    }
+
     /** Opens the popup for whatever is ringing in AlarmService. */
     fun alarmActivityIntent(c: Context): PendingIntent = PendingIntent.getActivity(
         c, 7001,
@@ -209,6 +225,13 @@ object Notifications {
             .setShowWhen(true)
             .setContentIntent(silentPopupIntent(c, item))
         addAnswerActions(c, b, item)
+        val instant = item.doseInstant
+        if (item.planId != null && instant != null) {
+            b.addExtras(android.os.Bundle().apply {
+                putLong(EXTRA_PLAN_ID, item.planId)
+                putLong(EXTRA_DOSE_AT, instant)
+            })
+        }
         try {
             NotificationManagerCompat.from(c).notify(reminderNotificationId(item), b.build())
         } catch (e: SecurityException) { /* notifications not permitted */ }

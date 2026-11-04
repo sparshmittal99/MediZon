@@ -122,6 +122,16 @@ class PushService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val d = message.data
         if (d.isEmpty()) return
+        // A dose was answered on another phone or the website: stop it here too. No notification.
+        if (d["type"] == "DOSE_DONE") {
+            val planId = d["planId"]?.trim()?.toLongOrNull()
+            val at = d["at"]?.trim()
+            if (planId != null && !at.isNullOrEmpty()) {
+                val app = applicationContext
+                android.os.Handler(android.os.Looper.getMainLooper()).post { AlarmService.dismissDose(app, planId, at) }
+            }
+            return
+        }
         // A medicine or reminder changed (on any device): fetch the schedule now so the alarms are right
         if (d["type"] == "SYNC") {
             Sync.syncNow(applicationContext)

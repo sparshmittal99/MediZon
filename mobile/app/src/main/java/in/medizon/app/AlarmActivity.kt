@@ -116,7 +116,9 @@ class AlarmActivity : AppCompatActivity() {
 
     private fun items(): List<AlarmItem> {
         val ringing = AlarmService.activeAlarms(this)
-        return (ringing + silentItems.filter { s -> ringing.none { it.id == s.id } }).sortedBy { it.atMillis }
+        silentItems.removeAll { AlarmService.isDismissed(it) } // answered elsewhere
+        return (ringing + silentItems.filter { s -> ringing.none { it.id == s.id } })
+            .sortedByDescending { it.sortKey } // newest scheduled dose first: "1 of N" is the latest
     }
 
     private fun render() {

@@ -24,6 +24,10 @@ object AlarmActions {
             DISMISS -> null
             else -> return null
         }
+        // Same removal as when another device answers (DOSE_DONE push): all copies of this dose go.
+        if ((action == TAKEN || action == SKIP) && item.planId != null && item.at.isNotBlank()) {
+            AlarmService.dismissDose(c, item.planId, item.at)
+        }
         Notifications.cancelReminder(c, item)
         AlarmService.resolve(c, item.id)
         return msg
