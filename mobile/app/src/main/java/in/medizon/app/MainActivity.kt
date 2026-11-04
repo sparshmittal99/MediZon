@@ -734,8 +734,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun deliverFiles(uris: Array<Uri>?) {
-        fileCallback?.onReceiveValue(uris)
+        val callback = fileCallback ?: return
         fileCallback = null
+        if (uris == null) { callback.onReceiveValue(null); return }
+        // Big phone photos are shrunk first (off the main thread): over 5 MB the upload is refused
+        Thread {
+            val ready = ImageShrink.shrinkAll(applicationContext, uris)
+            runOnUiThread { callback.onReceiveValue(ready) }
+        }.start()
     }
 
     private fun cleanOldCameraFiles() {
