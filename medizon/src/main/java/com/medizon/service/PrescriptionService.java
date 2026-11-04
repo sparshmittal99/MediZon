@@ -9,6 +9,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
@@ -349,17 +351,33 @@ public class PrescriptionService {
         line.setPrescribedBy(by.isEmpty() ? null : by.length() > 300 ? by.substring(0, 299) + "…" : by);
     }
 
-    /** After an order: any prescription now fully ordered is used up, and the customer is told. */
+    /**
+     * After an order: any prescription now fully ordered is used up, and the customer is told. Its file is deleted
+     * (quietly) once the order is saved; the medicines, doctor and date stay on the record and the invoice.
+     */
     @Transactional
     public void finishUse(Collection<Prescription> used) {
         for (Prescription rx : used) {
             if (rx.getStatus() == PrescriptionStatus.APPROVED && rx.isFullyOrdered()) {
                 rx.setStatus(PrescriptionStatus.USED_UP);
+                deleteFileAfterCommit(rx.getStoredFileName());
                 notifications.notify(rx.getUser(), NotificationType.PRESCRIPTION_UPDATE, "Prescription used up",
                         "Everything on your prescription " + describe(rx) + " has now been ordered. Upload a new prescription "
                                 + "to order prescription medicines again.", "/prescriptions");
             }
         }
+    }
+
+    /** Deletes only if the order commits: a failed checkout leaves the prescription approved, with its file. */
+    private void deleteFileAfterCommit(String name) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            storage.delete(name);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() { storage.delete(name); }
+        });
     }
 
     /** A cancelled order gives its packs back to the prescriptions it used, which are usable again if they were used up. */

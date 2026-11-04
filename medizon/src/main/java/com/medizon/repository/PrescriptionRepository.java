@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -29,4 +30,11 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, Long
     List<Prescription> findByStatusOrderByUploadedAtAsc(PrescriptionStatus status);
     List<Prescription> findTop30ByStatusInOrderByReviewedAtDesc(Collection<PrescriptionStatus> statuses);
     long countByStatus(PrescriptionStatus status);
+
+    /** Files still needed: drafts, pending and approved prescriptions, and ones rejected after {@code since}. */
+    @Query("""
+            select p.storedFileName from Prescription p where p.removed = false and (p.status in :inUse
+              or (p.status = :rejected and (p.reviewedAt is null or p.reviewedAt > :since)))""")
+    List<String> fileNamesInUse(@Param("inUse") Collection<PrescriptionStatus> inUse,
+                                @Param("rejected") PrescriptionStatus rejected, @Param("since") LocalDateTime since);
 }

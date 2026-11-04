@@ -49,7 +49,7 @@
                                 <i class="bi bi-send me-1"></i>Check and send</a>
                             <a th:if="${p.status.name() != 'DRAFT' and (aiEnabled or p.aiReading != null or p.limited)}" th:href="@{/prescriptions/{id}(id=${p.id})}" class="btn btn-sm btn-primary me-1">
                                 <i class="bi bi-capsule me-1"></i>Medicines</a>
-                            <a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">View</a>
+                            <a th:if="${@fileStorageService.exists(p.storedFileName)}" th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">View</a>
                             <form th:action="@{/prescriptions/{id}/remove(id=${p.id})}" method="post" class="d-inline"
                                   th:attr="data-mz-confirm=${p.status.name() == 'APPROVED'} ? 'Remove this prescription? Its medicines can no longer be ordered with it; you would need to upload it again.' : 'Remove this prescription?'"
                                   data-mz-confirm-title="Remove prescription" data-mz-confirm-ok="Remove">

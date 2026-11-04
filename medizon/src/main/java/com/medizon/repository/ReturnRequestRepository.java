@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,4 +42,12 @@ public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Lo
     BigDecimal totalRefunded(@Param("refunded") ReturnStatus refunded);
 
     List<ReturnRequest> findByStatusAndRefundDueOnLessThanEqual(ReturnStatus status, LocalDate day);
+
+    /** Photos still needed: returns being worked on, and ones rejected or refunded after {@code since}. */
+    @Query("""
+            select i.storedFileName from ReturnRequest r join r.images i where r.status in :open
+              or (r.status = :rejected and (r.decidedAt is null or r.decidedAt > :since))
+              or (r.status = :refunded and (r.refundedAt is null or r.refundedAt > :since))""")
+    List<String> photoNamesInUse(@Param("open") Collection<ReturnStatus> open, @Param("rejected") ReturnStatus rejected,
+                                 @Param("refunded") ReturnStatus refunded, @Param("since") LocalDateTime since);
 }

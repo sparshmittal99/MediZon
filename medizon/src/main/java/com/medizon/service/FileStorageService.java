@@ -6,12 +6,15 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -102,6 +105,30 @@ public class FileStorageService {
         Path p = root.resolve(name).normalize();
         if (!p.startsWith(root)) return;
         try { Files.deleteIfExists(p); } catch (IOException ignored) { }
+    }
+
+    /**
+     * Stored names of private uploads (prescriptions, return and ticket photos) last written before the cutoff.
+     * Medicine images are public catalogue photos and never listed.
+     */
+    public List<String> privateFilesOlderThan(Instant cutoff) throws IOException {
+        try (var paths = Files.walk(root)) {
+            return paths.filter(Files::isRegularFile)
+                    .filter(f -> !f.startsWith(imageRoot))
+                    .filter(f -> {
+                        try { return Files.getLastModifiedTime(f).toInstant().isBefore(cutoff); }
+                        catch (IOException e) { return false; }
+                    })
+                    .map(f -> root.relativize(f).toString().replace(File.separatorChar, '/'))
+                    .toList();
+        }
+    }
+
+    /** Whether a private upload is still on disk: files are deleted after use, and the server's disk on restart. */
+    public boolean exists(String name) {
+        if (name == null || name.isBlank()) return false;
+        Path p = root.resolve(name).normalize();
+        return p.startsWith(root) && Files.isRegularFile(p);
     }
 
     public Resource load(String name) {

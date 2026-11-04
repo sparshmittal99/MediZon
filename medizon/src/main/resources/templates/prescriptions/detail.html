@@ -22,7 +22,7 @@
             </p>
         </div>
         <div class="d-flex gap-2">
-            <a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">
+            <a th:if="${@fileStorageService.exists(p.storedFileName)}" th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">
                 <i class="bi bi-file-earmark-medical me-1"></i>View file</a>
             <form th:action="@{/prescriptions/{id}/remove(id=${p.id})}" method="post"
                   th:attr="data-mz-confirm=${p.status.name() == 'APPROVED'} ? 'Remove this prescription? Its medicines can no longer be ordered with it; you would need to upload it again.' : 'Remove this prescription?'"

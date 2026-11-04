@@ -29,9 +29,13 @@
             </div>
             <div class="mz-msg-body" th:text="${m.body}">Message</div>
             <div class="mz-msg-photos" th:unless="${#lists.isEmpty(m.attachments)}">
-                <a th:each="a, p : ${m.attachments}" th:href="@{/support/attachments/{m}/{i}(m=${m.id}, i=${p.index})}" target="_blank" rel="noopener">
-                    <img th:src="@{/support/attachments/{m}/{i}(m=${m.id}, i=${p.index})}" th:alt="'Photo ' + ${p.count}" loading="lazy">
-                </a>
+                <th:block th:each="a, p : ${m.attachments}">
+                    <a th:if="${@fileStorageService.exists(a.storedFileName)}" th:href="@{/support/attachments/{m}/{i}(m=${m.id}, i=${p.index})}" target="_blank" rel="noopener">
+                        <img th:src="@{/support/attachments/{m}/{i}(m=${m.id}, i=${p.index})}" th:alt="'Photo ' + ${p.count}" loading="lazy">
+                    </a>
+                    <span th:unless="${@fileStorageService.exists(a.storedFileName)}" class="small text-muted">
+                        <i class="bi bi-image me-1" aria-hidden="true"></i><span th:text="'Photo ' + ${p.count} + ' was attached'">Photo 1 was attached</span></span>
+                </th:block>
             </div>
         </th:block>
     </li>

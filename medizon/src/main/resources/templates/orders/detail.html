@@ -186,7 +186,7 @@
                 <p class="small text-muted mb-0" th:if="${o.gatewayPaymentId != null}" th:text="'Payment id ' + ${o.gatewayPaymentId}"></p>
                 <p class="small text-muted mb-0" th:if="${o.gatewayRefundId != null}" th:text="'Refund id ' + ${o.gatewayRefundId}"></p>
                 <p class="small text-success mb-0" th:if="${o.discounted}" th:text="'You saved ₹' + ${o.discount} + ' with ' + ${o.couponCode}"></p>
-                <p th:each="rx : ${o.prescriptionsUsed}" sec:authorize="hasAnyRole('CUSTOMER','ADMIN','PHARMACIST')" class="small mt-3 mb-0">
+                <p th:each="rx : ${o.prescriptionsUsed}" th:if="${@fileStorageService.exists(rx.storedFileName)}" sec:authorize="hasAnyRole('CUSTOMER','ADMIN','PHARMACIST')" class="small mt-3 mb-0">
                     <i class="bi bi-file-earmark-medical"></i>
                     <a th:href="@{/prescriptions/{id}/file(id=${rx.id})}" target="_blank" rel="noopener"
                        th:text="'View prescription' + (${rx.doctorName != null} ? ' (Dr. ' + ${rx.doctorName} + ')' : '')">View prescription</a>

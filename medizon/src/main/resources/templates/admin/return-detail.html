@@ -54,9 +54,13 @@
             <section class="mz-panel">
                 <h2 class="h6">Photos</h2>
                 <div class="mz-photo-grid">
-                    <a th:each="img, s : ${r.images}" th:href="@{/returns/{id}/images/{i}(id=${r.id}, i=${s.index})}" target="_blank" rel="noopener">
-                        <img th:src="@{/returns/{id}/images/{i}(id=${r.id}, i=${s.index})}" th:alt="'Return photo ' + ${s.count}" loading="lazy">
-                    </a>
+                    <th:block th:each="img, s : ${r.images}">
+                        <a th:if="${@fileStorageService.exists(img.storedFileName)}" th:href="@{/returns/{id}/images/{i}(id=${r.id}, i=${s.index})}" target="_blank" rel="noopener">
+                            <img th:src="@{/returns/{id}/images/{i}(id=${r.id}, i=${s.index})}" th:alt="'Return photo ' + ${s.count}" loading="lazy">
+                        </a>
+                        <span th:unless="${@fileStorageService.exists(img.storedFileName)}" class="small text-muted">
+                            <i class="bi bi-image me-1" aria-hidden="true"></i><span th:text="'Photo ' + ${s.count} + ' was attached'">Photo 1 was attached</span></span>
+                    </th:block>
                 </div>
             </section>
         </div>
