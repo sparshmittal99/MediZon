@@ -111,6 +111,14 @@ object Store {
     fun askedNotifications(c: Context) = prefs(c).getBoolean(K_ASKED_NOTIF, false)
     fun setAskedNotifications(c: Context) = prefs(c).edit().putBoolean(K_ASKED_NOTIF, true).apply()
 
+    // ---- alarms that went off and are not answered yet ----
+    fun dueAlarms(c: Context): List<AlarmItem> = readItems(c, "dueAlarms")
+    fun saveDueAlarms(c: Context, items: List<AlarmItem>) = writeItems(c, "dueAlarms", items)
+
+    // ---- FCM token last sent to the server ----
+    fun lastPushToken(c: Context): String? = prefs(c).getString("lastPushToken", null)
+    fun setLastPushToken(c: Context, token: String?) = prefs(c).edit().putString("lastPushToken", token).apply()
+
     // ---- announcement notices already shown ----
     fun shownNotices(c: Context): Set<String> = prefs(c).getStringSet("shownNotices", emptySet())?.toSet() ?: emptySet()
     fun setShownNotices(c: Context, ids: Set<String>) = prefs(c).edit().putStringSet("shownNotices", HashSet(ids)).apply()

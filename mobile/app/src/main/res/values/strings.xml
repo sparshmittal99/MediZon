@@ -18,6 +18,8 @@
     <string name="channel_calls_desc">Rings like an incoming call when a medicine dose or reminder is due.</string>
     <string name="channel_reminders">Medicine reminders</string>
     <string name="channel_reminders_desc">Notification only (when Ring phone is off in Settings).</string>
+    <string name="channel_updates">Updates</string>
+    <string name="channel_updates_desc">Order, prescription, support and stock updates from MediZon.</string>
     <string name="channel_announcements">Announcements</string>
     <string name="channel_announcements_desc">MediZon news such as scheduled downtime.</string>
     <string name="channel_missed">Missed alarms</string>

@@ -62,7 +62,7 @@ class SettingsActivity : AppCompatActivity() {
         val data = res.data ?: return@registerForActivityResult
         if (res.resultCode != RESULT_OK) return@registerForActivityResult
         val uri = IntentCompat.getParcelableExtra(data, RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
-        AppSettings.setRingtone(this, if (uri == null || uri == Settings.System.DEFAULT_RINGTONE_URI) null else uri)
+        if (uri != null) AppSettings.setRingtoneSetting(this, uri.toString())
         refresh()
     }
 
@@ -295,7 +295,7 @@ class SettingsActivity : AppCompatActivity() {
     )
 
     private fun ringtoneTitle(): String {
-        val uri = AppSettings.ringtone(this) ?: return "Default ringtone"
+        val uri = AppSettings.ringtoneUri(this) ?: return "MediZon tring (default)"
         return try {
             RingtoneManager.getRingtone(this, uri)?.getTitle(this) ?: "Custom ringtone"
         } catch (e: Exception) {
@@ -307,13 +307,30 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun pickRingtone() {
         if (!AppSettings.ringPhone(this)) return
+        val current = if (AppSettings.ringtoneUri(this) == null) 0 else 1
+        AlertDialog.Builder(this)
+            .setTitle("Ringtone")
+            .setSingleChoiceItems(arrayOf("MediZon tring", "Choose a phone ringtone…"), current) { d, which ->
+                d.dismiss()
+                if (which == 0) {
+                    AppSettings.setRingtoneSetting(this, AppSettings.TRING)
+                    refresh()
+                } else {
+                    openRingtonePicker()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun openRingtonePicker() {
         val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
             putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_RINGTONE or RingtoneManager.TYPE_ALARM)
             putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Dose ringtone")
             putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
             putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
             putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, Settings.System.DEFAULT_RINGTONE_URI)
-            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, AppSettings.ringtone(this@SettingsActivity) ?: Settings.System.DEFAULT_RINGTONE_URI)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, AppSettings.ringtoneUri(this@SettingsActivity) ?: Settings.System.DEFAULT_RINGTONE_URI)
         }
         try { ringtonePicker.launch(intent) } catch (e: ActivityNotFoundException) { toast("No ringtone picker on this phone") }
     }

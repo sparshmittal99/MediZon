@@ -1,0 +1,14 @@
+# Copy this file to firebase.properties (gitignored) and fill in the four values from your
+# Firebase project. Leave them blank to build without push notifications.
+#
+# Where to find each value (google-services.json is downloaded from Firebase console ->
+# Project settings -> General -> Your apps -> the Android app "in.medizon.app"):
+#   firebase.apiKey    = client[0].api_key[0].current_key        (starts with "AIza")
+#   firebase.appId     = client[0].client_info.mobilesdk_app_id  (looks like 1:123456789012:android:0a1b2c...)
+#                        also shown as "App ID" on the same console page
+#   firebase.projectId = project_info.project_id                 (console: "Project ID")
+#   firebase.senderId  = project_info.project_number             (console: Project settings -> Cloud Messaging -> "Sender ID")
+firebase.apiKey=
+firebase.appId=
+firebase.projectId=
+firebase.senderId=

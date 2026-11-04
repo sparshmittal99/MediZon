@@ -26,8 +26,9 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 
 /**
- * Foreground service that rings: looping alarm-stream audio, repeating vibration, a full-screen
- * notification. Holds every alarm that is currently ringing (several can fire at the same minute).
+ * Foreground service that rings: looping alarm-stream audio, call-like vibration, an incoming-call
+ * notification. The list of due (unanswered) alarms is persisted, so after the ring stops (timeout,
+ * Back/Home on the popup) a silent notification keeps them and the popup can be reopened.
  * All state is touched on the main thread only.
  */
 class AlarmService : Service() {
@@ -35,14 +36,26 @@ class AlarmService : Service() {
     companion object {
         private const val TAG = "MediZonAlarmService"
         private const val ACTION_FIRE = "in.medizon.app.action.SERVICE_FIRE"
+        private const val DUE_MAX_AGE_MS = 12 * 60 * 60 * 1000L
 
         @Volatile private var instance: AlarmService? = null
-        private val active = mutableListOf<AlarmItem>()
+        private var dueCache: MutableList<AlarmItem>? = null
 
         /** Called by AlarmActivity to re-render when the list changes. Main thread only. */
         var listener: (() -> Unit)? = null
 
-        fun activeAlarms(): List<AlarmItem> = active.toList()
+        private fun due(c: Context): MutableList<AlarmItem> {
+            dueCache?.let { return it }
+            val cutoff = System.currentTimeMillis() - DUE_MAX_AGE_MS
+            return Store.dueAlarms(c).filter { it.atMillis > cutoff }.toMutableList().also { dueCache = it }
+        }
+
+        private fun saveDue(c: Context) = Store.saveDueAlarms(c, due(c))
+
+        /** Alarms that went off and are not answered yet (ringing or silenced). */
+        fun activeAlarms(c: Context): List<AlarmItem> = due(c).toList()
+
+        fun isRinging(): Boolean = instance?.player != null || instance?.vibrator != null
 
         fun fire(c: Context, item: AlarmItem) {
             val i = Intent(c, AlarmService::class.java).setAction(ACTION_FIRE)
@@ -52,11 +65,41 @@ class AlarmService : Service() {
 
         /** The user answered [id]: drop it; stop ringing when nothing is left. */
         fun resolve(c: Context, id: String) {
+            val list = due(c)
+            list.removeAll { it.id == id }
+            saveDue(c)
             val svc = instance
-            if (svc != null) svc.remove(id) else {
-                active.removeAll { it.id == id }
-                NotificationManagerCompat.from(c).cancel(Notifications.RINGING_ID)
+            if (svc != null) {
+                svc.afterRemove()
+            } else {
+                showPendingOrCancel(c)
                 listener?.invoke()
+            }
+        }
+
+        /** Stop sound + vibration now, keep the alarms in a silent notification. */
+        fun silence(c: Context) {
+            instance?.silenceNow() ?: showPendingOrCancel(c)
+        }
+
+        /** The silent notification was swiped away: forget the unanswered alarms. */
+        fun clearDue(c: Context) {
+            due(c).clear()
+            saveDue(c)
+            instance?.stopAll()
+            NotificationManagerCompat.from(c).cancel(Notifications.RINGING_ID)
+            listener?.invoke()
+        }
+
+        private fun showPendingOrCancel(c: Context) {
+            val list = due(c)
+            val nm = NotificationManagerCompat.from(c)
+            if (list.isEmpty()) {
+                nm.cancel(Notifications.RINGING_ID)
+            } else {
+                try {
+                    nm.notify(Notifications.RINGING_ID, Notifications.pending(c, list))
+                } catch (e: SecurityException) { /* notifications off */ }
             }
         }
     }
@@ -66,7 +109,7 @@ class AlarmService : Service() {
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var focusRequest: AudioFocusRequest? = null
-    private val timeout = Runnable { onTimeout() }
+    private val timeout = Runnable { silenceNow() }
 
     private val alarmAttrs: AudioAttributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_ALARM)
@@ -81,13 +124,16 @@ class AlarmService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        instance = this
         val item = AlarmItem.fromIntent(intent)
+        val list = due(this)
         if (item != null) {
-            active.removeAll { it.id == item.id }
-            active.add(item)
-            active.sortBy { it.atMillis }
+            list.removeAll { it.id == item.id }
+            list.add(item)
+            list.sortBy { it.atMillis }
+            saveDue(this)
         }
-        if (active.isEmpty()) {
+        if (item == null || list.isEmpty()) {
             // Must still satisfy the startForegroundService contract before stopping.
             goForeground(
                 NotificationCompat.Builder(this, Notifications.CHANNEL_CALLS)
@@ -96,10 +142,12 @@ class AlarmService : Service() {
                     .setSilent(true)
                     .build()
             )
-            stopAll()
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            showPendingOrCancel(this)
+            stopSelf()
             return START_NOT_STICKY
         }
-        goForeground(Notifications.ringing(this, active))
+        goForeground(Notifications.ringing(this, list))
         startRinging()
         handler.removeCallbacks(timeout)
         handler.postDelayed(timeout, AppSettings.ringSeconds(this) * 1000L)
@@ -112,43 +160,48 @@ class AlarmService : Service() {
         ServiceCompat.startForeground(this, Notifications.RINGING_ID, n, type)
     }
 
-    private fun remove(id: String) {
-        active.removeAll { it.id == id }
-        if (active.isEmpty()) {
+    private fun afterRemove() {
+        val list = due(this)
+        if (list.isEmpty()) {
             stopAll()
         } else {
             try {
-                NotificationManagerCompat.from(this).notify(Notifications.RINGING_ID, Notifications.ringing(this, active))
+                NotificationManagerCompat.from(this).notify(Notifications.RINGING_ID, Notifications.ringing(this, list))
             } catch (e: SecurityException) { /* notifications off */ }
         }
         listener?.invoke()
     }
 
-    private fun onTimeout() {
-        active.forEach { Notifications.missed(this, it) }
-        active.clear()
-        stopAll()
+    /** Ring time over, or the user left the popup: quiet now, keep a silent notification. */
+    private fun silenceNow() {
+        if (instance === this) instance = null
+        handler.removeCallbacks(timeout)
+        stopRinging()
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        showPendingOrCancel(this)
+        stopSelf()
         listener?.invoke()
     }
 
     private fun startRinging() {
+        val ringMs = AppSettings.ringSeconds(this) * 1000L
         if (wakeLock == null) {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MediZon:alarm").apply {
                 setReferenceCounted(false)
-                acquire(AppSettings.ringSeconds(this@AlarmService) * 1000L + 60_000)
+                acquire(ringMs + 60_000)
             }
         }
         if (player == null) {
             requestFocus()
-            // Chosen ringtone, else the phone's ringtone, else the alarm / notification sound.
+            // Chosen phone ringtone (if any) -> bundled "MediZon tring" -> phone ringtone / alarm sound.
             val candidates = listOfNotNull(
-                AppSettings.ringtone(this),
+                AppSettings.ringtoneUri(this),
+                AppSettings.tringUri(this),
                 RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_RINGTONE),
                 Settings.System.DEFAULT_RINGTONE_URI,
                 RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM),
                 Settings.System.DEFAULT_ALARM_ALERT_URI,
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
             ).distinct()
             for (uri in candidates) {
                 player = tryPlay(uri)
@@ -209,6 +262,7 @@ class AlarmService : Service() {
     }
 
     private fun stopAll() {
+        if (instance === this) instance = null
         handler.removeCallbacks(timeout)
         stopRinging()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -218,7 +272,7 @@ class AlarmService : Service() {
     override fun onDestroy() {
         handler.removeCallbacks(timeout)
         stopRinging()
-        instance = null
+        if (instance === this) instance = null
         super.onDestroy()
     }
 }

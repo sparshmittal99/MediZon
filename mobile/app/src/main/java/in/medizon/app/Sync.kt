@@ -66,6 +66,7 @@ object Sync {
 
     /** What `unlink()` does; also used when the server answers 401/403. */
     fun unlink(c: Context) {
+        Push.forget(c, Store.token(c)) // before the sync token is cleared
         AlarmScheduler.cancelEverything(c)
         Store.clearLink(c)
         val wm = WorkManager.getInstance(c)

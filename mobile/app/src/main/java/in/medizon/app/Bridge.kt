@@ -38,6 +38,7 @@ class Bridge(private val activity: MainActivity) {
         Store.saveLink(app, token, account ?: "")
         Sync.syncNow(app, replace = true)
         Sync.ensurePeriodic(app)
+        Push.ensureToken(app, force = true)
     }
 
     @JavascriptInterface

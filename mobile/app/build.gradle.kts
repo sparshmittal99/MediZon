@@ -10,6 +10,14 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// Firebase Cloud Messaging config (no google-services plugin). Missing/blank values = push off.
+val firebaseProps = Properties().apply {
+    val f = rootProject.file("firebase.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun firebase(key: String): String =
+    (firebaseProps.getProperty("firebase.$key") ?: "").trim().replace("\\", "\\\\").replace("\"", "\\\"")
+
 android {
     namespace = "in.medizon.app"
     compileSdk = 34
@@ -21,6 +29,10 @@ android {
         versionCode = 1
         versionName = "1.0"
         buildConfigField("String", "BASE_URL", "\"https://medizon-mze9.onrender.com\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${firebase("apiKey")}\"")
+        buildConfigField("String", "FIREBASE_APP_ID", "\"${firebase("appId")}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebase("projectId")}\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebase("senderId")}\"")
     }
 
     signingConfigs {
@@ -65,4 +77,5 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    implementation("com.google.firebase:firebase-messaging:23.4.1")
 }

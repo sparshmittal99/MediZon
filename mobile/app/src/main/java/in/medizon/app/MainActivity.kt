@@ -51,6 +51,9 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_PATH = "in.medizon.app.PATH"
+
+        /** True while MainActivity is resumed (push messages are then shown live by the page). */
+        @Volatile var foreground = false
         private const val SPLASH_MS = 1100L
         val baseHost: String = (Uri.parse(BuildConfig.BASE_URL).host ?: "").lowercase()
 
@@ -92,6 +95,14 @@ class MainActivity : AppCompatActivity() {
     // geolocation
     private var geoOrigin: String? = null
     private var geoCallback: GeolocationPermissions.Callback? = null
+
+    // Razorpay checkout: popup window (net banking) + redirect flow in the main WebView
+    private var razorpayFlow = false
+    @Volatile private var checkoutSeenAt = 0L
+    private var popupContainer: View? = null
+    private var popupWebView: WebView? = null
+    private var popupTitle: TextView? = null
+    private var popupDecided = false
 
     // fixAlarmSettings flow
     private var fixing = false
@@ -188,6 +199,7 @@ class MainActivity : AppCompatActivity() {
         if (Store.isLinked(this)) {
             Sync.syncNow(this)
             Sync.ensurePeriodic(this)
+            Push.ensureToken(this)
         }
     }
 
@@ -199,6 +211,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        foreground = true
         webView.onResume()
         notifyPageStatus()
         applyThemeColors()
@@ -206,6 +219,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        foreground = false
         webView.onPause()
         CookieManager.getInstance().flush()
         super.onPause()
@@ -214,6 +228,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
+        closePopup()
         (webView.parent as? android.view.ViewGroup)?.removeView(webView)
         webView.destroy()
         super.onDestroy()
@@ -280,8 +295,9 @@ class MainActivity : AppCompatActivity() {
             allowFileAccess = false
             allowContentAccess = true // needed to read FileProvider camera captures
             setGeolocationEnabled(true)
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false)
+            // Razorpay net banking opens the bank in a popup window (window.open) and posts back to it.
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(true)
             // The site has its own dark CSS: never let the WebView auto-darken it.
             if (Build.VERSION.SDK_INT >= 33) {
                 isAlgorithmicDarkeningAllowed = false
@@ -313,7 +329,14 @@ class MainActivity : AppCompatActivity() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
             handleNavigation(request.url, request.isForMainFrame)
 
+        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
+            if (isRazorpayHost(request.url.host)) checkoutSeenAt = SystemClock.elapsedRealtime()
+            return null
+        }
+
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+            val host = url?.let { Uri.parse(it).host?.lowercase() }
+            if (host == baseHost) razorpayFlow = false else if (isRazorpayHost(host)) razorpayFlow = true
             currentUrl = url
             mainFrameError = false
             pageLoading = true
@@ -357,11 +380,145 @@ class MainActivity : AppCompatActivity() {
                 if (scheme == "http") { loadUrl(uri.buildUpon().scheme("https").build().toString()); return true }
                 return false
             }
-            if (scheme == "https" && (host == "razorpay.com" || host.endsWith(".razorpay.com"))) return false
+            if (scheme == "https" && isRazorpayHost(host)) { razorpayFlow = true; return false }
+            // Any https page reached from a Razorpay page (bank / 3-D Secure redirect) stays in the app.
+            if (scheme == "https" && razorpayFlow) return false
         }
         if (scheme == "about" || scheme == "javascript" || scheme == "blob" || scheme == "data") return false
         openExternal(uri)
         return true
+    }
+
+    private fun isRazorpayHost(host: String?): Boolean {
+        val h = host?.lowercase() ?: return false
+        return h == "razorpay.com" || h.endsWith(".razorpay.com")
+    }
+
+    // ---------------------------------------------------------------- popup windows (Razorpay net banking)
+
+    private fun checkoutActive(): Boolean =
+        razorpayFlow || (checkoutSeenAt != 0L && SystemClock.elapsedRealtime() - checkoutSeenAt < 30 * 60 * 1000L)
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun openPopupWindow(resultMsg: android.os.Message): Boolean {
+        val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
+        closePopup()
+        val child = WebView(this)
+        child.setBackgroundColor(ContextCompat.getColor(this, R.color.mz_bg))
+        with(child.settings) {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            builtInZoomControls = true
+            displayZoomControls = false
+            textZoom = 100
+            allowFileAccess = false
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(false) // nested popups load in place
+            userAgentString = webView.settings.userAgentString
+            if (Build.VERSION.SDK_INT >= 33) isAlgorithmicDarkeningAllowed = false
+        }
+        CookieManager.getInstance().setAcceptThirdPartyCookies(child, true)
+        child.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                popupNavigation(request.url, request.isForMainFrame)
+
+            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                val uri = url?.let { Uri.parse(it) } ?: return
+                if (!popupDecided && (uri.scheme == "http" || uri.scheme == "https")) {
+                    if (popupNavigation(uri, true)) { view.stopLoading(); return }
+                }
+                popupTitle?.text = uri.host ?: ""
+            }
+        }
+        child.webChromeClient = object : WebChromeClient() {
+            override fun onCloseWindow(window: WebView) = closePopup()
+        }
+        popupWebView = child
+        popupDecided = checkoutActive()
+        if (popupDecided) showPopup(child)
+        transport.webView = child
+        resultMsg.sendToTarget()
+        return true
+    }
+
+    /**
+     * Inside the popup every http(s) page loads in place (bank, Razorpay, 3-D Secure). For a popup
+     * outside a checkout (e.g. a target=_blank link) the first URL decides: MediZon pages open in
+     * the main view, other sites in the browser. Non-http schemes (upi:, intent:, tel:) go out.
+     */
+    private fun popupNavigation(uri: Uri, mainFrame: Boolean): Boolean {
+        val scheme = uri.scheme?.lowercase() ?: return true
+        if (scheme == "http" || scheme == "https") {
+            if (!popupDecided && mainFrame) {
+                val host = uri.host?.lowercase()
+                popupDecided = true
+                if (isRazorpayHost(host)) {
+                    popupWebView?.let { showPopup(it) }
+                    return false
+                }
+                if (host == baseHost) loadUrl(uri.toString()) else openExternal(uri)
+                webView.post { closePopup() }
+                return true
+            }
+            return false
+        }
+        if (scheme == "about" || scheme == "javascript" || scheme == "blob" || scheme == "data") return false
+        openExternal(uri)
+        return true
+    }
+
+    private fun showPopup(child: WebView) {
+        if (popupContainer != null) return
+        val dp = resources.displayMetrics.density
+        val root = findViewById<android.widget.FrameLayout>(R.id.root)
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setBackgroundColor(ContextCompat.getColor(context, R.color.mz_bg))
+            isClickable = true
+        }
+        val bar = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setBackgroundColor(ContextCompat.getColor(context, R.color.mz_header))
+            setPadding((4 * dp).toInt(), 0, (16 * dp).toInt(), 0)
+        }
+        bar.addView(android.widget.ImageButton(this).apply {
+            setImageResource(R.drawable.ic_close)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            setPadding((12 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt())
+            background = ContextCompat.getDrawable(context, R.drawable.round_ripple_white)
+            contentDescription = "Close"
+            setOnClickListener { closePopup() }
+        }, android.widget.LinearLayout.LayoutParams((48 * dp).toInt(), (48 * dp).toInt()))
+        val title = TextView(this).apply {
+            setTextColor(ContextCompat.getColor(context, R.color.mz_white))
+            textSize = 16f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding((8 * dp).toInt(), 0, 0, 0)
+            text = child.url?.let { Uri.parse(it).host } ?: "Secure payment"
+        }
+        bar.addView(title, android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        box.addView(bar, android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, (48 * dp).toInt()))
+        (child.parent as? android.view.ViewGroup)?.removeView(child)
+        box.addView(child, android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        root.addView(box, android.widget.FrameLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+        popupContainer = box
+        popupTitle = title
+    }
+
+    /** Closing the popup (X, Back, window.close()) destroys it; Razorpay sees the window closed. */
+    private fun closePopup() {
+        popupContainer?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        popupContainer = null
+        popupTitle = null
+        popupWebView?.let {
+            (it.parent as? android.view.ViewGroup)?.removeView(it)
+            it.stopLoading()
+            it.destroy()
+        }
+        popupWebView = null
     }
 
     private fun openExternal(uri: Uri) {
@@ -435,7 +592,9 @@ class MainActivity : AppCompatActivity() {
     private fun setupBack() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) {
+                if (popupContainer != null) {
+                    closePopup()
+                } else if (webView.canGoBack()) {
                     hideError()
                     webView.goBack()
                 } else {
@@ -448,6 +607,9 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------------- chrome client: files, location
 
     private inner class Chrome : WebChromeClient() {
+        override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean =
+            openPopupWindow(resultMsg)
+
         override fun onShowFileChooser(
             view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams
         ): Boolean {
@@ -461,13 +623,8 @@ class MainActivity : AppCompatActivity() {
                 pickFiles(mimes, multiple)
                 return true
             }
-            AlertDialog.Builder(this@MainActivity)
-                .setTitle("Add a file")
-                .setItems(arrayOf("Take a photo", "Choose from phone")) { _, which ->
-                    if (which == 0) startCamera() else pickFiles(mimes, multiple)
-                }
-                .setOnCancelListener { deliverFiles(null) }
-                .show()
+            val pdfAllowed = mimes.any { it == "application/pdf" || it == "*/*" }
+            showUploadChoice(if (pdfAllowed) "Add prescription" else "Add photo", mimes, multiple)
             return true
         }
 
@@ -479,6 +636,48 @@ class MainActivity : AppCompatActivity() {
             geoCallback = callback
             locationPermission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
+    }
+
+    /** "Take a photo" / "Choose from files". Any way of closing it without a choice cancels the input. */
+    private fun showUploadChoice(title: String, mimes: List<String>, multiple: Boolean) {
+        var chosen = false
+        lateinit var dialog: AlertDialog
+        val dp = resources.displayMetrics.density
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+        }
+        fun option(icon: Int, label: String, action: () -> Unit) {
+            val row = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                minimumHeight = (64 * dp).toInt()
+                setPadding((24 * dp).toInt(), 0, (24 * dp).toInt(), 0)
+                val ripple = ColorStateList.valueOf(0x220E6B57)
+                background = android.graphics.drawable.RippleDrawable(ripple, null, android.graphics.drawable.ColorDrawable(0xFFFFFFFF.toInt()))
+                setOnClickListener { chosen = true; dialog.dismiss(); action() }
+            }
+            row.addView(android.widget.ImageView(this).apply {
+                setImageResource(icon)
+                imageTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.mz_accent))
+            })
+            row.addView(TextView(this).apply {
+                text = label
+                textSize = 17f
+                setTextColor(ContextCompat.getColor(context, R.color.mz_text))
+                setPadding((20 * dp).toInt(), 0, 0, 0)
+            })
+            box.addView(row)
+        }
+        option(R.drawable.ic_camera, "Take a photo") { startCamera() }
+        option(R.drawable.ic_folder, "Choose from files") { pickFiles(mimes, multiple) }
+        dialog = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(box)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnDismissListener { if (!chosen) deliverFiles(null) }
+        dialog.show()
     }
 
     private fun hasLocationPermission(): Boolean =

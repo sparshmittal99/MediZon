@@ -11,6 +11,7 @@ class MediZonApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AppSettings.applyTheme(AppSettings.theme(this))
+        Push.init(this)
         createChannels()
     }
 
@@ -46,6 +47,9 @@ class MediZonApplication : Application() {
         val announcements = NotificationChannel(
             Notifications.CHANNEL_ANNOUNCEMENTS, getString(R.string.channel_announcements), NotificationManager.IMPORTANCE_DEFAULT
         ).apply { description = getString(R.string.channel_announcements_desc) }
-        nm.createNotificationChannels(listOf(calls, reminders, missed, announcements))
+        val updates = NotificationChannel(
+            Notifications.CHANNEL_UPDATES, getString(R.string.channel_updates), NotificationManager.IMPORTANCE_HIGH
+        ).apply { description = getString(R.string.channel_updates_desc) }
+        nm.createNotificationChannels(listOf(calls, reminders, missed, announcements, updates))
     }
 }

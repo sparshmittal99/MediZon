@@ -12,6 +12,7 @@ object AlarmActions {
     const val SNOOZE = "in.medizon.app.action.SNOOZE"
     const val DISMISS = "in.medizon.app.action.DISMISS"
     const val SNOOZE_ALL = "in.medizon.app.action.SNOOZE_ALL"
+    const val CLEAR_DUE = "in.medizon.app.action.CLEAR_DUE"
 
 
     /** Main thread. Returns the toast text, or null. */
@@ -29,7 +30,7 @@ object AlarmActions {
     }
 
     fun snoozeAll(c: Context) {
-        AlarmService.activeAlarms().forEach { snooze(c, it); AlarmService.resolve(c, it.id) }
+        AlarmService.activeAlarms(c).forEach { snooze(c, it); AlarmService.resolve(c, it.id) }
     }
 
     private fun snooze(c: Context, item: AlarmItem) {
@@ -59,6 +60,10 @@ object AlarmActions {
 class AlarmActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
+        if (action == AlarmActions.CLEAR_DUE) {
+            AlarmService.clearDue(context)
+            return
+        }
         if (action == AlarmActions.SNOOZE_ALL) {
             AlarmActions.snoozeAll(context)
             Toast.makeText(context, "Snoozed for ${AppSettings.snoozeMinutes(context)} minutes", Toast.LENGTH_SHORT).show()

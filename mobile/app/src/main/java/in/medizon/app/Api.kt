@@ -31,6 +31,10 @@ object Api {
     fun postDose(c: Context, token: String, dose: JSONObject): Response =
         request(c, "POST", "/api/app/doses", token, dose.toString())
 
+    @Throws(IOException::class)
+    fun postPushToken(c: Context, token: String, pushToken: String): Response =
+        request(c, "POST", "/api/app/push-token", token, JSONObject().put("token", pushToken).toString())
+
     private fun request(c: Context, method: String, path: String, token: String, json: String?): Response {
         val conn = URL(BuildConfig.BASE_URL + path).openConnection() as HttpURLConnection
         try {

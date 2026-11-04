@@ -67,11 +67,9 @@ class AlarmActivity : AppCompatActivity() {
 
         addSilentItem(intent)
 
-        // Back never silently dismisses: it snoozes the alarm on screen.
+        // Back: stop ringing and close; the alarm stays in a silent notification with its actions.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                current?.let { act(AlarmActions.SNOOZE, it) }
-            }
+            override fun handleOnBackPressed() = leave()
         })
     }
 
@@ -93,7 +91,23 @@ class AlarmActivity : AppCompatActivity() {
         startAnimations()
     }
 
+    /** Home / Recents. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        leave()
+    }
+
+    private fun leave() {
+        if (isFinishing) return
+        AlarmService.silence(this)
+        finish()
+    }
+
     override fun onStop() {
+        // Left the foreground some other way (another app came up). Ignore stops caused by the screen
+        // turning off, so a just-fired alarm is never silenced by the display going to sleep.
+        val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+        if (!isFinishing && !isChangingConfigurations && pm.isInteractive) leave()
         AlarmService.listener = null
         animators.forEach { it.cancel() }
         animators.clear()
@@ -101,7 +115,7 @@ class AlarmActivity : AppCompatActivity() {
     }
 
     private fun items(): List<AlarmItem> {
-        val ringing = AlarmService.activeAlarms()
+        val ringing = AlarmService.activeAlarms(this)
         return (ringing + silentItems.filter { s -> ringing.none { it.id == s.id } }).sortedBy { it.atMillis }
     }
 

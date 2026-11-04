@@ -23,14 +23,19 @@ object AppSettings {
     fun ringPhone(c: Context) = p(c).getBoolean(K_RING, true)
     fun setRingPhone(c: Context, v: Boolean) = p(c).edit().putBoolean(K_RING, v).apply()
 
-    /** null = system default ringtone. */
-    fun ringtone(c: Context): Uri? = p(c).getString(K_RINGTONE, null)?.let { Uri.parse(it) }
-    fun setRingtone(c: Context, uri: Uri?) = p(c).edit().putString(K_RINGTONE, uri?.toString()).apply()
+    /** "tring" (bundled MediZon tring, the default) or a ringtone URI string. */
+    const val TRING = "tring"
+    fun ringtoneSetting(c: Context): String = p(c).getString(K_RINGTONE, null)?.takeIf { it.isNotBlank() } ?: TRING
+    fun setRingtoneSetting(c: Context, value: String) = p(c).edit().putString(K_RINGTONE, value).apply()
+
+    /** The chosen phone ringtone, or null when "MediZon tring" is selected. */
+    fun ringtoneUri(c: Context): Uri? = ringtoneSetting(c).takeIf { it != TRING }?.let { Uri.parse(it) }
+    fun tringUri(c: Context): Uri = Uri.parse("android.resource://${c.packageName}/${R.raw.tring}")
 
     fun vibrate(c: Context) = p(c).getBoolean(K_VIBRATE, true)
     fun setVibrate(c: Context, v: Boolean) = p(c).edit().putBoolean(K_VIBRATE, v).apply()
 
-    fun ringSeconds(c: Context) = p(c).getInt(K_RING_SECONDS, 60)
+    fun ringSeconds(c: Context) = p(c).getInt(K_RING_SECONDS, 30)
     fun setRingSeconds(c: Context, v: Int) = p(c).edit().putInt(K_RING_SECONDS, v).apply()
 
     fun snoozeMinutes(c: Context) = p(c).getInt(K_SNOOZE_MIN, 10)

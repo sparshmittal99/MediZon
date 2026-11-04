@@ -3,7 +3,7 @@
 A small native Android app (Kotlin, no Capacitor/Flutter) for personal use. It:
 
 - shows the live MediZon website (`https://medizon-mze9.onrender.com`) in a WebView, with a branded splash, pull-to-refresh, an offline screen, camera/file uploads, location, downloads and printing/Save as PDF;
-- rings **real alarms** for medicine doses and reminders, even when the app is closed and the phone is locked. Alarms come from the server (`GET /api/app/schedule`) and are set with `AlarmManager.setAlarmClock`, so they fire on time in Doze. Each alarm plays your chosen ringtone (default: the phone's ringtone) on the alarm stream, which rings even in silent/vibrate mode. It also vibrates and opens an incoming-call style full-screen page with **Skip / Taken** buttons and a Snooze option.
+- rings **real alarms** for medicine doses and reminders, even when the app is closed and the phone is locked. Alarms come from the server (`GET /api/app/schedule`) and are set with `AlarmManager.setAlarmClock`, so they fire on time in Doze. Each alarm plays the bundled "MediZon tring" sound (or a phone ringtone you choose) on the alarm stream, which rings even in silent/vibrate mode. It also vibrates and opens an incoming-call style full-screen page with **Skip / Taken** buttons and a Snooze option.
 
 The website switches on its app-only features (alarm banner, link button, etc.) when the user agent contains `MediZonApp`. The page talks to the app through the `window.MediZonApp` JavaScript bridge.
 
@@ -106,7 +106,7 @@ Edit `BASE_URL` in `app/build.gradle.kts`:
 buildConfigField("String", "BASE_URL", "\"https://medizon-mze9.onrender.com\"")
 ```
 
-Then rebuild. Only pages on that host load inside the app (plus `*.razorpay.com` payment pages). Other links open in the browser or the matching app (phone, mail, UPI, maps, WhatsApp).
+Then rebuild. Only pages on that host load inside the app, plus Razorpay checkout pages and the bank / 3-D Secure pages reached from them. Net-banking popups open in an in-app window with a close button. Other links open in the browser or the matching app (phone, mail, UPI, maps, WhatsApp).
 
 ## How alarms stay in sync
 
@@ -118,4 +118,14 @@ Then rebuild. Only pages on that host load inside the app (plus `*.razorpay.com`
 - After a reboot, alarms are re-armed from the stored schedule straight away, even without internet.
 - Taken/Skipped answers are sent to `POST /api/app/doses`. If the phone is offline, answers are queued and sent when it reconnects.
 - If the server answers 401/403, or you sign out on the site, the app unlinks and cancels all alarms.
-- If nobody answers within the "Ring for" time (default 1 minute), ringing stops and a "Missed: ..." notification stays. Tapping it opens the relevant page.
+- If nobody answers within the "Ring for" time (default 30 seconds), only the sound and vibration stop. The popup stays open if it is showing, and a silent notification keeps the Taken / Skip / Snooze buttons. Back or Home on the popup does the same straight away. Tapping the notification reopens the popup.
+
+## Push notifications (Firebase)
+
+Order, prescription, support and other updates arrive as phone notifications even when the app is closed. They use Firebase Cloud Messaging, configured without the google-services plugin:
+
+1. In the Firebase console, create a project and add an Android app with package `in.medizon.app`, then download `google-services.json`.
+2. Copy `firebase.properties.example` to `firebase.properties` (gitignored) and fill in the four values. The example file says where each one is.
+3. Rebuild. If `firebase.properties` is missing or blank, push is simply off.
+
+When the app is linked, it sends its FCM token to `POST /api/app/push-token`. Signing out sends an empty token and deletes the FCM token.

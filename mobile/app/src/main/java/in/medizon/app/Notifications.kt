@@ -20,6 +20,7 @@ object Notifications {
     const val CHANNEL_REMINDERS = "medicine_reminders"
     const val CHANNEL_MISSED = "missed_alarms"
     const val CHANNEL_ANNOUNCEMENTS = "announcements"
+    const val CHANNEL_UPDATES = "updates"
     const val RINGING_ID = 1001
 
     private const val FLAGS = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -133,6 +134,55 @@ object Notifications {
             b.addAction(0, c.getString(R.string.ok), action(c, AlarmActions.DISMISS, item))
         }
         b.addAction(0, AppSettings.snoozeLabel(c), action(c, AlarmActions.SNOOZE, item))
+    }
+
+    /**
+     * After the ring stops (time out, or Back/Home on the popup): same alarms, silent, with the answer
+     * buttons. Tapping it reopens the popup (silently). Swiping it away forgets them.
+     */
+    fun pending(c: Context, items: List<AlarmItem>): Notification {
+        val first = items.first()
+        val b = NotificationCompat.Builder(c, CHANNEL_CALLS)
+            .setSmallIcon(R.drawable.ic_stat_capsule)
+            .setLargeIcon(logo(c))
+            .setColor(ContextCompat.getColor(c, R.color.mz_green))
+            .setContentTitle(titleFor(items))
+            .setContentText(first.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(items.joinToString("\n") { "${it.title} · ${it.body}" }))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setSilent(true)
+            .setOnlyAlertOnce(true)
+            .setWhen(first.atMillis)
+            .setShowWhen(true)
+            .setContentIntent(alarmActivityIntent(c))
+            .setDeleteIntent(PendingIntent.getBroadcast(
+                c, 7003, Intent(c, AlarmActionReceiver::class.java).setAction(AlarmActions.CLEAR_DUE), FLAGS
+            ))
+        addAnswerActions(c, b, first)
+        return b.build()
+    }
+
+    /** FCM data message -> one heads-up notification. */
+    @SuppressLint("MissingPermission")
+    fun push(c: Context, nid: String, title: String, body: String, link: String) {
+        val nm = NotificationManagerCompat.from(c)
+        if (!nm.areNotificationsEnabled()) return
+        val path = link.trim().ifBlank { "/notifications" }
+        val open = PendingIntent.getActivity(c, ("push-" + nid).hashCode(), MainActivity.openIntent(c, path), FLAGS)
+        val n = NotificationCompat.Builder(c, CHANNEL_UPDATES)
+            .setSmallIcon(R.drawable.ic_stat_capsule)
+            .setColor(ContextCompat.getColor(c, R.color.mz_green))
+            .setContentTitle(title.ifBlank { "MediZon" })
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .build()
+        try { nm.notify(nid.hashCode(), n) } catch (e: SecurityException) { }
     }
 
     /** "Ring phone" OFF: one heads-up notification with the default sound; tap opens the silent popup. */
