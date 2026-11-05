@@ -9,6 +9,8 @@ import com.medizon.dto.ProfileForm;
 import com.medizon.dto.RegisterForm;
 import com.medizon.repository.StoreRepository;
 import com.medizon.repository.UserRepository;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.session.SessionInformation;
 import org.springframework.security.core.session.SessionRegistry;
@@ -33,6 +35,7 @@ public class UserService {
     private final StoreRepository stores;
     private final NotificationService notificationService;
     private final EmailService emailService;
+    private final SignInService signIns;
 
     @org.springframework.beans.factory.annotation.Value("${medizon.base-url:http://localhost:8080}")
     private String baseUrl;
@@ -100,7 +103,7 @@ public class UserService {
      * "Keep me signed in" cookies stop working too, since they're signed with the old password.
      */
     @Transactional
-    public int changePassword(User user, String current, String next, String confirm, String keepSessionId) {
+    public int changePassword(User user, String current, String next, String confirm, HttpServletRequest here) {
         if (user.isAdmin()) throw new BusinessException("The admin password is set with MEDIZON_ADMIN_PASSWORD on the server.");
         if (current == null || !passwordEncoder.matches(current, user.getPassword())) {
             throw new BusinessException("Your current password isn't right.");
@@ -125,7 +128,7 @@ public class UserService {
         } catch (Exception e) {
             // non-fatal
         }
-        return signOutOtherSessions(user, keepSessionId);
+        return signOutOtherSessions(user, here);
     }
 
     /** Step one of changing the password: whether this is the account's current password. */
@@ -133,21 +136,24 @@ public class UserService {
         return password != null && passwordEncoder.matches(password, user.getPassword());
     }
 
-    /** Ends every session of this user except the given one (the browser they're using). */
-    public int signOutOtherSessions(User u, String keepSessionId) {
-        // Remembered sign-ins too ("Keep me signed in", the Android app); the caller re-issues this device's
-        users.findById(u.getId()).ifPresent(fresh -> {
-            fresh.setRememberEpoch(fresh.getRememberEpoch() + 1);
-            users.save(fresh);
-        });
-        List<SessionInformation> others = sessionsOf(u.getEmail()).stream()
-                .filter(si -> !si.getSessionId().equals(keepSessionId)).toList();
-        others.forEach(SessionInformation::expireNow);
-        return others.size();
+    /**
+     * Signs this user out on every browser and phone except the one making the request, remembered sign-ins included
+     * ("Keep me signed in", the Android app); the caller re-issues this device's remember-me cookie.
+     * Returns how many other devices were signed out.
+     */
+    @Transactional
+    public int signOutOtherSessions(User u, HttpServletRequest here) {
+        int n = signIns.endOthers(u, here);
+        HttpSession session = here.getSession(false);
+        String keep = session == null ? null : session.getId();
+        sessionsOf(u.getEmail()).stream()
+                .filter(si -> !si.getSessionId().equals(keep))
+                .forEach(SessionInformation::expireNow);
+        return n;
     }
 
-    /** How many browsers or devices this user is signed in on right now. */
-    public int sessionCount(User u) { return sessionsOf(u.getEmail()).size(); }
+    /** How many browsers and phones this user is signed in on, this one included. */
+    public int sessionCount(User u) { return signIns.count(u); }
 
     // ------------------------------------------------------------------ admin: manage accounts
 
@@ -209,11 +215,16 @@ public class UserService {
         return u;
     }
 
-    /** Ends every session of this user; their next click lands on the sign-in page. */
+    /**
+     * Ends every sign-in of this user, phones kept signed in by the app included; their next click lands on the
+     * sign-in page and their phones stop ringing alarms. Returns on how many devices they were signed in.
+     */
+    @Transactional
     public int signOutEverywhere(User u) {
+        int n = signIns.endAll(u);
         List<SessionInformation> sessions = sessionsOf(u.getEmail());
         sessions.forEach(SessionInformation::expireNow);
-        return sessions.size();
+        return Math.max(n, sessions.size());
     }
 
     private User guardedTarget(Long id, User actingAdmin) {

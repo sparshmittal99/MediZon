@@ -14,4 +14,5 @@ public interface NotificationDeviceRepository extends JpaRepository<Notification
     Optional<NotificationDevice> findByAppTokenHash(String appTokenHash);
     List<NotificationDevice> findByPushToken(String pushToken);
     List<NotificationDevice> findByUserAndPushTokenIsNotNull(User user);
+    List<NotificationDevice> findByUser(User user);
 }

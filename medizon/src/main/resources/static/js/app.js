@@ -26,6 +26,9 @@
             .catch(() => {});
     } else if (account) {
         call('syncNow');
+    } else if (call('linkedAccount')) {
+        // Signed out here, maybe from another device or by the admin: a sync finds out, and drops the alarms if so
+        call('syncNow');
     }
 
     // Sign out: the token stops working on the server and the phone forgets its alarms

@@ -2,6 +2,7 @@ package com.medizon.config;
 
 import com.medizon.repository.UserRepository;
 import com.medizon.service.CartService;
+import com.medizon.service.SignInService;
 import com.medizon.service.UserService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -31,6 +32,7 @@ import org.springframework.security.web.authentication.AuthenticationFailureHand
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.rememberme.RememberMeAuthenticationFilter;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
@@ -107,10 +109,13 @@ public class SecurityConfig {
                                            SessionRegistry sessionRegistry, @Lazy UserService userService,
                                            @Lazy CartService cartService, LoginThrottle loginThrottle,
                                            @Value("${medizon.monitoring.token:}") String monitoringToken,
-                                           MediZonRememberMeServices rememberMeServices) throws Exception {
+                                           MediZonRememberMeServices rememberMeServices,
+                                           UserRepository users, @Lazy SignInService signIns) throws Exception {
         http
             // Refuses sign-in while an email or address is locked out for too many wrong passwords
             .addFilterBefore(loginThrottleFilter(loginThrottle), UsernamePasswordAuthenticationFilter.class)
+            // Signs out disabled accounts and sessions ended from another device, remember-me ones (the app) included
+            .addFilterAfter(new SignInGuard(users, signIns, rememberMeServices), RememberMeAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 // Monitoring: health for load balancers and uptime checks; Prometheus with a bearer token or as an admin
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
@@ -172,6 +177,10 @@ public class SecurityConfig {
                 .permitAll())
             .logout(logout -> logout
                 .logoutSuccessUrl("/?signedOut")
+                // This device no longer counts as signed in (Account > "signed in on N devices")
+                .addLogoutHandler((request, response, auth) -> {
+                    if (auth != null) signIns.signedOut(auth.getName(), request);
+                })
                 // The "Delivers to" location belongs to whoever picked it: signing out goes back to "Select location"
                 .deleteCookies("mz_pin", "mz_loc", "mz_addr", "mz_loc_by")
                 .permitAll())
@@ -197,8 +206,10 @@ public class SecurityConfig {
         customer.setDefaultTargetUrl("/");
         return (request, response, authentication) -> {
             loginThrottle.succeeded(authentication.getName());
-            userService.recordLogin(authentication.getName())
-                    .ifPresent(u -> cartService.mergeGuestCart(u, request.getSession(false)));
+            userService.recordLogin(authentication.getName()).ifPresent(u -> {
+                SignInService.started(request.getSession(), u.getRememberEpoch());
+                cartService.mergeGuestCart(u, request.getSession(false));
+            });
             boolean staff = authentication.getAuthorities().stream()
                     .anyMatch(a -> a.getAuthority().equals("ROLE_STAFF"));
             if (staff) response.sendRedirect(request.getContextPath() + "/admin");

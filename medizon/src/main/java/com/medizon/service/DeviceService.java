@@ -36,15 +36,8 @@ public class DeviceService {
     /** This browser's settings for the user, created (with the cookie) on the first page view. */
     @Transactional
     public NotificationDevice current(User user, HttpServletRequest request, HttpServletResponse response) {
-        String key = cookie(request);
-        if (key == null) {
-            key = UUID.randomUUID().toString();
-            response.addHeader(HttpHeaders.SET_COOKIE, ResponseCookie.from(COOKIE, key)
-                    .path(contextPath(request)).maxAge(COOKIE_LIFETIME).httpOnly(true).sameSite("Lax")
-                    .secure(request.isSecure()).build().toString());
-        }
-        String finalKey = key;
-        NotificationDevice d = devices.findByUserAndDeviceKey(user, key).orElseGet(() -> {
+        String finalKey = key(request, response);
+        NotificationDevice d = devices.findByUserAndDeviceKey(user, finalKey).orElseGet(() -> {
             NotificationDevice n = new NotificationDevice();
             n.setUser(user);
             n.setDeviceKey(finalKey);
@@ -86,6 +79,29 @@ public class DeviceService {
     @Transactional
     public void forget(Long deviceId, User user) {
         devices.findByIdAndUser(deviceId, user).ifPresent(devices::delete);
+    }
+
+    /**
+     * This browser's key, given the cookie on its first visit. The same key names its sign-in (SignInService).
+     * Made once per request, so a filter and a page in the same request don't each set a different cookie.
+     */
+    public static String key(HttpServletRequest request, HttpServletResponse response) {
+        String key = cookie(request);
+        if (key != null) return key;
+        Object made = request.getAttribute(COOKIE);
+        if (made instanceof String s) return s;
+        key = UUID.randomUUID().toString();
+        request.setAttribute(COOKIE, key);
+        response.addHeader(HttpHeaders.SET_COOKIE, ResponseCookie.from(COOKIE, key)
+                .path(contextPath(request)).maxAge(COOKIE_LIFETIME).httpOnly(true).sameSite("Lax")
+                .secure(request.isSecure()).build().toString());
+        return key;
+    }
+
+    /** This browser's key, or null before it has one. */
+    public static String keyOf(HttpServletRequest request) {
+        String key = cookie(request);
+        return key != null ? key : request.getAttribute(COOKIE) instanceof String s ? s : null;
     }
 
     private static String cookie(HttpServletRequest request) {

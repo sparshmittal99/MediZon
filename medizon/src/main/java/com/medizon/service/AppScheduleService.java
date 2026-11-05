@@ -84,7 +84,9 @@ public class AppScheduleService {
     @Transactional(readOnly = true)
     public Optional<NotificationDevice> device(String token) {
         if (token == null || token.isBlank() || token.length() > 100) return Optional.empty();
-        return devices.findByAppTokenHash(hash(token));
+        // A disabled or deleted account's phones stop syncing; the app drops its alarms on the refusal
+        return devices.findByAppTokenHash(hash(token))
+                .filter(d -> d.getUser().isEnabled() && !d.getUser().isDeleted());
     }
 
     /** Doses and one-off reminders from now to a week ahead, for the members this device follows. */

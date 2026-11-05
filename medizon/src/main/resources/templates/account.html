@@ -111,7 +111,8 @@
             <section class="mz-panel" id="devices">
                 <h2 class="h5 mb-1">Signed-in devices</h2>
                 <p class="small text-muted mb-3" th:text="${sessions <= 1} ? 'You are signed in on this device only.'
-                        : 'You are signed in on ' + ${sessions} + ' browsers or devices, including this one.'"></p>
+                        : 'You are signed in on ' + ${sessions} + ' devices: this one and ' + ${sessions - 1}
+                          + (${sessions == 2} ? ' other.' : ' others.')"></p>
                 <div class="d-flex flex-wrap gap-2">
                     <form th:action="@{/account/sign-out-others}" method="post"
                           data-mz-confirm="You'll stay signed in here. Everywhere else will need to sign in again."

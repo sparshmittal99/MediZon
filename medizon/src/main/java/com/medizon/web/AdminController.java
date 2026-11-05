@@ -330,7 +330,7 @@ public class AdminController {
         }
         int n = userService.signOutEverywhere(u);
         ra.addFlashAttribute("success", n == 0 ? u.getFullName() + " wasn't signed in."
-                : u.getFullName() + " was signed out of " + n + " session" + (n == 1 ? "." : "s."));
+                : u.getFullName() + " was signed out on " + n + " device" + (n == 1 ? "." : "s."));
         return "redirect:/admin/users";
     }
 

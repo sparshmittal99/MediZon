@@ -15,6 +15,16 @@ import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmailIgnoreCase(String email);
+
+    /** Just what the sign-in check needs on every request (SignInGuard), without loading the whole account. */
+    interface AccountState {
+        Long getId();
+        boolean isEnabled();
+        boolean isDeleted();
+        int getRememberEpoch();
+    }
+
+    Optional<AccountState> findStateByEmailIgnoreCase(String email);
     boolean existsByEmailIgnoreCase(String email);
     long countByRole(Role role);
     long countByRoleAndCreatedAtAfter(Role role, LocalDateTime since);

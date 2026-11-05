@@ -10,6 +10,11 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Optional;
+
 /**
  * "Keep me signed in". On the website it's the login checkbox and lasts {@value #WEB_DAYS} days. In the Android app
  * there's no checkbox: every sign-in is remembered for years, so the app stays signed in until the user signs out
@@ -63,6 +68,18 @@ public class MediZonRememberMeServices extends TokenBasedRememberMeServices {
             UserDetails fresh = getUserDetailsService().loadUserByUsername(authentication.getName());
             onLoginSuccess(request, response,
                     UsernamePasswordAuthenticationToken.authenticated(fresh, null, fresh.getAuthorities()));
+        }
+    }
+
+    /** When this device's remember-me cookie runs out, read from the cookie itself; empty when it has none. */
+    public Optional<LocalDateTime> rememberedUntil(HttpServletRequest request) {
+        String cookie = extractRememberMeCookie(request);
+        if (cookie == null || cookie.isEmpty()) return Optional.empty();
+        try {
+            long expiry = Long.parseLong(decodeCookie(cookie)[1]);
+            return Optional.of(LocalDateTime.ofInstant(Instant.ofEpochMilli(expiry), ZoneId.systemDefault()));
+        } catch (Exception e) {
+            return Optional.empty();
         }
     }
 

@@ -8,7 +8,6 @@ import com.medizon.service.UserService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
@@ -40,9 +39,9 @@ public class AccountController {
 
     @PostMapping("/password")
     public String changePassword(@RequestParam String currentPassword, @RequestParam String newPassword,
-                                 @RequestParam String confirmPassword, HttpSession session, HttpServletRequest request,
+                                 @RequestParam String confirmPassword, HttpServletRequest request,
                                  HttpServletResponse response, RedirectAttributes ra) {
-        int others = userService.changePassword(currentUser.get(), currentPassword, newPassword, confirmPassword, session.getId());
+        int others = userService.changePassword(currentUser.get(), currentPassword, newPassword, confirmPassword, request);
         rememberMe.reissue(request, response, SecurityContextHolder.getContext().getAuthentication());
         ra.addFlashAttribute("success", "Password changed." + (others > 0
                 ? " You were signed out on " + others + " other device" + (others == 1 ? "." : "s.") : ""));
@@ -62,8 +61,8 @@ public class AccountController {
     }
 
     @PostMapping("/sign-out-others")
-    public String signOutOthers(HttpSession session, HttpServletRequest request, HttpServletResponse response, RedirectAttributes ra) {
-        int n = userService.signOutOtherSessions(currentUser.get(), session.getId());
+    public String signOutOthers(HttpServletRequest request, HttpServletResponse response, RedirectAttributes ra) {
+        int n = userService.signOutOtherSessions(currentUser.get(), request);
         rememberMe.reissue(request, response, SecurityContextHolder.getContext().getAuthentication());
         ra.addFlashAttribute("success", n == 0 ? "You're not signed in anywhere else."
                 : "Signed out on " + n + " other device" + (n == 1 ? "." : "s."));
