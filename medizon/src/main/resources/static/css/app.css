@@ -92,3 +92,6 @@ html.mz-kb body:has(.mz-tabbar) { padding-bottom: 0; }
     animation: mz-app-busy 1s ease-in-out infinite; }
 @keyframes mz-app-busy { from { left: -40%; } to { left: 100%; } }
 .is-busy { pointer-events: none; opacity: .85; }
+
+/* Card rows scroll by touch, so no left/right arrows */
+.mz-rail-arrow { display: none !important; }

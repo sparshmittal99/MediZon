@@ -53,7 +53,7 @@
             </a>
 
             <!-- Where orders go: "Select location" until one is chosen, then "Delivers to ..." (or "We don't deliver here") -->
-            <button type="button" class="mz-loc d-none d-lg-inline-flex" sec:authorize="!hasRole('STAFF')" data-bs-toggle="modal" data-bs-target="#mzLocModal"
+            <button type="button" class="mz-loc d-none d-lg-inline-flex" sec:authorize="!hasRole('STAFF')" th:if="${inApp != true or showCatbar == true}" data-bs-toggle="modal" data-bs-target="#mzLocModal"
                     data-mz-loc th:classappend="${deliverTo != null and !deliverTo.serviceable} ? 'is-off'"
                     th:attr="aria-label=${deliverTo == null} ? 'Select delivery location' : 'Change delivery location'">
                 <i class="bi bi-geo-alt mz-loc-pin" aria-hidden="true"></i>
@@ -157,7 +157,8 @@
         </div>
     </nav>
 
-    <div class="mz-locbar d-lg-none" sec:authorize="!hasRole('STAFF')">
+    <!-- In the Android app the location strip is on the home page only -->
+    <div class="mz-locbar d-lg-none" sec:authorize="!hasRole('STAFF')" th:if="${inApp != true or showCatbar == true}">
         <div class="container">
             <!-- Phones and tablets: "Delivers to" as a strip of its own. Where orders go: "Select location" until one is chosen, then "Delivers to ..." (or "We don't deliver here") -->
             <button type="button" class="mz-loc" data-bs-toggle="modal" data-bs-target="#mzLocModal"

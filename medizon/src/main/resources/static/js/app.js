@@ -172,7 +172,8 @@
         busyBar.hidden = false;
         clearTimeout(busy.timer);
         busy.timer = setTimeout(idle, 30000);   // a download, or a page that never came: don't leave it spinning
-        if (button && !button.classList.contains('is-busy')) {
+        // No spinner on search buttons: the top bar is enough there
+        if (button && !button.classList.contains('is-busy') && !button.closest('[role=search]')) {
             button.classList.add('is-busy');
             button.insertAdjacentHTML('afterbegin', '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>');
         }
