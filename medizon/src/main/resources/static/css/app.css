@@ -118,16 +118,26 @@ html body .mz-nav, html body.mz-home .mz-locbar { background-color: var(--mz-hea
     .mz-search { border-radius: .8rem; }
 }
 
-/* Search button: no box of its own - the search bar is one white piece with the magnifier inside it, in the header's
-   colour (the banner's on home, brand green in the compact bar). Dark mode: the bar's own surface, with the magnifier
-   in the header's light matching shade, which also follows the banner, since the dark header colour wouldn't show. */
-.mz-search button, .mz-search button:hover, .mz-search button:active { background-color: transparent; color: var(--mz-head);
-    transition: color .45s ease, opacity .15s ease; }
+/* Search bar, modern-app style, the same in the full header and the compact bar: one white bar (the form's own
+   background - the text box and both buttons are see-through, so there's a single uniform white) with the magnifier
+   on the left and the voice search mic on the right. Only the two icons change colour: the header's (the banner's on
+   home, brand green in the compact bar). The bar stays plain white in dark mode too, with dark text. */
+html .mz-search, html[data-theme="dark"] .mz-search { align-items: stretch; background: #fff; }
+html .mz-search .form-control, html .mz-search .form-control:focus, html .mz-search .form-control:-webkit-autofill,
+html[data-theme="dark"] .mz-search .form-control, html[data-theme="dark"] .mz-search .form-control:focus {
+    background: transparent; color: #17302A; padding-left: .15rem; padding-right: .25rem; }
+html .mz-search .form-control::placeholder, html[data-theme="dark"] .mz-search .form-control::placeholder { color: #6B7F78; }
+.mz-search .mz-search-go, .mz-search .mz-search-mic { width: 2.6rem; font-size: 1.1rem; }
+.mz-search .mz-search-go { padding-left: .35rem; }
+.mz-search .mz-search-mic { padding-right: .35rem; font-size: 1.2rem; }
+html .mz-search button, html .mz-search button:hover, html .mz-search button:active, html .mz-search button:focus,
 html[data-theme="dark"] .mz-search button, html[data-theme="dark"] .mz-search button:hover,
-html[data-theme="dark"] .mz-search button:active { background-color: transparent; color: var(--mz-accent); }
-.mz-search button:active { opacity: .6; }
-.mz-search:focus-within { box-shadow: 0 0 0 3px var(--mz-accent); }
-
+html[data-theme="dark"] .mz-search button:active, html[data-theme="dark"] .mz-search button:focus {
+    background: transparent; border: 0; box-shadow: none; filter: none; color: var(--mz-head);
+    transition: color .45s ease, opacity .15s ease; }
+html .mz-search button:active { opacity: .6; }
+/* While typing: a ring in the header's light matching shade (follows the banner on home, mint in the compact bar) */
+html .mz-search:focus-within, html[data-theme="dark"] .mz-search:focus-within { box-shadow: 0 0 0 3px var(--mz-accent); }
 /* ---------- Home: the header takes the colour of the banner showing (app.js), like shopping apps ----------
    Each banner's top edge fades from that same colour, so header and banner read as one surface. */
 .mz-banner-deals { --mz-banner-top: #0A4E40; --mz-banner-accent: #7CE0B4; }

@@ -129,6 +129,17 @@ class Bridge(private val activity: MainActivity) {
         main.post { activity.setPageStatusColor(parsed) }
     }
 
+    /** Whether the phone has speech input, so the page shows the mic in the search bar only when it works. */
+    @JavascriptInterface
+    fun canVoiceSearch(): Boolean = trusted() && activity.canVoiceSearch()
+
+    /** The mic in the search bar: the phone's voice input; the words come back through window.mzVoiceResult. */
+    @JavascriptInterface
+    fun voiceSearch() {
+        if (!trusted()) return
+        main.post { activity.startVoiceSearch() }
+    }
+
     companion object {
         fun status(c: Context): JSONObject {
             val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

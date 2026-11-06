@@ -306,6 +306,28 @@
         window.addEventListener('resize', remeasure);
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(remeasure);
     }
+
+    // Voice search: the mic in the search bar opens the phone's voice input (Bridge.voiceSearch); what was heard
+    // fills the box and searches. The mic always shows; where voice input can't work (an older app build, or a phone
+    // without it) a tap says so and puts the cursor in the box instead.
+    const mic = search && search.querySelector('.mz-search-mic');
+    if (mic) {
+        const voiceOk = () => typeof app.voiceSearch === 'function' && call('canVoiceSearch') === true;
+        mic.addEventListener('click', () => {
+            if (voiceOk()) { call('voiceSearch'); return; }
+            const box = search.querySelector('input[name="q"]');
+            if (box) box.focus();
+            alert(typeof app.voiceSearch === 'function'
+                ? "Voice search isn't available on this phone. Type to search instead."
+                : 'Update the MediZon app to search by voice.');
+        });
+        window.mzVoiceResult = (text) => {
+            const box = search.querySelector('input[name="q"]');
+            if (!box || !text) return;
+            box.value = String(text);
+            if (search.requestSubmit) search.requestSubmit(); else search.submit();
+        };
+    }
     sendColor(true);
     // Dark mode or text size changed in App settings: the header colour and its height may have changed
     const applyTheme2 = window.mzApplyTheme;

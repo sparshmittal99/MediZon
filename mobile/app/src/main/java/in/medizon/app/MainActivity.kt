@@ -20,6 +20,7 @@ import android.os.Process
 import android.os.SystemClock
 import android.print.PrintManager
 import android.provider.Settings
+import android.speech.RecognizerIntent
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
@@ -136,6 +137,8 @@ class MainActivity : AppCompatActivity() {
 
     // fixAlarmSettings flow
     private var fixing = false
+    // The voice search screen is up (startVoiceSearch)
+    private var voiceListening = false
     private val fixAttempted = mutableSetOf<String>()
 
     // ---------------------------------------------------------------- activity result launchers
@@ -185,6 +188,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val storagePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    // Voice search: the words heard go to the page, which fills the search box and searches
+    private val voiceInput = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        voiceListening = false
+        val heard = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim()
+        if (result.resultCode != RESULT_OK || heard.isNullOrEmpty()) return@registerForActivityResult
+        callPage("window.mzVoiceResult && window.mzVoiceResult(${org.json.JSONObject.quote(heard)})")
+    }
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -253,7 +264,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         foreground = false
         // Away to pick a file / take a photo or fix alarm settings: the page is waiting on that, so no refresh after
-        pausedAt = if (fileCallback != null || fixing) 0L else SystemClock.elapsedRealtime()
+        pausedAt = if (fileCallback != null || fixing || voiceListening) 0L else SystemClock.elapsedRealtime()
         webView.onPause()
         CookieManager.getInstance().flush()
         super.onPause()
@@ -850,6 +861,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+
+    private fun voiceIntent() = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        putExtra(RecognizerIntent.EXTRA_PROMPT, "Say a medicine, salt or brand")
+        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+    }
+
+    fun canVoiceSearch(): Boolean = voiceIntent().resolveActivity(packageManager) != null
+
+    fun startVoiceSearch() {
+        // Back from the voice screen: the page is waiting on it, so no auto refresh (onPause)
+        try {
+            voiceListening = true
+            voiceInput.launch(voiceIntent())
+        } catch (e: ActivityNotFoundException) {
+            voiceListening = false
+            toast("Voice search isn't available on this phone")
+        }
+    }
 
     // ---------------------------------------------------------------- dark mode
 

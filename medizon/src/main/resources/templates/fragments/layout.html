@@ -69,9 +69,13 @@
             </button>
 
             <form class="mz-search" th:action="@{/medicines}" method="get" role="search" sec:authorize="!hasRole('STAFF')">
+                <!-- Android app: one white bar - magnifier on the left, voice search mic on the right (app.css, app.js).
+                     -->
+                <button type="submit" class="mz-search-go" aria-label="Search" th:if="${inApp == true}"><i class="bi bi-search"></i></button>
                 <input class="form-control" name="q" type="search" placeholder="Search medicines, salts or brands"
                        aria-label="Search medicines" th:value="${q}">
-                <button type="submit" aria-label="Search"><i class="bi bi-search"></i></button>
+                <button type="submit" aria-label="Search" th:unless="${inApp == true}"><i class="bi bi-search"></i></button>
+                <button type="button" class="mz-search-mic" aria-label="Search by voice" th:if="${inApp == true}"><i class="bi bi-mic-fill"></i></button>
             </form>
 
             <!-- Orders & returns, cart, bell, then the signed-in name in the corner -->
