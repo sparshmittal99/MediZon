@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Promo codes: the applied one, the code box with Apply beside it, and every coupon with its own Apply.
+  Used on checkout (website) and on the app's coupons screen (from='coupons': a code that doesn't work stays there).
+  Needs cart, promos, promosUsedToday and selectedAddress.
+-->
+<th:block th:fragment="couponBody(from)">
+    <div th:if="${cart.discounted}" class="mz-promo-applied mb-3">
+        <div>
+            <strong th:text="${cart.couponCode}">FIRST50</strong> applied
+            <div class="small" th:text="'You save ₹' + ${cart.discount}"></div>
+        </div>
+        <form th:action="@{/checkout/coupon/remove}" method="post">
+            <input type="hidden" name="address" th:value="${selectedAddress}">
+            <input type="hidden" name="from" th:if="${from != null}" th:value="${from}">
+            <button class="btn btn-sm btn-link text-danger" type="submit">Remove</button>
+        </form>
+    </div>
+    <div th:if="${cart.coupon != null and !cart.coupon.isOk()}" class="alert alert-warning small py-2" th:text="${cart.coupon.problem()}"></div>
+    <form th:unless="${cart.discounted}" th:action="@{/checkout/coupon}" method="post" class="d-flex gap-2 mb-3">
+        <input type="hidden" name="address" th:value="${selectedAddress}">
+        <input type="hidden" name="from" th:if="${from != null}" th:value="${from}">
+        <input class="form-control text-uppercase" name="code" maxlength="20" placeholder="Enter promo code" aria-label="Promo code" required>
+        <button class="btn btn-outline-primary" type="submit">Apply</button>
+    </form>
+    <h2 th:if="${from != null and !#lists.isEmpty(promos)}" class="mz-coupons-head">All coupons</h2>
+    <div class="d-grid gap-2">
+        <div th:each="c : ${promos}" class="mz-promo-card"
+             th:with="used=${promosUsedToday.contains(c.code)}, below=${cart.subtotal.compareTo(c.minOrder) < 0}, on=${c.code == cart.couponCode}"
+             th:classappend="${used or below} ? 'is-off' : (${on} ? 'is-on' : '')">
+            <div class="mz-promo-code" th:text="${c.code}">FIRST50</div>
+            <div class="flex-grow-1">
+                <div class="fw-semibold small" th:text="${c.title}"></div>
+                <div class="small text-muted" th:text="${c.description}"></div>
+                <div class="small text-danger" th:if="${used}">Used today. Try again tomorrow.</div>
+                <div class="small text-muted" th:if="${!used and below}"
+                     th:text="'Add ₹' + ${c.minOrder.subtract(cart.subtotal)} + ' more to use this'"></div>
+            </div>
+            <span th:if="${on}" class="small fw-semibold text-success">Applied</span>
+            <form th:unless="${on or used or below}" th:action="@{/checkout/coupon}" method="post">
+                <input type="hidden" name="address" th:value="${selectedAddress}">
+                <input type="hidden" name="from" th:if="${from != null}" th:value="${from}">
+                <input type="hidden" name="code" th:value="${c.code}">
+                <button class="btn btn-sm btn-outline-primary" type="submit">Apply</button>
+            </form>
+        </div>
+    </div>
+</th:block>
+</body>
+</html>

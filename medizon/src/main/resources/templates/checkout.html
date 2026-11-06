@@ -101,44 +101,31 @@
 
         <div class="col-lg-5">
             <!-- Promo codes: typed in or picked from the cards; one use of each code a day -->
-            <section class="mz-panel mb-4">
+            <section class="mz-panel mb-4" th:unless="${inApp == true}">
                 <h2 class="h5 mb-3"><i class="bi bi-ticket-perforated me-1 text-success" aria-hidden="true"></i>Apply coupon</h2>
-                <div th:if="${cart.discounted}" class="mz-promo-applied mb-3">
-                    <div>
-                        <strong th:text="${cart.couponCode}">FIRST50</strong> applied
-                        <div class="small" th:text="'You save ₹' + ${cart.discount}"></div>
-                    </div>
-                    <form th:action="@{/checkout/coupon/remove}" method="post">
+                <th:block th:replace="~{fragments/coupons :: couponBody(null)}"></th:block>
+            </section>
+            <!-- Android app: one "Apply coupon" row; the code box and the coupons are on their own screen (/checkout/coupons) -->
+            <section class="mb-4" th:if="${inApp == true}">
+                <!-- Applied: the code and the saving (tap to change it) with Remove beside; otherwise "Apply coupon ›" -->
+                <div class="mz-coupon-row" th:classappend="${cart.discounted} ? 'is-on'">
+                    <a class="mz-coupon-link"
+                       th:href="${selectedAddress != null} ? @{/checkout/coupons(address=${selectedAddress})} : @{/checkout/coupons}">
+                        <span class="mz-coupon-ico" aria-hidden="true"><i class="bi" th:classappend="${cart.discounted} ? 'bi-patch-check-fill' : 'bi-ticket-perforated'"></i></span>
+                        <span class="mz-coupon-text">
+                            <strong th:text="${cart.discounted} ? ${cart.couponCode} + ' applied' : 'Apply coupon'">Apply coupon</strong>
+                            <small th:text="${cart.discounted} ? 'You save ₹' + ${cart.discount}
+                                    : (${#lists.isEmpty(promos)} ? 'Have a promo code? Enter it here'
+                                    : (${#lists.size(promos) == 1} ? '1 coupon available' : ${#lists.size(promos)} + ' coupons available'))">Coupons available</small>
+                        </span>
+                        <i th:unless="${cart.discounted}" class="bi bi-chevron-right mz-coupon-go" aria-hidden="true"></i>
+                    </a>
+                    <form th:if="${cart.discounted}" th:action="@{/checkout/coupon/remove}" method="post" class="mz-coupon-remove">
                         <input type="hidden" name="address" th:value="${selectedAddress}">
-                        <button class="btn btn-sm btn-link text-danger" type="submit">Remove</button>
+                        <button class="btn btn-sm btn-link text-danger fw-semibold text-decoration-none" type="submit" th:attr="aria-label='Remove coupon ' + ${cart.couponCode}">Remove</button>
                     </form>
                 </div>
-                <div th:if="${cart.coupon != null and !cart.coupon.isOk()}" class="alert alert-warning small py-2" th:text="${cart.coupon.problem()}"></div>
-                <form th:unless="${cart.discounted}" th:action="@{/checkout/coupon}" method="post" class="d-flex gap-2 mb-3">
-                    <input type="hidden" name="address" th:value="${selectedAddress}">
-                    <input class="form-control text-uppercase" name="code" maxlength="20" placeholder="Enter promo code" aria-label="Promo code" required>
-                    <button class="btn btn-outline-primary" type="submit">Apply</button>
-                </form>
-                <div class="d-grid gap-2">
-                    <div th:each="c : ${promos}" class="mz-promo-card"
-                         th:with="used=${promosUsedToday.contains(c.code)}, below=${cart.subtotal.compareTo(c.minOrder) < 0}, on=${c.code == cart.couponCode}"
-                         th:classappend="${used or below} ? 'is-off' : (${on} ? 'is-on' : '')">
-                        <div class="mz-promo-code" th:text="${c.code}">FIRST50</div>
-                        <div class="flex-grow-1">
-                            <div class="fw-semibold small" th:text="${c.title}"></div>
-                            <div class="small text-muted" th:text="${c.description}"></div>
-                            <div class="small text-danger" th:if="${used}">Used today. Try again tomorrow.</div>
-                            <div class="small text-muted" th:if="${!used and below}"
-                                 th:text="'Add ₹' + ${c.minOrder.subtract(cart.subtotal)} + ' more to use this'"></div>
-                        </div>
-                        <span th:if="${on}" class="small fw-semibold text-success">Applied</span>
-                        <form th:unless="${on or used or below}" th:action="@{/checkout/coupon}" method="post">
-                            <input type="hidden" name="address" th:value="${selectedAddress}">
-                            <input type="hidden" name="code" th:value="${c.code}">
-                            <button class="btn btn-sm btn-outline-primary" type="submit">Apply</button>
-                        </form>
-                    </div>
-                </div>
+                <div th:if="${cart.coupon != null and !cart.coupon.isOk()}" class="alert alert-warning small py-2 mt-2 mb-0" th:text="${cart.coupon.problem()}"></div>
             </section>
 
             <div class="mz-panel">

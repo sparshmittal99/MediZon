@@ -38,7 +38,9 @@
   Only the dark bar stays on screen; the strip and the category bar scroll away.
 -->
 <th:block th:fragment="navbar">
-    <nav class="mz-nav" aria-label="Main">
+    <!-- Android app, every screen but home: the compact bar (search + upload prescription) from the first paint (app.css) -->
+    <nav class="mz-nav" aria-label="Main"
+         th:classappend="${inApp == true and showCatbar != true and (me == null or !me.staff)} ? 'mz-nav-mini'">
         <div class="container mz-nav-row">
             <!-- On wide screens the category bar's "All" opens the menu; pages without the bar keep this button -->
             <button type="button" class="mz-burger" th:classappend="${showCatbar == true} ? 'd-lg-none'" sec:authorize="!hasRole('STAFF')"

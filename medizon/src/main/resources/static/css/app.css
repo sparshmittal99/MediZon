@@ -99,11 +99,12 @@ html.mz-kb body:has(.mz-tabbar) { padding-bottom: 0; }
 .mz-rail-arrow { display: none !important; }
 
 /* ---------- Header ---------- */
-/* One colour drives the header: --mz-head. The bar, the search button and the status bar all follow it
-   (home: the banner showing, set by app.js; every other screen and the compact bar: the brand green). */
-body { --mz-head: #0B3B31; }
+/* Two colours drive the header: --mz-head (the bar and the status bar) and --mz-accent (a lighter matching shade
+   for the search button, with the magnifier in --mz-head). Home: the banner showing (app.js); every other screen
+   and the compact bar: the brand green with mint. Plain colours, no color-mix(), so older WebViews follow too. */
+body { --mz-head: #0B3B31; --mz-accent: #7CE0B4; }
 html[data-theme="dark"] body { --mz-head: #0A2A23; }
-html body.mz-home, html[data-theme="dark"] body.mz-home { --mz-head: #0A4E40; }   /* first banner, until app.js runs */
+html body.mz-home, html[data-theme="dark"] body.mz-home { --mz-head: #0A4E40; --mz-accent: #7CE0B4; }   /* first banner, until app.js runs */
 html body .mz-nav, html body.mz-home .mz-locbar { background-color: var(--mz-head); transition: background-color .45s ease; }
 
 /* No side menu in the app: the tab bar and the "You" page cover everything in it. The brand sits at the left edge. */
@@ -117,23 +118,18 @@ html body .mz-nav, html body.mz-home .mz-locbar { background-color: var(--mz-hea
     .mz-search { border-radius: .8rem; }
 }
 
-/* Search: the magnifier takes the header's colour on a soft tint of it, inside the white field, so it changes
-   with the banner instead of staying mint green */
-.mz-search button { background-color: color-mix(in srgb, var(--mz-head) 11%, #fff); color: var(--mz-head);
-    transition: background-color .45s ease, color .45s ease; }
-.mz-search button:hover, .mz-search button:active { background-color: color-mix(in srgb, var(--mz-head) 20%, #fff); }
-.mz-search:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--mz-head) 35%, #fff); }
-html[data-theme="dark"] .mz-search button { background-color: color-mix(in srgb, var(--mz-head) 55%, var(--mz-surface, #16211E));
-    color: color-mix(in srgb, var(--mz-head) 20%, #fff); }
-html[data-theme="dark"] .mz-search button:hover, html[data-theme="dark"] .mz-search button:active {
-    background-color: color-mix(in srgb, var(--mz-head) 75%, var(--mz-surface, #16211E)); }
+/* Search button: the matching light shade of the header, magnifier in the header's dark colour */
+.mz-search button, html[data-theme="dark"] .mz-search button { background-color: var(--mz-accent); color: var(--mz-head);
+    transition: background-color .45s ease, color .45s ease, filter .15s ease; }
+.mz-search button:hover, .mz-search button:active { background-color: var(--mz-accent); filter: brightness(.93); }
+.mz-search:focus-within { box-shadow: 0 0 0 3px var(--mz-accent); }
 
 /* ---------- Home: the header takes the colour of the banner showing (app.js), like shopping apps ----------
    Each banner's top edge fades from that same colour, so header and banner read as one surface. */
-.mz-banner-deals { --mz-banner-top: #0A4E40; }
-.mz-banner-remind { --mz-banner-top: #2E2366; }
-.mz-banner-delivery { --mz-banner-top: #7A3E00; }
-.mz-banner-rx { --mz-banner-top: #123A5C; }
+.mz-banner-deals { --mz-banner-top: #0A4E40; --mz-banner-accent: #7CE0B4; }
+.mz-banner-remind { --mz-banner-top: #2E2366; --mz-banner-accent: #C6C3FF; }
+.mz-banner-delivery { --mz-banner-top: #7A3E00; --mz-banner-accent: #FFCF85; }
+.mz-banner-rx { --mz-banner-top: #123A5C; --mz-banner-accent: #9ED3FF; }
 .mz-home .mz-banner::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3rem; pointer-events: none;
     background: linear-gradient(180deg, var(--mz-banner-top) 0%, transparent 100%); }
 
@@ -143,22 +139,33 @@ html[data-theme="dark"] .mz-search button:hover, html[data-theme="dark"] .mz-sea
     border-radius: 2rem; background: rgba(255, 255, 255, .14); }
 .mz-home .mz-locbar .mz-loc:active { background: rgba(255, 255, 255, .22); }
 
-/* ---------- Every screen, scrolled down: only the search box stays, with upload prescription beside it ----------
-   The bar is sticky with a negative top (set by app.js), so the brand row simply scrolls away above the search
-   box. Nothing changes height, so the page never jumps. Once only the search is left (.is-compact), the bar is the
-   brand green and the prescription icon slides in beside the search box, a plain icon as in the full header. */
 @media (max-width: 991.98px) {
+    /* ---------- Every screen but home: always the compact bar - the search box, upload prescription beside it ----------
+       (.mz-nav-mini, set by app.js). The bell is on the "You" page; the brand is on the home page. */
+    .mz-nav.mz-nav-mini { padding: .6rem 0; }
+    .mz-nav.mz-nav-mini .mz-nav-row { flex-wrap: nowrap; column-gap: .15rem; }
+    .mz-nav.mz-nav-mini .mz-brand, .mz-nav.mz-nav-mini .mz-nav-icons > li:not(.mz-app-rx-li) { display: none !important; }
+    .mz-nav.mz-nav-mini .mz-search { order: 1; flex: 1 1 auto; }
+    .mz-nav.mz-nav-mini .mz-nav-icons { order: 2; margin-left: 0; }
+
+    /* ---------- Home, scrolled down: the same compact bar ----------
+       The bar is sticky with a negative top (set by app.js), so the brand row simply scrolls away above the search
+       box. Nothing changes height, so the page never jumps. Once only the search is left (.is-compact), the bar is
+       the brand green and the prescription icon slides in beside the search box. */
     html body .mz-nav { top: var(--mz-nav-top, 0px); }
-    html body .mz-nav.is-compact { --mz-head: #0B3B31; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
+    html body .mz-nav.is-compact { --mz-head: #0B3B31; --mz-accent: #7CE0B4; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
     html[data-theme="dark"] body .mz-nav.is-compact { --mz-head: #0A2A23; }
-    .mz-nav-row { position: relative; }
-    .mz-search { transition: flex-basis .25s ease; }
-    .mz-nav.is-compact:has(.mz-app-rx-li) .mz-search { flex-basis: calc(100% - 2.85rem); }
+    .mz-nav.is-compact .mz-nav-row { position: relative; }
+    .mz-nav .mz-search { transition: flex-basis .25s ease; }
+    .mz-nav.is-compact.has-rx .mz-search { flex-basis: calc(100% - 2.85rem); }
     /* Lined up with the search box: right at the container's content edge, the same height, centred */
     .mz-nav.is-compact .mz-app-rx-li { position: absolute; bottom: 0; right: calc(var(--bs-gutter-x, 1.5rem) * .5);
-        display: flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.75rem;
         animation: mz-rx-in .22s ease-out both; }
-    .mz-nav.is-compact .mz-app-rx-li .mz-icon-link { padding: 0; border: 0; font-size: 1.45rem; }
+
+    /* The prescription icon in either compact bar: a plain icon, the search box's height, no box around it */
+    .mz-nav.is-compact .mz-app-rx-li, .mz-nav.mz-nav-mini .mz-app-rx-li { display: flex; align-items: center; justify-content: center;
+        width: 2.4rem; height: 2.75rem; }
+    .mz-nav.is-compact .mz-app-rx-li .mz-icon-link, .mz-nav.mz-nav-mini .mz-app-rx-li .mz-icon-link { padding: 0; border: 0; background: none; font-size: 1.45rem; }
 }
 @keyframes mz-rx-in { from { opacity: 0; transform: translateX(.6rem); } to { opacity: 1; transform: none; } }
 html[data-motion="reduce"] body .mz-nav, html[data-motion="reduce"] body .mz-locbar, html[data-motion="reduce"] .mz-search,
@@ -169,3 +176,32 @@ html[data-motion="reduce"] .mz-search button, html[data-motion="reduce"] .mz-nav
 .mz-tabbar a i .mz-count { top: -.15rem; right: .55rem; left: auto; font-family: var(--bs-body-font-family);
     font-style: normal; line-height: 1; box-shadow: 0 0 0 2px var(--mz-surface, #fff); }
 html[data-theme="dark"] .mz-tabbar a i .mz-count { box-shadow: 0 0 0 2px var(--mz-surface); }
+
+/* ---------- Checkout: one "Apply coupon" row that opens the coupons screen ---------- */
+.mz-coupon-row { display: flex; align-items: center; border: 1px solid var(--mz-line); border-radius: 1rem;
+    background: var(--mz-surface, #fff); box-shadow: 0 1px 2px rgba(23, 48, 42, .04); overflow: hidden; }
+.mz-coupon-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: .85rem; padding: .9rem 1rem;
+    color: var(--mz-ink); text-decoration: none; transition: background-color .15s ease; }
+.mz-coupon-link:hover { color: var(--mz-ink); }
+.mz-coupon-link:active { background: var(--mz-paper); }
+html[data-theme="dark"] .mz-coupon-link:active { background: #1D2A26; }
+.mz-coupon-remove { flex: none; margin: 0 .75rem 0 0; }
+/* Remove: plain red text, as on the coupons screen */
+.mz-promo-applied .btn-link { font-weight: 600; text-decoration: none; }   /* coupons screen: no underline either */
+.mz-coupon-ico { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem;
+    border-radius: .75rem; background: var(--mz-mint); color: var(--mz-green); font-size: 1.25rem; }
+.mz-coupon-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.mz-coupon-text strong { font-size: 1rem; font-weight: 700; }
+.mz-coupon-text small { margin-top: .15rem; color: var(--mz-muted); font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mz-coupon-go { flex: none; color: var(--mz-muted); font-size: 1rem; }
+.mz-coupon-row.is-on { border-color: var(--mz-green); }
+.mz-coupon-row.is-on .mz-coupon-text strong { color: var(--mz-green); }
+.mz-coupon-row.is-on .mz-coupon-text small { color: var(--mz-green); opacity: .85; }
+
+/* ---------- The coupons screen ---------- */
+.mz-coupons-title { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+.mz-coupons-back { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.4rem;
+    margin-left: -.5rem; border-radius: 50%; color: var(--mz-ink); font-size: 1.35rem; text-decoration: none; }
+.mz-coupons-back:active { background: var(--mz-paper); }
+.mz-coupons-head { margin: .4rem 0 .7rem; font-size: .8rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--mz-muted); }
+.mz-coupons-page .mz-promo-card { padding: .8rem .9rem; border-radius: 1rem; }

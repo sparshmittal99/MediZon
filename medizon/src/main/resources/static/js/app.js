@@ -254,15 +254,18 @@
     if (home) {
         // The banner showing: its colour goes on the header (a CSS variable) and the status bar
         const carousel = document.getElementById('mzBanners');
-        const colourOf = (item) => {
+        const varOf = (item, name) => {
             const banner = item && item.querySelector('.mz-banner');
-            return banner ? toHex(getComputedStyle(banner).getPropertyValue('--mz-banner-top')) : null;
+            return banner ? toHex(getComputedStyle(banner).getPropertyValue(name)) : null;
         };
         const showBanner = (item) => {
-            const c = colourOf(item);
+            const c = varOf(item, '--mz-banner-top');
             if (!c) return;
             bannerColor = c;
             document.body.style.setProperty('--mz-head', c);
+            // The search button: a lighter shade that goes with this banner
+            const accent = varOf(item, '--mz-banner-accent');
+            if (accent) document.body.style.setProperty('--mz-accent', accent);
             sendColor();
         };
         if (carousel) {
@@ -272,10 +275,13 @@
         }
     }
 
-    // Every screen, scrolled down: the bar is sticky with a negative top, so the brand row scrolls away and only
-    // the search box stays. Measured, because text size (App settings) changes the row's height.
+    // Compact bar: just the search box, with upload prescription beside it. Every screen but home always has it
+    // (.mz-nav-mini, from the template so it's there at first paint). Home has the full header at the top and turns compact on scrolling down: the bar is sticky
+    // with a negative top, so the brand row scrolls away and only the search box stays. Measured, because text
+    // size (App settings) changes the row's height.
     const search = nav && nav.querySelector('.mz-search');
-    if (search) {
+    if (nav && nav.querySelector('.mz-app-rx-li')) nav.classList.add('has-rx');
+    if (search && home) {
         let offset = 0;
         const measure = () => {
             if (!search || !phone.matches) { offset = 0; nav.style.removeProperty('--mz-nav-top'); return; }

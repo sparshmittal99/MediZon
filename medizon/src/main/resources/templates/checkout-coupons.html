@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Apply coupon')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<!-- Android app: the coupons screen opened from checkout's "Apply coupon" row (OrderController#coupons) -->
+<main class="container mz-page mz-coupons-page">
+    <div class="mz-coupons-title">
+        <a class="mz-coupons-back" aria-label="Back to checkout"
+           th:href="${selectedAddress != null} ? @{/checkout(address=${selectedAddress})} : @{/checkout}">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i></a>
+        <h1 class="mz-page-title mb-0">Apply coupon</h1>
+    </div>
+    <p class="small text-muted mb-3" th:text="'Cart total ₹' + ${cart.subtotal} + ' · one use of each code a day'">Cart total</p>
+    <section class="mz-panel">
+        <th:block th:replace="~{fragments/coupons :: couponBody('coupons')}"></th:block>
+        <p th:if="${#lists.isEmpty(promos)}" class="small text-muted mb-0">No coupons right now. Have a promo code? Enter it above.</p>
+    </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

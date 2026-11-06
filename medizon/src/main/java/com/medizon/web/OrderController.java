@@ -70,11 +70,7 @@ public class OrderController {
         model.addAttribute("cart", cart);
         model.addAttribute("minOrder", orderSettings.minOrderValue());
         model.addAttribute("minShort", OrderSettingsService.shortBy(cart.getSubtotal(), orderSettings.minOrderValue()));
-        List<Coupon> promos = couponService.available();
-        Set<String> usedToday = promos.stream().filter(c -> couponService.usedToday(user, c))
-                .map(Coupon::getCode).collect(java.util.stream.Collectors.toSet());
-        model.addAttribute("promos", CouponService.bestFirst(promos, cart.getSubtotal(), usedToday));   // biggest saving first
-        model.addAttribute("promosUsedToday", usedToday);
+        addPromos(user, cart, model);
         model.addAttribute("prescriptions", prescriptionService.validForUser(user));
         // Which prescription(s) each prescription medicine comes from, and anything none of them covers
         model.addAttribute("rxCoverage", prescriptionService.cover(user, OrderService.rxLines(cart)));
@@ -84,9 +80,35 @@ public class OrderController {
         return "checkout";
     }
 
+    /**
+     * The coupons screen (Android app): checkout shows a single "Apply coupon" row that opens this, with the promo
+     * code box and every coupon. Applying one goes back to checkout; a code that doesn't work stays here.
+     */
+    @GetMapping("/checkout/coupons")
+    public String coupons(@RequestParam(required = false) Long address, HttpServletRequest request, HttpSession session, Model model) {
+        User user = currentUser.get();
+        String pin = addressService.find(address, user).map(Address::getPincode).orElse(deliveryLocations.pincode(request));
+        CartSummary cart = cartService.summary(user, pin, (String) session.getAttribute(COUPON));
+        if (cart.isEmpty()) return "redirect:/cart";
+        model.addAttribute("cart", cart);
+        addPromos(user, cart, model);
+        model.addAttribute("selectedAddress", address);
+        return "checkout-coupons";
+    }
+
+    /** The coupons on offer, biggest saving first, and which of them this customer already used today. */
+    private void addPromos(User user, CartSummary cart, Model model) {
+        List<Coupon> promos = couponService.available();
+        Set<String> usedToday = promos.stream().filter(c -> couponService.usedToday(user, c))
+                .map(Coupon::getCode).collect(java.util.stream.Collectors.toSet());
+        model.addAttribute("promos", CouponService.bestFirst(promos, cart.getSubtotal(), usedToday));
+        model.addAttribute("promosUsedToday", usedToday);
+    }
+
     /** Applies a promo typed in or picked from the cards, if it gives a discount on this cart. */
     @PostMapping("/checkout/coupon")
     public String applyCoupon(@RequestParam(required = false) String code, @RequestParam(required = false) Long address,
+                              @RequestParam(required = false) String from,
                               HttpServletRequest request, HttpSession session, RedirectAttributes ra) {
         User user = currentUser.get();
         String pin = addressService.find(address, user).map(Address::getPincode).orElse(deliveryLocations.pincode(request));
@@ -99,14 +121,22 @@ public class OrderController {
         } else {
             session.setAttribute(COUPON, applied.coupon().getCode());
             ra.addFlashAttribute("success", applied.coupon().getCode() + " applied. You save ₹" + applied.discount() + ".");
+            return checkoutRedirect(address, null);
         }
-        return "redirect:/checkout" + (address == null ? "" : "?address=" + address);
+        return checkoutRedirect(address, from);   // didn't work: back to where it was tried, to try another
     }
 
     @PostMapping("/checkout/coupon/remove")
-    public String removeCoupon(@RequestParam(required = false) Long address, HttpSession session) {
+    public String removeCoupon(@RequestParam(required = false) Long address, @RequestParam(required = false) String from,
+                               HttpSession session) {
         session.removeAttribute(COUPON);
-        return "redirect:/checkout" + (address == null ? "" : "?address=" + address);
+        return checkoutRedirect(address, from);
+    }
+
+    /** Back to checkout, or to the coupons screen when that's where the customer was ({@code from=coupons}). */
+    private static String checkoutRedirect(Long address, String from) {
+        String path = "coupons".equals(from) ? "/checkout/coupons" : "/checkout";
+        return "redirect:" + path + (address == null ? "" : "?address=" + address);
     }
 
     /**
