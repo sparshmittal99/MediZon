@@ -180,7 +180,7 @@ html[data-theme="dark"] .mz-tabbar a i .mz-count { box-shadow: 0 0 0 2px var(--m
 /* ---------- Checkout: one "Apply coupon" row that opens the coupons screen ---------- */
 .mz-coupon-row { display: flex; align-items: center; border: 1px solid var(--mz-line); border-radius: 1rem;
     background: var(--mz-surface, #fff); box-shadow: 0 1px 2px rgba(23, 48, 42, .04); overflow: hidden; }
-.mz-coupon-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: .85rem; padding: .9rem 1rem;
+.mz-coupon-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: .75rem; padding: .65rem .9rem;   /* compact row: even space above and below */
     color: var(--mz-ink); text-decoration: none; transition: background-color .15s ease; }
 .mz-coupon-link:hover { color: var(--mz-ink); }
 .mz-coupon-link:active { background: var(--mz-paper); }
@@ -188,8 +188,8 @@ html[data-theme="dark"] .mz-coupon-link:active { background: #1D2A26; }
 .mz-coupon-remove { flex: none; margin: 0 .75rem 0 0; }
 /* Remove: plain red text, as on the coupons screen */
 .mz-promo-applied .btn-link { font-weight: 600; text-decoration: none; }   /* coupons screen: no underline either */
-.mz-coupon-ico { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem;
-    border-radius: .75rem; background: var(--mz-mint); color: var(--mz-green); font-size: 1.25rem; }
+.mz-coupon-ico { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 2.1rem; height: 2.1rem;
+    border-radius: .6rem; background: var(--mz-mint); color: var(--mz-green); font-size: 1.1rem; }
 .mz-coupon-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .mz-coupon-text strong { font-size: 1rem; font-weight: 700; }
 .mz-coupon-text small { margin-top: .15rem; color: var(--mz-muted); font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -114,9 +114,7 @@
                         <span class="mz-coupon-ico" aria-hidden="true"><i class="bi" th:classappend="${cart.discounted} ? 'bi-patch-check-fill' : 'bi-ticket-perforated'"></i></span>
                         <span class="mz-coupon-text">
                             <strong th:text="${cart.discounted} ? ${cart.couponCode} + ' applied' : 'Apply coupon'">Apply coupon</strong>
-                            <small th:text="${cart.discounted} ? 'You save ₹' + ${cart.discount}
-                                    : (${#lists.isEmpty(promos)} ? 'Have a promo code? Enter it here'
-                                    : (${#lists.size(promos) == 1} ? '1 coupon available' : ${#lists.size(promos)} + ' coupons available'))">Coupons available</small>
+                            <small th:if="${cart.discounted}" th:text="'You save ₹' + ${cart.discount}">You save</small>
                         </span>
                         <i th:unless="${cart.discounted}" class="bi bi-chevron-right mz-coupon-go" aria-hidden="true"></i>
                     </a>
