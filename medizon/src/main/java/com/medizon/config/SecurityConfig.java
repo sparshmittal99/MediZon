@@ -22,7 +22,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.core.session.SessionRegistryImpl;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -172,7 +175,7 @@ public class SecurityConfig {
             .formLogin(form -> form
                 .loginPage("/login")
                 .usernameParameter("email")
-                .successHandler(successHandler(userService, cartService, loginThrottle))
+                .successHandler(successHandler(userService, cartService, loginThrottle, signIns))
                 .failureHandler(failureHandler(loginThrottle))
                 .permitAll())
             .logout(logout -> logout
@@ -201,13 +204,14 @@ public class SecurityConfig {
      * the cart). Anything put in the cart before signing in moves into the account's cart.
      */
     private AuthenticationSuccessHandler successHandler(UserService userService, CartService cartService,
-                                                        LoginThrottle loginThrottle) {
+                                                        LoginThrottle loginThrottle, SignInService signIns) {
         SavedRequestAwareAuthenticationSuccessHandler customer = new SavedRequestAwareAuthenticationSuccessHandler();
         customer.setDefaultTargetUrl("/");
         return (request, response, authentication) -> {
             loginThrottle.succeeded(authentication.getName());
             userService.recordLogin(authentication.getName()).ifPresent(u -> {
                 SignInService.started(request.getSession(), u.getRememberEpoch());
+                signIns.signedInAgain(u, request);    // in case this device was signed out from another one
                 cartService.mergeGuestCart(u, request.getSession(false));
             });
             boolean staff = authentication.getAuthorities().stream()
@@ -246,10 +250,35 @@ public class SecurityConfig {
 
     private AuthenticationFailureHandler failureHandler(LoginThrottle loginThrottle) {
         return (request, response, exception) -> {
+            if (exception instanceof AdminInUseException) {
+                // The password was right: not a failed attempt for the lockout
+                response.sendRedirect(request.getContextPath() + "/login?inUse");
+                return;
+            }
             loginThrottle.failed(request.getParameter("email"), request.getRemoteAddr());
             response.sendRedirect(request.getContextPath()
                     + (exception instanceof DisabledException ? "/login?disabled" : "/login?error"));
         };
+    }
+
+    /**
+     * Checks the password against the account, then lets the admin account in on one device at a time
+     * (SignInService#claimOnlySignIn). As the only provider, it replaces the one Spring Boot would set up.
+     */
+    @Bean
+    public DaoAuthenticationProvider authenticationProvider(AppUserDetailsService userDetailsService,
+                                                            PasswordEncoder passwordEncoder, @Lazy SignInService signIns) {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        provider.setPostAuthenticationChecks(user -> {
+            boolean admin = user.getAuthorities().stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+            if (admin && RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs
+                    && !signIns.claimOnlySignIn(user.getUsername(), attrs.getRequest())) {
+                throw new AdminInUseException();
+            }
+        });
+        return provider;
     }
 
     /**

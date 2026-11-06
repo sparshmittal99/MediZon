@@ -89,7 +89,7 @@ between them. Automatic refills go to the address chosen on each reminder, or th
 invoice prints both. Without it, orders are billed to the account holder at the delivery address. In the cart a medicine can also be for "Others"
 (someone outside the family): it's delivered but not added to My medicines, and can share a line with family members.
 Each family member has a patient name (as on prescriptions), shown in the cart, at checkout and on the invoice.
-Account settings: change password (current password first, then the new one twice) and sign out other devices.
+Account settings: change password (current password first, then the new one twice) and See devices: sign out one device, or all other devices.
 
 **Back office**: dashboard (with sales by store for any day), customer order pipeline (Placed → Confirmed → Shipped → Delivered / Cancelled),
 prescription review (AI score and fast-track, medicines and packs pre-filled from the AI reading and the customer's

@@ -114,12 +114,8 @@
                         : 'You are signed in on ' + ${sessions} + ' devices: this one and ' + ${sessions - 1}
                           + (${sessions == 2} ? ' other.' : ' others.')"></p>
                 <div class="d-flex flex-wrap gap-2">
-                    <form th:action="@{/account/sign-out-others}" method="post"
-                          data-mz-confirm="You'll stay signed in here. Everywhere else will need to sign in again."
-                          data-mz-confirm-title="Sign out other devices?" data-mz-confirm-ok="Sign them out">
-                        <button class="btn btn-outline-secondary" type="submit" th:disabled="${sessions <= 1}">
-                            <i class="bi bi-phone me-1"></i>Sign out other devices</button>
-                    </form>
+                    <a th:href="@{/account/devices}" class="btn btn-outline-primary">
+                        <i class="bi bi-laptop me-1"></i>See devices</a>
                     <form th:action="@{/logout}" method="post">
                         <button class="btn btn-outline-danger" type="submit"><i class="bi bi-box-arrow-right me-1"></i>Sign out</button>
                     </form>

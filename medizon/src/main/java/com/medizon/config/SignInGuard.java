@@ -60,7 +60,8 @@ public class SignInGuard extends OncePerRequestFilter {
         Optional<AccountState> state = users.findStateByEmailIgnoreCase(auth.getName());
         boolean disabled = state.isEmpty() || !state.get().isEnabled() || state.get().isDeleted();
         HttpSession session = request.getSession(false);
-        boolean ended = !disabled && session != null && SignInService.outdated(session, state.get().getRememberEpoch());
+        boolean ended = !disabled && ((session != null && SignInService.outdated(session, state.get().getRememberEpoch()))
+                || signIns.endedElsewhere(state.get().getId(), request));    // this one device signed out from another
         if (disabled || ended) {
             signOut(request, response);
             // Like the session registry's expiry: fetch() calls see a redirect and the page goes to the sign-in page

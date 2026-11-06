@@ -37,4 +37,10 @@ public class SignIn {
 
     /** When this device's remember-me cookie runs out; null when it has none and lasts as long as the session. */
     private LocalDateTime rememberedUntil;
+
+    /**
+     * Set when this one device is signed out from another one. Its next request finds it and signs out there
+     * (SignInGuard); a password sign-in on that device clears it.
+     */
+    private LocalDateTime signedOutAt;
 }

@@ -9,5 +9,8 @@ import java.util.Optional;
 
 public interface SignInRepository extends JpaRepository<SignIn, Long> {
     Optional<SignIn> findByUserAndDeviceKey(User user, String deviceKey);
+    Optional<SignIn> findByUser_IdAndDeviceKey(Long userId, String deviceKey);
+    Optional<SignIn> findByIdAndUser(Long id, User user);
     List<SignIn> findByUser(User user);
+    boolean existsByUser_IdAndDeviceKeyAndSignedOutAtIsNotNull(Long userId, String deviceKey);
 }

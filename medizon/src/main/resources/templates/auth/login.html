@@ -13,6 +13,7 @@
         <div th:if="${param.error}" class="alert alert-danger" data-mz-popup>That email and password don't match. Try again.</div>
         <div th:if="${param.locked}" class="alert alert-danger" data-mz-popup>Too many wrong passwords. Wait 15 minutes, then try again.</div>
         <div th:if="${param.disabled}" class="alert alert-danger" data-mz-popup>This account has been disabled. Contact MediZon support for help.</div>
+        <div th:if="${param.inUse}" class="alert alert-danger" data-mz-popup>The admin account is already signed in on another device. Sign out there first, then try again.</div>
         <div th:if="${param.expired}" class="alert alert-warning" data-mz-popup>You were signed out. Please sign in again.</div>
         <div th:if="${cartCount != null and cartCount > 0}" class="alert alert-success small">
             <i class="bi bi-bag-check me-1" aria-hidden="true"></i>

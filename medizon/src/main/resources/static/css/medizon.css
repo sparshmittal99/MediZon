@@ -672,6 +672,10 @@ body *::-webkit-scrollbar { display: none; }
 .mz-device-prompt > i { font-size: 1.5rem; color: var(--mz-green); }
 .mz-device-row { display: flex; align-items: center; gap: .9rem; padding: .85rem 1.1rem; border-bottom: 1px solid var(--mz-line); }
 .mz-device-row:last-child { border-bottom: 0; }
+/* Account > Signed-in devices: a narrow column, so the full-width button stays a sensible size on desktop */
+.mz-w-devices { max-width: 40rem; }
+.mz-device-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem;
+    border-radius: 50%; background: var(--mz-mint); color: var(--mz-green); font-size: 1.15rem; }
 
 /* ---------- Returns ---------- */
 .mz-track-sm li { font-size: .75rem; padding-top: 1.6rem; }

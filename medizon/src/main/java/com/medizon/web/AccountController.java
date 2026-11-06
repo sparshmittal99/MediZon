@@ -4,6 +4,7 @@ import com.medizon.config.MediZonRememberMeServices;
 import com.medizon.domain.User;
 import com.medizon.service.AccountDeletionService;
 import com.medizon.service.CurrentUser;
+import com.medizon.service.SignInService;
 import com.medizon.service.UserService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,6 +14,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -28,6 +30,7 @@ public class AccountController {
     private final AccountDeletionService accountDeletion;
     private final CurrentUser currentUser;
     private final MediZonRememberMeServices rememberMe;
+    private final SignInService signIns;
 
     @GetMapping
     public String view(Model model) {
@@ -60,12 +63,27 @@ public class AccountController {
         return "redirect:/";
     }
 
+    /** Every browser and phone the account is signed in on, each with its own "Sign out". */
+    @GetMapping("/devices")
+    public String devices(HttpServletRequest request, Model model) {
+        model.addAttribute("devices", signIns.devices(currentUser.get(), request));
+        return "account-devices";
+    }
+
+    @PostMapping("/devices/{id}/sign-out")
+    public String signOutDevice(@PathVariable Long id, HttpServletRequest request, RedirectAttributes ra) {
+        signIns.endOne(currentUser.get(), id, request).ifPresentOrElse(
+                label -> ra.addFlashAttribute("success", "Signed out on " + label + "."),
+                () -> ra.addFlashAttribute("error", "That device is already signed out."));
+        return "redirect:/account/devices";
+    }
+
     @PostMapping("/sign-out-others")
     public String signOutOthers(HttpServletRequest request, HttpServletResponse response, RedirectAttributes ra) {
         int n = userService.signOutOtherSessions(currentUser.get(), request);
         rememberMe.reissue(request, response, SecurityContextHolder.getContext().getAuthentication());
         ra.addFlashAttribute("success", n == 0 ? "You're not signed in anywhere else."
                 : "Signed out on " + n + " other device" + (n == 1 ? "." : "s."));
-        return "redirect:/account";
+        return "redirect:/account/devices";
     }
 }

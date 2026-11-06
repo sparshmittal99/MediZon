@@ -19,9 +19,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Predicate;
 
 /**
  * Where an account is signed in, one row per browser or phone, and ending those sign-ins.
@@ -94,11 +97,96 @@ public class SignInService {
     /** How many browsers and phones the account is signed in on, this one included. */
     @Transactional
     public int count(User user) {
+        return Math.max(1, signedIn(user).size());
+    }
+
+    /** One row on the "Signed-in devices" page. */
+    public record Device(Long id, String label, LocalDateTime signedInAt, boolean current) {
+        public boolean phone() {
+            return label != null && (label.contains("Android") || label.contains("iPhone"));
+        }
+        public boolean tablet() {
+            return label != null && label.contains("iPad");
+        }
+    }
+
+    /** Where the account is signed in: this device first, then the most recently used. */
+    @Transactional
+    public List<Device> devices(User user, HttpServletRequest here) {
+        String key = DeviceService.keyOf(here);
+        List<Device> list = new ArrayList<>(signedIn(user).stream()
+                .sorted(Comparator.comparing(SignIn::getLastSeenAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(s -> new Device(s.getId(), s.getLabel(), s.getSignedInAt(), s.getDeviceKey().equals(key)))
+                .toList());
+        list.sort(Comparator.comparing(d -> !d.current()));
+        if (list.stream().noneMatch(Device::current)) {
+            // This device's row is made on its first request after signing in, and may not exist yet
+            list.add(0, new Device(null, DeviceService.describe(here.getHeader(HttpHeaders.USER_AGENT)), LocalDateTime.now(), true));
+        }
+        return list;
+    }
+
+    /** Signed in now; rows that ran out are cleared on the way. Devices signed out from elsewhere don't count. */
+    private List<SignIn> signedIn(User user) {
         LocalDateTime now = LocalDateTime.now();
         List<SignIn> all = signIns.findByUser(user);
         List<SignIn> gone = all.stream().filter(s -> !active(s, now)).toList();
         signIns.deleteAll(gone);
-        return Math.max(1, all.size() - gone.size());
+        return all.stream().filter(s -> active(s, now) && s.getSignedOutAt() == null).toList();
+    }
+
+    /**
+     * Signs the account out on one other device. Its next request is refused (SignInGuard); a phone also loses its
+     * alarm sync at once. Returns the device's name, or empty when it's this device or not one of the account's.
+     */
+    @Transactional
+    public Optional<String> endOne(User user, Long signInId, HttpServletRequest here) {
+        String key = DeviceService.keyOf(here);
+        Optional<SignIn> found = signIns.findByIdAndUser(signInId, user)
+                .filter(s -> !s.getDeviceKey().equals(key) && s.getSignedOutAt() == null);
+        found.ifPresent(s -> {
+            s.setSignedOutAt(LocalDateTime.now());
+            signIns.save(s);
+            dropPhones(user, d -> d.getDeviceKey().equals(s.getDeviceKey()));
+        });
+        return found.map(SignIn::getLabel);
+    }
+
+    /** True when this device was signed out from another one. Clears its sign-in, so it's handled once. */
+    @Transactional
+    public boolean endedElsewhere(Long userId, HttpServletRequest request) {
+        String key = DeviceService.keyOf(request);
+        if (key == null || !signIns.existsByUser_IdAndDeviceKeyAndSignedOutAtIsNotNull(userId, key)) return false;
+        signIns.findByUser_IdAndDeviceKey(userId, key).ifPresent(signIns::delete);
+        return true;
+    }
+
+    /**
+     * The admin account signs in on one device at a time. Refused (false) while another device is in use: it made a
+     * request within the session timeout and hasn't signed out. Otherwise every other sign-in is ended, so a device
+     * left signed in by a remember-me cookie (the app, "Keep me signed in") can't come back alongside this one.
+     */
+    @Transactional
+    public boolean claimOnlySignIn(String email, HttpServletRequest request) {
+        Optional<User> found = users.findByEmailIgnoreCase(email);
+        if (found.isEmpty()) return true;
+        User user = found.get();
+        String key = DeviceService.keyOf(request);
+        LocalDateTime since = LocalDateTime.now().minus(sessionTimeout).minus(SEEN_EVERY);
+        boolean inUse = signIns.findByUser(user).stream()
+                .anyMatch(s -> !s.getDeviceKey().equals(key) && s.getSignedOutAt() == null
+                        && s.getLastSeenAt() != null && s.getLastSeenAt().isAfter(since));
+        if (inUse) return false;
+        end(user, key);
+        return true;
+    }
+
+    /** A password sign-in on a device signed out from elsewhere earlier: it's signed in again. */
+    @Transactional
+    public void signedInAgain(User user, HttpServletRequest request) {
+        String key = DeviceService.keyOf(request);
+        if (key == null) return;
+        signIns.findByUserAndDeviceKey(user, key).filter(s -> s.getSignedOutAt() != null).ifPresent(signIns::delete);
     }
 
     /**
@@ -129,13 +217,18 @@ public class SignInService {
         LocalDateTime now = LocalDateTime.now();
         List<SignIn> others = signIns.findByUser(user).stream()
                 .filter(s -> !s.getDeviceKey().equals(keepKey)).toList();
-        int n = (int) others.stream().filter(s -> active(s, now)).count();
+        int n = (int) others.stream().filter(s -> active(s, now) && s.getSignedOutAt() == null).count();
         signIns.deleteAll(others);
 
-        // Phones: their alarm sync token stops working; a push makes them sync now, get refused, and drop the alarms
+        dropPhones(user, d -> !d.getDeviceKey().equals(keepKey));
+        return n;
+    }
+
+    /** Phones: their alarm sync token stops working; a push makes them sync now, get refused, and drop the alarms. */
+    private void dropPhones(User user, Predicate<NotificationDevice> which) {
         List<String> wake = new ArrayList<>();
         for (NotificationDevice d : devices.findByUser(user)) {
-            if (d.getDeviceKey().equals(keepKey) || d.getAppTokenHash() == null) continue;
+            if (!which.test(d) || d.getAppTokenHash() == null) continue;
             if (d.getPushToken() != null) wake.add(d.getPushToken());
             d.setAppTokenHash(null);
             d.setAppLinkedAt(null);
@@ -143,7 +236,6 @@ public class SignInService {
             devices.save(d);
         }
         afterCommit(() -> wake.forEach(t -> push.send(t, Map.of("type", "SYNC"))));
-        return n;
     }
 
     private int currentEpoch(User user) {
