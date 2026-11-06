@@ -100,7 +100,7 @@ html.mz-kb body:has(.mz-tabbar) { padding-bottom: 0; }
 
 /* ---------- Header ---------- */
 /* Two colours drive the header: --mz-head (the bar and the status bar) and --mz-accent (a lighter matching shade
-   for the search button, with the magnifier in --mz-head). Home: the banner showing (app.js); every other screen
+   for the search box's focus ring; the magnifier is in --mz-head). Home: the banner showing (app.js); every other screen
    and the compact bar: the brand green with mint. Plain colours, no color-mix(), so older WebViews follow too. */
 body { --mz-head: #0B3B31; --mz-accent: #7CE0B4; }
 html[data-theme="dark"] body { --mz-head: #0A2A23; }
@@ -118,10 +118,14 @@ html body .mz-nav, html body.mz-home .mz-locbar { background-color: var(--mz-hea
     .mz-search { border-radius: .8rem; }
 }
 
-/* Search button: the matching light shade of the header, magnifier in the header's dark colour */
-.mz-search button, html[data-theme="dark"] .mz-search button { background-color: var(--mz-accent); color: var(--mz-head);
-    transition: background-color .45s ease, color .45s ease, filter .15s ease; }
-.mz-search button:hover, .mz-search button:active { background-color: var(--mz-accent); filter: brightness(.93); }
+/* Search button: no box of its own - the search bar is one white piece with the magnifier inside it, in the header's
+   colour (the banner's on home, brand green in the compact bar). Dark mode: the bar's own surface, with the magnifier
+   in the header's light matching shade, which also follows the banner, since the dark header colour wouldn't show. */
+.mz-search button, .mz-search button:hover, .mz-search button:active { background-color: transparent; color: var(--mz-head);
+    transition: color .45s ease, opacity .15s ease; }
+html[data-theme="dark"] .mz-search button, html[data-theme="dark"] .mz-search button:hover,
+html[data-theme="dark"] .mz-search button:active { background-color: transparent; color: var(--mz-accent); }
+.mz-search button:active { opacity: .6; }
 .mz-search:focus-within { box-shadow: 0 0 0 3px var(--mz-accent); }
 
 /* ---------- Home: the header takes the colour of the banner showing (app.js), like shopping apps ----------
