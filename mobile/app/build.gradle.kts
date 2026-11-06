@@ -28,7 +28,10 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        buildConfigField("String", "BASE_URL", "\"https://medizon-mze9.onrender.com\"")
+        // The site the app shows. Links to it (in emails, etc.) open the app: see the App Links filter in the manifest
+        val siteHost = "medizon-mze9.onrender.com"
+        buildConfigField("String", "BASE_URL", "\"https://$siteHost\"")
+        manifestPlaceholders["siteHost"] = siteHost
         buildConfigField("String", "FIREBASE_API_KEY", "\"${firebase("apiKey")}\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"${firebase("appId")}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebase("projectId")}\"")

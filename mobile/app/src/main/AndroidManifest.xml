@@ -89,6 +89,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- App Links: links to the site open here when the app is installed (verified by the site's
+                 /.well-known/assetlinks.json); otherwise they open in the browser. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="${siteHost}" />
+            </intent-filter>
         </activity>
 
         <activity

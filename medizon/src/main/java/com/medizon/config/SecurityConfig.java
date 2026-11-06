@@ -133,6 +133,8 @@ public class SecurityConfig {
                         "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/error").permitAll()
                 // Site icons, also under their content-hashed names (favicon-3f9a….svg) from the resource chain
                 .requestMatchers("/favicon*", "/apple-touch-icon*").permitAll()
+                // Android App Links verification (AppLinksController)
+                .requestMatchers("/.well-known/assetlinks.json").permitAll()
                 // Visitors can fill a cart and pick a delivery location before signing in; checkout needs an account.
                 // Admin accounts are turned away in CartController / CartService.
                 .requestMatchers("/cart", "/cart/add", "/cart/*/remove", "/api/cart", "/api/cart/*", "/api/location/**").permitAll()

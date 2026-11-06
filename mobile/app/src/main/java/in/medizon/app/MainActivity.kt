@@ -65,6 +65,19 @@ class MainActivity : AppCompatActivity() {
                 .putExtra(EXTRA_PATH, path ?: "/")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
+        /**
+         * The page an intent asks for: a notification's path, or the path of a link to the site that opened the app
+         * (App Links, e.g. a button in an email). Null when it asks for no page.
+         */
+        fun pathFrom(intent: Intent?): String? {
+            if (intent == null) return null
+            intent.getStringExtra(EXTRA_PATH)?.let { return it }
+            val uri = intent.data ?: return null
+            if (intent.action != Intent.ACTION_VIEW || uri.scheme != "https" || uri.host?.lowercase() != baseHost) return null
+            val path = uri.encodedPath?.takeIf { it.startsWith("/") } ?: "/"
+            return path + (uri.encodedQuery?.let { "?$it" } ?: "") + (uri.encodedFragment?.let { "#$it" } ?: "")
+        }
+
         fun urlFor(path: String?): String {
             val p = path?.trim().orEmpty()
             // Only same-site absolute paths; anything else falls back to home.
@@ -206,7 +219,7 @@ class MainActivity : AppCompatActivity() {
         watchNetwork()
 
         cleanOldCameraFiles()
-        loadUrl(urlFor(intent?.getStringExtra(EXTRA_PATH)))
+        loadUrl(urlFor(pathFrom(intent)))
 
         if (Store.isLinked(this)) {
             Sync.syncNow(this)
@@ -218,7 +231,7 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.getStringExtra(EXTRA_PATH)?.let { loadUrl(urlFor(it)) }
+        pathFrom(intent)?.let { loadUrl(urlFor(it)) }
     }
 
     override fun onResume() {
