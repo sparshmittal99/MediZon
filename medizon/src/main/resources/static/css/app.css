@@ -135,9 +135,12 @@ html body .mz-nav, html body.mz-home .mz-locbar { background-color: var(--mz-hea
 
 /* "Delivers to" as a soft pill on the same colour, instead of a strip of its own */
 .mz-home .mz-locbar { padding: 0 0 .65rem; }
-.mz-home .mz-locbar .mz-loc { display: inline-flex; width: auto; max-width: 100%; margin: 0; padding: .4rem .8rem .4rem .65rem;
-    border-radius: 2rem; background: rgba(255, 255, 255, .14); }
-.mz-home .mz-locbar .mz-loc:active { background: rgba(255, 255, 255, .22); }
+.mz-home .mz-locbar .mz-loc { display: inline-flex; width: auto; max-width: 100%; margin: 0; padding: .4rem 0;
+    border-radius: 0; background: none; }
+.mz-home .mz-locbar .mz-loc:active { background: none; opacity: .75; }
+/* The app: no box or tap flash around "Select location" on any screen */
+.mz-loc { -webkit-tap-highlight-color: transparent; }
+.mz-loc, .mz-loc:hover, .mz-loc:focus { border-color: transparent; outline: none; box-shadow: none; }
 
 @media (max-width: 991.98px) {
     /* ---------- Every screen but home: always the compact bar - the search box, upload prescription beside it ----------
