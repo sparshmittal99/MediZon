@@ -121,6 +121,14 @@ class Bridge(private val activity: MainActivity) {
         main.post { activity.startActivity(android.content.Intent(activity, SettingsActivity::class.java)) }
     }
 
+    /** The page's header colour ("#RRGGBB"), so the status bar above it matches (home: the banner showing). */
+    @JavascriptInterface
+    fun setStatusBarColor(color: String?) {
+        if (!trusted() || color == null) return
+        val parsed = try { android.graphics.Color.parseColor(color.trim()) } catch (e: IllegalArgumentException) { return }
+        main.post { activity.setPageStatusColor(parsed) }
+    }
+
     companion object {
         fun status(c: Context): JSONObject {
             val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

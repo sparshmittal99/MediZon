@@ -35,6 +35,12 @@
     };
 
     apply();
+    // App only: a page that refreshed itself (app.js) skips the fade-in, so the refresh is hardly noticed
+    if (app) {
+        try {
+            if (sessionStorage.getItem('mz_soft') === location.href) root.classList.add('mz-soft');
+        } catch (e) { /* no storage: a normal fade */ }
+    }
     window.addEventListener('storage', (e) => { if (e.key === KEY) apply(); });   // other tabs
     // Paper is white: print (invoices) in light colours, then go back to dark
     window.addEventListener('beforeprint', () => {

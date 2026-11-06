@@ -12,6 +12,8 @@ html { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
 /* Pages fade in, like moving between app screens (opacity only: a transform would break fixed elements) */
 @keyframes mz-app-in { from { opacity: 0; } to { opacity: 1; } }
 body { animation: mz-app-in .18s ease-out both; }
+/* A page that refreshed itself (app.js auto refresh) just appears in place */
+html.mz-soft body { animation: none; }
 
 /* An app has no website footer */
 .mz-footer { display: none !important; }
@@ -95,3 +97,54 @@ html.mz-kb body:has(.mz-tabbar) { padding-bottom: 0; }
 
 /* Card rows scroll by touch, so no left/right arrows */
 .mz-rail-arrow { display: none !important; }
+
+/* ---------- Header ---------- */
+/* No side menu in the app: the tab bar and the "You" page cover everything in it. The brand sits at the left edge. */
+.mz-burger { display: none !important; }
+@media (max-width: 991.98px) {
+    .mz-nav { padding-top: .6rem; }
+    .mz-nav-row { column-gap: .5rem; }
+    .mz-nav .mz-brand { font-size: 1.3rem; gap: .55rem; }
+    .mz-nav .mz-mark { width: 2rem; height: 2rem; font-size: 1rem; box-shadow: 0 2px 6px rgba(0, 0, 0, .18); }
+    .mz-nav-icons { gap: .15rem; }
+    .mz-search { border-radius: .8rem; }
+    .mz-search button { border-radius: 0 .8rem .8rem 0; }
+}
+
+/* ---------- Home: the header takes the colour of the banner showing (app.js), like shopping apps ----------
+   The status bar follows too (MediZonApp.setStatusBarColor). Each banner's top edge fades from that same colour,
+   so header and banner read as one surface. */
+.mz-banner-deals { --mz-banner-top: #0A4E40; }
+.mz-banner-remind { --mz-banner-top: #2E2366; }
+.mz-banner-delivery { --mz-banner-top: #7A3E00; }
+.mz-banner-rx { --mz-banner-top: #123A5C; }
+.mz-home .mz-banner::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3rem; pointer-events: none;
+    background: linear-gradient(180deg, var(--mz-banner-top) 0%, transparent 100%); }
+
+html body.mz-home .mz-nav, html body.mz-home .mz-locbar { background-color: var(--mz-head, #0A4E40); transition: background-color .45s ease; }
+html[data-motion="reduce"] body.mz-home .mz-nav, html[data-motion="reduce"] body.mz-home .mz-locbar { transition: none; }
+
+/* "Delivers to" as a soft pill on the same colour, instead of a strip of its own */
+.mz-home .mz-locbar { padding: 0 0 .65rem; }
+.mz-home .mz-locbar .mz-loc { display: inline-flex; width: auto; max-width: 100%; margin: 0; padding: .4rem .8rem .4rem .65rem;
+    border-radius: 2rem; background: rgba(255, 255, 255, .14); }
+.mz-home .mz-locbar .mz-loc:active { background: rgba(255, 255, 255, .22); }
+
+/* ---------- Home, scrolled down: only the search box stays, with upload prescription beside it ----------
+   The bar is sticky with a negative top (set by app.js), so the brand row simply scrolls away above the search
+   box. Nothing changes height, so the page never jumps. Once only the search is left (.is-compact), the bar goes
+   back to the brand green and the prescription button slides in next to the search box. */
+@media (max-width: 991.98px) {
+    html body.mz-home .mz-nav { top: var(--mz-nav-top, 0px); }
+    .mz-home .mz-nav-row { position: relative; }
+    .mz-home .mz-search { transition: flex-basis .25s ease; }
+    html body.mz-home .mz-nav.is-compact { background-color: #0B3B31; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
+    html[data-theme="dark"] body.mz-home .mz-nav.is-compact { background-color: #0A2A23; }
+    .mz-home .mz-nav.is-compact:has(.mz-app-rx-li) .mz-search { flex-basis: calc(100% - 3.25rem); }
+    .mz-home .mz-nav.is-compact .mz-app-rx-li { position: absolute; right: 0; bottom: 0; display: flex; animation: mz-rx-in .22s ease-out both; }
+    .mz-home .mz-nav.is-compact .mz-app-rx-li .mz-icon-link { justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0;
+        border-radius: .8rem; background: rgba(255, 255, 255, .14); }
+    .mz-home .mz-nav.is-compact .mz-app-rx-li .mz-icon-link:active { background: rgba(255, 255, 255, .24); }
+}
+@keyframes mz-rx-in { from { opacity: 0; transform: translateX(.6rem); } to { opacity: 1; transform: none; } }
+html[data-motion="reduce"] .mz-home .mz-search, html[data-motion="reduce"] .mz-home .mz-nav.is-compact .mz-app-rx-li { transition: none; animation: none; }

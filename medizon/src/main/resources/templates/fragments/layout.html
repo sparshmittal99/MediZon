@@ -96,7 +96,8 @@
                     </a>
                 </li>
                 <!-- Android app, signed-in customers: an upload-prescription button here; the account menu is under the name in the tab bar -->
-                <li th:if="${inApp == true and me != null and me.customer}">
+                <!-- On the home page it moves next to the search box once the header shrinks (app.css .is-compact) -->
+                <li class="mz-app-rx-li" th:if="${inApp == true and me != null and me.customer}">
                     <form th:action="@{/prescriptions}" method="post" enctype="multipart/form-data" class="mz-app-rx" data-mz-rx-quick>
                         <label class="mz-icon-link mb-0" title="Upload prescription">
                             <i class="bi bi-file-earmark-medical"></i>

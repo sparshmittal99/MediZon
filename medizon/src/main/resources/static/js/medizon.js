@@ -265,6 +265,7 @@
             if (document.querySelector('[data-mz-hold-live]')) return true;   // the payment page: never reload mid-payment
             return [...document.querySelectorAll('form input, form textarea, form select')].some(edited);
         };
+        window.mzPageBusy = busy;   // the Android app's auto refresh (app.js) waits on the same thing
         function apply() {
             timer = null;
             if (pending <= version || leaving || document.hidden) return;   // hidden tabs catch up when shown

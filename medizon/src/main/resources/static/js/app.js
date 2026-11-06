@@ -224,4 +224,151 @@
     document.addEventListener('click', (e) => {
         if (e.target.closest('[data-mz-app-settings]')) { e.preventDefault(); call('openSettings'); }
     });
+
+    // ---- Header colour, and the status bar above it ----
+    // Every page tells the app its header colour so the status bar matches. On the home page the header takes the
+    // colour of the banner showing and changes as the banners slide; scrolled down it's back to the brand green.
+    const root = document.documentElement;
+    const nav = document.querySelector('.mz-nav');
+    const home = document.body.classList.contains('mz-home') && nav;
+    const phone = window.matchMedia('(max-width: 991.98px)');
+    const brandGreen = () => (root.dataset.theme === 'dark' ? '#0A2A23' : '#0B3B31');
+    const toHex = (css) => {
+        const m = String(css || '').match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?/);
+        if (!m) return /^#[0-9a-f]{6}$/i.test(String(css).trim()) ? String(css).trim() : null;
+        if (m[4] !== undefined && Number(m[4]) === 0) return null;   // transparent
+        return '#' + [m[1], m[2], m[3]].map(n => Number(n).toString(16).padStart(2, '0')).join('');
+    };
+    let bannerColor = null;
+    let compact = false;
+    let sentColor = null;
+    const headColor = () => {
+        if (home && !compact && bannerColor) return bannerColor;
+        if (home) return brandGreen();
+        return (nav && toHex(getComputedStyle(nav).backgroundColor)) || brandGreen();
+    };
+    const sendColor = (force) => {
+        const c = headColor();
+        if (!force && c === sentColor) return;
+        sentColor = c;
+        call('setStatusBarColor', c);
+    };
+
+    if (home) {
+        // The banner showing: its colour goes on the header (a CSS variable) and the status bar
+        const carousel = document.getElementById('mzBanners');
+        const colourOf = (item) => {
+            const banner = item && item.querySelector('.mz-banner');
+            return banner ? toHex(getComputedStyle(banner).getPropertyValue('--mz-banner-top')) : null;
+        };
+        const showBanner = (item) => {
+            const c = colourOf(item);
+            if (!c) return;
+            bannerColor = c;
+            document.body.style.setProperty('--mz-head', c);
+            sendColor();
+        };
+        if (carousel) {
+            showBanner(carousel.querySelector('.carousel-item.active'));
+            // Fires as a slide starts (also for swipes), so header, banner and status bar move together
+            carousel.addEventListener('slide.bs.carousel', (e) => showBanner(e.relatedTarget));
+        }
+
+        // Scrolled down: the bar is sticky with a negative top, so the brand row scrolls away and only the
+        // search box stays. Measured, because text size (App settings) changes the row's height.
+        const search = nav.querySelector('.mz-search');
+        let offset = 0;
+        const measure = () => {
+            if (!search || !phone.matches) { offset = 0; nav.style.removeProperty('--mz-nav-top'); return; }
+            const gap = parseFloat(getComputedStyle(nav).paddingBottom) || 8;
+            offset = Math.max(0, Math.round(search.getBoundingClientRect().top - nav.getBoundingClientRect().top - gap));
+            nav.style.setProperty('--mz-nav-top', -offset + 'px');
+        };
+        const onScroll = () => {
+            const next = offset > 0 && window.scrollY >= offset - 1;
+            if (next === compact) return;
+            compact = next;
+            nav.classList.toggle('is-compact', compact);
+            sendColor();
+        };
+        // Measure only at the top (when not compact), so the moved prescription button doesn't skew it
+        const remeasure = () => { if (!compact) measure(); onScroll(); };
+        measure();
+        onScroll();
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', remeasure);
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(remeasure);
+    }
+    sendColor(true);
+    // Dark mode or text size changed in App settings: the header colour and its height may have changed
+    const applyTheme2 = window.mzApplyTheme;
+    window.mzApplyTheme = () => {
+        if (applyTheme2) applyTheme2();
+        window.dispatchEvent(new Event('resize'));
+        sendColor(true);
+    };
+    // Back to this page from the next one: the app had the next page's colour
+    window.addEventListener('pageshow', (e) => { if (e.persisted) sendColor(true); });
+
+    // ---- Auto refresh, in place of pull-to-refresh ----
+    // A page refreshes itself when it may be out of date: back in the app after a while, the connection coming
+    // back, or left open untouched for a few minutes. Never while the user is busy with it (typing, a filled-in
+    // form, an open dialog, a payment) - the same check the live updates use (medizon.js). Signed-in pages also
+    // reload the moment their data changes elsewhere (live updates). The scroll position is kept.
+    const SOFT_KEY = 'mz_soft';
+    const RESUME_AFTER_MS = 60 * 1000;          // away from the app this long: refresh on return
+    const IDLE_AFTER_MS = 5 * 60 * 1000;        // page this old and untouched for a minute: refresh
+    const loadedAt = Date.now();
+    let touchedAt = Date.now();
+    let refreshing = false;
+
+    // This load was an auto refresh: put the page back where it was
+    try {
+        if (sessionStorage.getItem(SOFT_KEY) === location.href) {
+            const y = Number(sessionStorage.getItem(SOFT_KEY + '_y')) || 0;
+            sessionStorage.removeItem(SOFT_KEY);
+            sessionStorage.removeItem(SOFT_KEY + '_y');
+            if (y > 0) {
+                const back = () => { if (window.scrollY < 4) window.scrollTo(0, y); };
+                back();
+                window.addEventListener('load', back, { once: true });
+            }
+        }
+    } catch (e) { /* no storage */ }
+
+    const holdRefresh = () => {
+        if (refreshing || document.hidden || !navigator.onLine) return true;
+        if (busyBar && !busyBar.hidden) return true;                              // already going somewhere
+        if (document.querySelector('.mz-pop, .is-invalid, .alert-danger:not([hidden])')) return true;
+        if (/\/(checkout|payment)(\/|$)/.test(path)) return true;                 // never mid-checkout
+        try { if (window.mzPageBusy && window.mzPageBusy()) return true; } catch (e) { return true; }
+        return false;
+    };
+    const refresh = () => {
+        if (holdRefresh()) return false;
+        refreshing = true;
+        try {
+            sessionStorage.setItem(SOFT_KEY, location.href);
+            sessionStorage.setItem(SOFT_KEY + '_y', String(Math.round(window.scrollY)));
+        } catch (e) { /* refreshes anyway, from the top */ }
+        busy(null);
+        // A fresh GET of this address (never resends a form); with a #hash, replace() would only scroll
+        if (location.hash) location.reload(); else location.replace(location.href);
+        return true;
+    };
+
+    // The app calls this on coming back to the foreground, with how long it was away
+    window.mzAppResumed = (awayMs) => { if (Number(awayMs) >= RESUME_AFTER_MS) refresh(); };
+    // Connection back after dropping: whatever failed to load meanwhile comes in
+    let wentOffline = false;
+    window.addEventListener('offline', () => { wentOffline = true; });
+    window.addEventListener('online', () => { if (wentOffline) { wentOffline = false; setTimeout(refresh, 600); } });
+    // Shown again from the back/forward cache after a while
+    window.addEventListener('pageshow', (e) => { if (e.persisted && Date.now() - loadedAt > RESUME_AFTER_MS) refresh(); });
+    // Left open and untouched
+    ['touchstart', 'keydown', 'input', 'scroll'].forEach(t => window.addEventListener(t, () => { touchedAt = Date.now(); }, { passive: true, capture: true }));
+    setInterval(() => {
+        const now = Date.now();
+        if (now - loadedAt >= IDLE_AFTER_MS && now - touchedAt >= 60 * 1000) refresh();
+    }, 30 * 1000);
 })();

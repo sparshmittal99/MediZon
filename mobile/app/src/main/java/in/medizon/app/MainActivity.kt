@@ -44,7 +44,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import android.animation.ValueAnimator
+import android.animation.ArgbEvaluator
+import android.net.Network
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -55,6 +57,7 @@ class MainActivity : AppCompatActivity() {
         /** True while MainActivity is resumed (push messages are then shown live by the page). */
         @Volatile var foreground = false
         private const val SPLASH_MS = 1100L
+        private const val AUTO_RETRY_MS = 8000L
         val baseHost: String = (Uri.parse(BuildConfig.BASE_URL).host ?: "").lowercase()
 
         fun openIntent(c: Context, path: String?): Intent =
@@ -74,7 +77,6 @@ class MainActivity : AppCompatActivity() {
         private set
 
     private lateinit var webView: WebView
-    private lateinit var swipe: SwipeRefreshLayout
     private lateinit var progress: ProgressBar
     private lateinit var errorView: View
     private lateinit var errorTitle: TextView
@@ -86,6 +88,21 @@ class MainActivity : AppCompatActivity() {
     private var pageLoading = false
     private var mainFrameError = false
     private var lastRequestedUrl: String = BuildConfig.BASE_URL + "/"
+
+    // Status bar: the colour the page's header asked for (null = the default dark green)
+    private var pageStatusColor: Int? = null
+    private var statusAnimator: ValueAnimator? = null
+
+    // Auto refresh: how long the app was away, and retrying the offline screen by itself
+    private var pausedAt = 0L
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private val autoRetry = object : Runnable {
+        override fun run() {
+            if (errorView.visibility != View.VISIBLE) return
+            if (isOnline() && retryButton.isEnabled) retry()
+            webView.postDelayed(this, AUTO_RETRY_MS)
+        }
+    }
 
     // file chooser
     private var fileCallback: ValueCallback<Array<Uri>>? = null
@@ -166,7 +183,6 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_main)
         webView = findViewById(R.id.webView)
-        swipe = findViewById(R.id.swipe)
         progress = findViewById(R.id.progress)
         errorView = findViewById(R.id.errorView)
         errorTitle = findViewById(R.id.errorTitle)
@@ -186,12 +202,8 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
         setupBack()
 
-        swipe.setColorSchemeColors(ContextCompat.getColor(this, R.color.mz_accent))
-        swipe.setOnRefreshListener {
-            if (errorView.visibility == View.VISIBLE) retry() else webView.reload()
-        }
-        webView.viewTreeObserver.addOnScrollChangedListener { swipe.isEnabled = webView.scrollY == 0 }
         retryButton.setOnClickListener { retry() }
+        watchNetwork()
 
         cleanOldCameraFiles()
         loadUrl(urlFor(intent?.getStringExtra(EXTRA_PATH)))
@@ -216,16 +228,31 @@ class MainActivity : AppCompatActivity() {
         notifyPageStatus()
         applyThemeColors()
         callPage("window.mzApplyTheme && window.mzApplyTheme()")
+        // Back from the background: the page decides whether it's stale enough to refresh itself (app.js)
+        if (pausedAt != 0L) {
+            val away = SystemClock.elapsedRealtime() - pausedAt
+            pausedAt = 0L
+            if (errorView.visibility == View.VISIBLE) retry()
+            else callPage("window.mzAppResumed && window.mzAppResumed($away)")
+        }
     }
 
     override fun onPause() {
         foreground = false
+        // Away to pick a file / take a photo or fix alarm settings: the page is waiting on that, so no refresh after
+        pausedAt = if (fileCallback != null || fixing) 0L else SystemClock.elapsedRealtime()
         webView.onPause()
         CookieManager.getInstance().flush()
         super.onPause()
     }
 
     override fun onDestroy() {
+        networkCallback?.let {
+            try { (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(it) } catch (e: Exception) { }
+        }
+        networkCallback = null
+        webView.removeCallbacks(autoRetry)
+        statusAnimator?.cancel()
         fileCallback?.onReceiveValue(null)
         fileCallback = null
         closePopup()
@@ -263,6 +290,7 @@ class MainActivity : AppCompatActivity() {
         if (splashDone) return
         splashDone = true
         applyNavBar()
+        setPageStatusColor(pageStatusColor)
         splashView.animate().alpha(0f).setDuration(200).withEndAction {
             splashView.visibility = View.GONE
             askNotificationsOnFirstRun()
@@ -337,6 +365,8 @@ class MainActivity : AppCompatActivity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             val host = url?.let { Uri.parse(it).host?.lowercase() }
             if (host == baseHost) razorpayFlow = false else if (isRazorpayHost(host)) razorpayFlow = true
+            // Our pages set their own header colour once loaded (app.js); anything else gets the default
+            if (host != baseHost) setPageStatusColor(null)
             currentUrl = url
             mainFrameError = false
             pageLoading = true
@@ -346,7 +376,6 @@ class MainActivity : AppCompatActivity() {
         override fun onPageFinished(view: WebView, url: String?) {
             currentUrl = url
             pageLoading = false
-            swipe.isRefreshing = false
             updateProgress()
             if (!mainFrameError) hideError()
             retryButton.isEnabled = true
@@ -550,7 +579,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateProgress() {
-        progress.visibility = if (splashDone && pageLoading && !swipe.isRefreshing) View.VISIBLE else View.GONE
+        progress.visibility = if (splashDone && pageLoading) View.VISIBLE else View.GONE
     }
 
     // ---------------------------------------------------------------- error view
@@ -570,13 +599,35 @@ class MainActivity : AppCompatActivity() {
             errorBody.setText(R.string.offline_body)
         }
         errorView.visibility = View.VISIBLE
-        swipe.isRefreshing = false
         retryButton.isEnabled = true
         retryButton.setText(R.string.try_again)
+        setPageStatusColor(null)
+        // Keep trying by itself; the network callback also retries the moment a connection comes back
+        webView.removeCallbacks(autoRetry)
+        webView.postDelayed(autoRetry, AUTO_RETRY_MS)
     }
 
     private fun hideError() {
         errorView.visibility = View.GONE
+        webView.removeCallbacks(autoRetry)
+    }
+
+    /** A connection came back while the offline screen is up: load again without waiting for a tap. */
+    private fun watchNetwork() {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                runOnUiThread {
+                    if (!isFinishing && errorView.visibility == View.VISIBLE && retryButton.isEnabled) retry()
+                }
+            }
+        }
+        try {
+            cm.registerDefaultNetworkCallback(cb)
+            networkCallback = cb
+        } catch (e: Exception) {
+            // Too many callbacks registered (rare): the timed retry still covers it
+        }
     }
 
     private fun retry() {
@@ -814,10 +865,28 @@ class MainActivity : AppCompatActivity() {
         errorBody.setTextColor(ContextCompat.getColor(this, R.color.mz_text2))
         val accent = ContextCompat.getColor(this, R.color.mz_accent)
         progress.indeterminateTintList = ColorStateList.valueOf(accent)
-        swipe.setColorSchemeColors(accent)
-        swipe.setProgressBackgroundColorSchemeColor(ContextCompat.getColor(this, if (isNight()) R.color.mz_surface else R.color.mz_white))
-        window.statusBarColor = ContextCompat.getColor(this, R.color.mz_header)
+        statusAnimator?.cancel()
+        window.statusBarColor = pageStatusColor ?: ContextCompat.getColor(this, R.color.mz_header)
         if (splashDone) applyNavBar()
+    }
+
+    /**
+     * The status bar takes the colour of the header under it (bridge setStatusBarColor; null = default green),
+     * fading across like the header does when the home banner slides. Icons stay light: every header is dark.
+     */
+    fun setPageStatusColor(color: Int?) {
+        pageStatusColor = color
+        if (!splashDone) return   // the splash keeps its own green; dismissSplash() applies this
+        val target = color ?: ContextCompat.getColor(this, R.color.mz_header)
+        val from = window.statusBarColor
+        statusAnimator?.cancel()
+        if (from == target) return
+        if (AppSettings.reduceMotion(this)) { window.statusBarColor = target; return }
+        statusAnimator = ValueAnimator.ofObject(ArgbEvaluator(), from, target).apply {
+            duration = 450
+            addUpdateListener { window.statusBarColor = it.animatedValue as Int }
+            start()
+        }
     }
 
     private fun applyNavBar() {

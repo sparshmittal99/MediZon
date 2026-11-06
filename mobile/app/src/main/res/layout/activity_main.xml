@@ -5,17 +5,12 @@
     android:layout_height="match_parent"
     android:background="@color/mz_bg">
 
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/swipe"
+    <!-- No pull-to-refresh: it fought with scrolling up. Pages refresh themselves instead (app.js, onResume). -->
+    <WebView
+        android:id="@+id/webView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-
-        <WebView
-            android:id="@+id/webView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@color/mz_bg" />
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+        android:layout_height="match_parent"
+        android:background="@color/mz_bg" />
 
     <!-- Native error view (offline / server unreachable) -->
     <LinearLayout
