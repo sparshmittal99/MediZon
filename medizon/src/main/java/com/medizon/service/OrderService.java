@@ -139,7 +139,7 @@ public class OrderService {
                 coverage, OrderSource.CUSTOMER, ship, promo);
         if (useWallet) {
             for (Order o : placed) {
-                BigDecimal used = wallet.spend(user, o.getTotal(), "Paid for order " + o.getOrderNumber(), "/orders/" + o.getId());
+                BigDecimal used = wallet.spend(user, o.getTotal(), "Paid for order " + o.getOrderNumber(), o.getCustomerPath());
                 o.setWalletUsed(used);
                 if (used.signum() > 0 && used.compareTo(o.getTotal()) >= 0) {
                     o.setPaymentMethod(PaymentMethod.WALLET);
@@ -153,7 +153,7 @@ public class OrderService {
                         "₹" + paid + " paid with MediZon Money for " + (placed.size() == 1 ? "order " + first.getOrderNumber()
                                 : "orders " + placed.stream().map(Order::getOrderNumber).collect(Collectors.joining(", ")))
                                 + ". Balance left: ₹" + wallet.balance(user) + ".",
-                        placed.size() == 1 ? "/orders/" + first.getId() : "/wallet");
+                        placed.size() == 1 ? first.getCustomerPath() : "/wallet");
             }
         }
         if (gatewayPaymentId != null) {
@@ -171,7 +171,7 @@ public class OrderService {
         if (placed.size() == 1) {
             Order o = placed.get(0);
             notifications.notify(user, NotificationType.ORDER_UPDATE, "Order placed",
-                    "Order " + o.getOrderNumber() + " for ₹" + o.getTotal() + " is placed.", "/orders/" + o.getId());
+                    "Order " + o.getOrderNumber() + " for ₹" + o.getTotal() + " is placed.", o.getCustomerPath());
         } else {
             BigDecimal total = placed.stream().map(Order::getTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
             notifications.notify(user, NotificationType.ORDER_UPDATE, "Orders placed",
@@ -476,7 +476,7 @@ public class OrderService {
         BigDecimal walletBack = next != OrderStatus.CANCELLED || o.getWalletUsed() == null ? BigDecimal.ZERO
                 : o.getWalletUsed().subtract(o.getWalletRefunded());
         if (walletBack.signum() > 0) {
-            wallet.credit(o.getUser(), walletBack, "Order " + o.getOrderNumber() + " cancelled", "/orders/" + o.getId());
+            wallet.credit(o.getUser(), walletBack, "Order " + o.getOrderNumber() + " cancelled", o.getCustomerPath());
             o.setWalletRefunded(o.getWalletRefunded().add(walletBack));
         }
 
@@ -489,7 +489,7 @@ public class OrderService {
                         + (next == OrderStatus.SHIPPED ? " Your tax invoice " + o.getInvoiceNumber() + " is ready on the order page." : "")
                         + (next == OrderStatus.OUT_FOR_DELIVERY ? " Our delivery partner is out for delivery with your package." : "")
                         + (next == OrderStatus.DELIVERED ? " Tell us how it went with a quick review." : ""),
-                "/orders/" + o.getId());
+                o.getCustomerPath());
         events.publishEvent(new OrderEmailService.StatusChanged(o.getId(), next));
         return o;
     }

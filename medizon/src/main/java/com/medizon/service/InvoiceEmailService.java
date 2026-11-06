@@ -45,7 +45,7 @@ public class InvoiceEmailService {
         reserve(order.getId());
 
         byte[] pdf = pdfService.render(order);
-        String orderUrl = baseUrl.replaceAll("/+$", "") + "/orders/" + order.getId();
+        String orderUrl = baseUrl.replaceAll("/+$", "") + order.getCustomerPath();
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("firstName", user.getFirstName());
         vars.put("invoiceNumber", order.getInvoiceNumber());

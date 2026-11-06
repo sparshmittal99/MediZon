@@ -250,7 +250,7 @@ public class PaymentService {
     }
 
     private static String redirect(Long firstOrderId, int count) {
-        return count == 1 ? "/orders/" + firstOrderId : "/orders";
+        return count == 1 ? "/orders/" + com.medizon.domain.OrderRef.encode(firstOrderId) : "/orders";
     }
 
     private static long paise(BigDecimal rupees) { return rupees.movePointRight(2).longValueExact(); }

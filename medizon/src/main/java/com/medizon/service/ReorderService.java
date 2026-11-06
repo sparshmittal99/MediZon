@@ -91,7 +91,7 @@ public class ReorderService {
                         "There's " + supply + " of " + title + " left, so we ordered " + p.getReorderPacks()
                                 + " pack(s). Order " + o.getOrderNumber() + ", ₹" + o.getTotal()
                                 + ", pay on delivery. You can cancel it before it ships.",
-                        "/orders/" + o.getId(), p.getMember());
+                        o.getCustomerPath(), p.getMember());
                 log.info("Auto-reorder {} placed for plan {}", o.getOrderNumber(), p.getId());
             } else {
                 p.setReorderIssue(blocker.get().status());

@@ -384,13 +384,13 @@ public class AssistantTools {
         return Map.of("id", o.getId(), "order_number", o.getOrderNumber(), "status", o.getStatus().getLabel(),
                 "total", o.getTotal(), "placed", o.getCreatedAt().format(DAY),
                 "items", o.getItems().stream().map(i -> i.getQuantity() + " × " + i.getMedicineName()).toList(),
-                "url", "/orders/" + o.getId());
+                "url", o.getCustomerPath());
     }
 
     private Map<String, Object> returnRequest(ReturnRequest r) {
         return Map.of("return_number", r.getReturnNumber(), "order_number", r.getOrder().getOrderNumber(),
                 "status", r.getStatus().getLabel(), "packs", r.getPackCount(), "refund", Objects.requireNonNullElse(r.getRefundAmount(), java.math.BigDecimal.ZERO),
-                "requested", r.getCreatedAt().format(DAY), "url", "/orders/" + r.getOrder().getId());
+                "requested", r.getCreatedAt().format(DAY), "url", r.getOrder().getCustomerPath());
     }
 
     // ------------------------------------------------------------------ medication plans

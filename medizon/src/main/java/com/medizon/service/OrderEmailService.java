@@ -62,7 +62,7 @@ public class OrderEmailService {
     private void sendOrderConfirmation(Order order) {
         if (order.getUser() == null || !order.getUser().isCustomer() || order.getUser().getEmail() == null) return;
 
-        String orderUrl = baseUrl.replaceAll("/+$", "") + "/orders/" + order.getId();
+        String orderUrl = baseUrl.replaceAll("/+$", "") + order.getCustomerPath();
         String subject = "Order Placed: #" + order.getOrderNumber() + " | MediZon";
 
         Map<String, Object> variables = Map.of(
@@ -89,8 +89,8 @@ public class OrderEmailService {
     private void sendOrderStatusUpdate(Order order, OrderStatus nextStatus) {
         if (order.getUser() == null || !order.getUser().isCustomer() || order.getUser().getEmail() == null) return;
 
-        String orderUrl = baseUrl.replaceAll("/+$", "") + "/orders/" + order.getId();
-        String invoiceUrl = baseUrl.replaceAll("/+$", "") + "/orders/" + order.getId() + "/invoice";
+        String orderUrl = baseUrl.replaceAll("/+$", "") + order.getCustomerPath();
+        String invoiceUrl = baseUrl.replaceAll("/+$", "") + order.getCustomerPath() + "/invoice";
 
         String subject = switch (nextStatus) {
             case CONFIRMED -> "Order #" + order.getOrderNumber() + " Confirmed | MediZon";

@@ -1,5 +1,6 @@
 package com.medizon.monitoring;
 
+import com.medizon.domain.OrderRef;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
@@ -77,8 +78,13 @@ public class PerformanceMonitor {
     /** "/medicines/42" and "/medicines/57" are the same page: "/medicines/{id}". */
     String pageKey(String path) {
         String p = path == null || path.isBlank() ? "/" : path.replaceAll("[?#].*$", "");
-        p = Arrays.stream(p.split("/")).map(s -> s.matches("\\d+|[0-9a-fA-F-]{16,}") ? "{id}" : s)
-                .collect(Collectors.joining("/"));
+        String[] parts = p.split("/");
+        for (int i = 0; i < parts.length; i++) {
+            // Customer order pages carry a masked reference (OrderRef), not a number
+            boolean orderRef = i > 0 && "orders".equals(parts[i - 1]) && !parts[i].isEmpty() && OrderRef.decode(parts[i]) != null;
+            if (orderRef || parts[i].matches("\\d+|[0-9a-fA-F-]{16,}")) parts[i] = "{id}";
+        }
+        p = String.join("/", parts);
         if (p.isEmpty()) p = "/";
         if (p.length() > 80) p = p.substring(0, 80);
         if (pages.contains(p)) return p;

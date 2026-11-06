@@ -6,12 +6,12 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-page">
-    <a th:href="@{/orders/{id}(id=${o.id})}" class="small"><i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
+    <a th:href="@{/orders/{id}(id=${o.ref})}" class="small"><i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
     <h1 class="mz-page-title mt-2">Return items</h1>
     <p class="text-muted mb-3" th:text="'Return by ' + ${#temporals.format(returnBy, 'd MMMM yyyy')}"></p>
 
     <!-- Two steps on one form, so the photos chosen in step 1 are still there when it's sent. Without script both show. -->
-    <form th:action="@{/orders/{id}/return(id=${o.id})}" method="post" enctype="multipart/form-data" novalidate data-mz-return-form>
+    <form th:action="@{/orders/{id}/return(id=${o.ref})}" method="post" enctype="multipart/form-data" novalidate data-mz-return-form>
         <ol class="mz-track mz-track-sm mb-4" data-mz-return-steps hidden>
             <li class="done">Items &amp; reason</li>
             <li data-mz-step-mark="2">Pickup &amp; refund</li>
@@ -71,7 +71,7 @@
             <div class="alert alert-danger small" data-mz-step-error data-mz-popup role="alert" hidden></div>
             <div class="d-flex gap-2" data-mz-step-nav hidden>
                 <button class="btn btn-primary" type="button" data-mz-step-next>Continue<i class="bi bi-arrow-right ms-1"></i></button>
-                <a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-outline-secondary">Cancel</a>
+                <a th:href="@{/orders/{id}(id=${o.ref})}" class="btn btn-outline-secondary">Cancel</a>
             </div>
         </div>
 
@@ -253,7 +253,7 @@
             <div class="d-flex gap-2">
                 <button class="btn btn-outline-secondary" type="button" data-mz-step-back hidden><i class="bi bi-arrow-left me-1"></i>Back</button>
                 <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Request return</button>
-                <a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-outline-secondary" data-mz-step-cancel>Cancel</a>
+                <a th:href="@{/orders/{id}(id=${o.ref})}" class="btn btn-outline-secondary" data-mz-step-cancel>Cancel</a>
             </div>
         </div>
     </form>

@@ -13,7 +13,7 @@
             <h1 class="mz-page-title mb-1 text-break" th:text="${t.subject}">Subject</h1>
             <p class="small text-muted mb-0">
                 <span th:text="${t.number}"></span> · <span th:text="${t.topic.label}"></span>
-                <th:block th:if="${t.order != null}"> · <a th:href="@{/orders/{id}(id=${t.order.id})}" th:text="'Order ' + ${t.order.orderNumber}"></a></th:block>
+                <th:block th:if="${t.order != null}"> · <a th:href="@{/orders/{id}(id=${t.order.ref})}" th:text="'Order ' + ${t.order.orderNumber}"></a></th:block>
                 · <span th:text="'Opened ' + ${#temporals.format(t.createdAt, 'd MMM yyyy')}"></span>
             </p>
         </div>
@@ -89,7 +89,7 @@
             <p class="small text-muted mb-0 mt-2" th:text="'You can reopen it until ' + ${#temporals.format(t.reopenUntil, 'd MMM yyyy')} + '.'"></p>
         </details>
         <p th:unless="${t.canReopen(now)}" class="small text-muted">
-            This ticket is closed. Still need help? <a th:href="${t.order != null} ? @{/support/new(order=${t.order.id})} : @{/support/new}">Raise a new ticket</a>.
+            This ticket is closed. Still need help? <a th:href="${t.order != null} ? @{/support/new(order=${t.order.ref})} : @{/support/new}">Raise a new ticket</a>.
         </p>
     </th:block>
 </main>

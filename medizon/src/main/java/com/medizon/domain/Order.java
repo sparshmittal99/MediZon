@@ -190,6 +190,12 @@ public class Order {
 
     public boolean isPaidWithWallet() { return walletUsed != null && walletUsed.signum() > 0; }
 
+    /** What customers see in links instead of the id: /orders/{ref}. See {@link OrderRef}. */
+    public String getRef() { return id == null ? null : OrderRef.encode(id); }
+
+    /** The customer's order page, /orders/{ref}. */
+    public String getCustomerPath() { return id == null ? "/orders" : "/orders/" + getRef(); }
+
     /** What was paid (or is due in cash) other than MediZon Money. */
     public BigDecimal getAmountDue() {
         return total.subtract(walletUsed == null ? BigDecimal.ZERO : walletUsed);

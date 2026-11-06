@@ -22,15 +22,15 @@
             <!-- A cart from several stores became one order per store -->
             <p class="small mb-0 mt-1" th:if="${placedWith != null and !#lists.isEmpty(placedWith)}">
                 <i class="bi bi-boxes me-1" aria-hidden="true"></i>Placed together with
-                <th:block th:each="x, s : ${placedWith}"><a th:href="${adminView} ? @{/admin/orders/{id}(id=${x.id})} : @{/orders/{id}(id=${x.id})}"
+                <th:block th:each="x, s : ${placedWith}"><a th:href="${adminView} ? @{/admin/orders/{id}(id=${x.id})} : @{/orders/{id}(id=${x.ref})}"
                     th:text="${x.orderNumber}"></a><span th:if="${x.store != null}" th:text="' (' + ${x.store.name} + ')'"></span><span th:unless="${s.last}">, </span></th:block>
             </p>
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2">
             <a th:if="${o.invoiceAvailable}" class="btn btn-sm btn-outline-primary"
-               th:href="${adminView} ? @{/admin/orders/{id}/invoice(id=${o.id})} : @{/orders/{id}/invoice(id=${o.id})}">
+               th:href="${adminView} ? @{/admin/orders/{id}/invoice(id=${o.id})} : @{/orders/{id}/invoice(id=${o.ref})}">
                 <i class="bi bi-receipt me-1"></i>Tax invoice</a>
-            <form th:if="${o.invoiceAvailable and !adminView}" th:action="@{/orders/{id}/invoice/email(id=${o.id})}" method="post" class="d-inline">
+            <form th:if="${o.invoiceAvailable and !adminView}" th:action="@{/orders/{id}/invoice/email(id=${o.ref})}" method="post" class="d-inline">
                 <input type="hidden" name="from" value="order">
                 <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-envelope me-1"></i>Email invoice</button>
             </form>
@@ -122,7 +122,7 @@
                     <div class="small text-muted" th:with="fixed=${o.items.?[!returnable]}" th:unless="${#lists.isEmpty(fixed)}"
                          th:text="'Not returnable: ' + ${#strings.listJoin(fixed.![medicineName], ', ')}"></div>
                 </div>
-                <a th:if="${returnBlocker == null}" th:href="@{/orders/{id}/return(id=${o.id})}" class="btn btn-outline-primary">
+                <a th:if="${returnBlocker == null}" th:href="@{/orders/{id}/return(id=${o.ref})}" class="btn btn-outline-primary">
                     <i class="bi bi-arrow-return-left me-1"></i>Return items</a>
             </div>
 
@@ -133,7 +133,7 @@
                         <h2 class="h6 mb-0">Need help with this order?</h2>
                         <div class="small text-muted">Late, missing, damaged or a payment problem: our support team will sort it out.</div>
                     </div>
-                    <a th:href="@{/support(order=${o.id})}" class="btn btn-outline-primary"><i class="bi bi-headset me-1"></i>Get help</a>
+                    <a th:href="@{/support(order=${o.ref})}" class="btn btn-outline-primary"><i class="bi bi-headset me-1"></i>Get help</a>
                 </div>
                 <div th:unless="${#lists.isEmpty(tickets)}" class="mz-panel-flush mt-3">
                     <th:block th:each="t : ${tickets}"><a th:replace="~{support/thread :: ticketRow(${t})}"></a></th:block>
@@ -153,7 +153,7 @@
             </div>
 
             <form th:if="${!adminView and review == null and o.status.name() == 'DELIVERED'}"
-                  th:action="@{/orders/{id}/review(id=${o.id})}" method="post" class="mz-panel mt-4">
+                  th:action="@{/orders/{id}/review(id=${o.ref})}" method="post" class="mz-panel mt-4">
                 <h2 class="h5 mb-3">How was your order?</h2>
                 <fieldset class="mb-3">
                     <legend class="form-label fs-6">Rating</legend>
@@ -199,10 +199,10 @@
 
             <!-- Customer actions -->
             <div th:unless="${adminView}" class="d-grid gap-2">
-                <form th:action="@{/orders/{id}/buy-again(id=${o.id})}" method="post" class="d-grid">
+                <form th:action="@{/orders/{id}/buy-again(id=${o.ref})}" method="post" class="d-grid">
                     <button class="btn btn-outline-primary" type="submit"><i class="bi bi-arrow-repeat me-1"></i>Buy again</button>
                 </form>
-                <form th:if="${o.cancellable}" th:action="@{/orders/{id}/cancel(id=${o.id})}" method="post" class="d-grid"
+                <form th:if="${o.cancellable}" th:action="@{/orders/{id}/cancel(id=${o.ref})}" method="post" class="d-grid"
                       data-mz-confirm="Cancel this order? Any amount you've paid will be refunded."
                       data-mz-confirm-title="Cancel order" data-mz-confirm-ok="Yes, cancel order">
                     <button class="btn btn-outline-danger" type="submit">Cancel order</button>

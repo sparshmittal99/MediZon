@@ -191,7 +191,7 @@
                              th:classappend="${rs.tone == 'danger'} ? 'text-danger' : (${rs.tone == 'warning'} ? 'text-warning-emphasis' : 'text-muted')">
                             <i th:if="${rs.tone != 'muted'}" class="bi bi-exclamation-circle me-1" aria-hidden="true"></i><span
                                 th:text="${rs.text}"></span>
-                            <a th:if="${p.refillOrder != null}" th:href="@{/orders/{id}(id=${p.refillOrder.id})}" class="ms-1">View order</a>
+                            <a th:if="${p.refillOrder != null}" th:href="@{/orders/{id}(id=${p.refillOrder.ref})}" class="ms-1">View order</a>
                         </div>
                         </th:block>
                     </div>

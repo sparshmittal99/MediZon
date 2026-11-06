@@ -68,8 +68,8 @@
                                    th:text="${ret.status.name() == 'REFUNDED'} ? 'Returned, refunded' : (${ret.open} ? 'Return in progress' : 'Return ' + ${#strings.toLowerCase(ret.status.label)})"></a>
                             </td>
                             <td class="text-end text-nowrap mz-td-actions">
-                                <a th:if="${o.invoiceAvailable}" th:href="@{/orders/{id}/invoice(id=${o.id})}" class="btn btn-sm btn-link">Invoice</a>
-                                <a th:href="@{/orders/{id}(id=${o.id})}" class="btn btn-sm btn-outline-primary">View</a>
+                                <a th:if="${o.invoiceAvailable}" th:href="@{/orders/{id}/invoice(id=${o.ref})}" class="btn btn-sm btn-link">Invoice</a>
+                                <a th:href="@{/orders/{id}(id=${o.ref})}" class="btn btn-sm btn-outline-primary">View</a>
                             </td>
                         </tr>
                         </tbody>
@@ -94,7 +94,7 @@
                                 <span class="fw-semibold" th:text="${r.returnNumber}"></span>
                                 <div class="small text-muted" th:text="${r.reason.label}"></div>
                             </td>
-                            <td data-label="Order"><a th:href="@{/orders/{id}(id=${r.order.id})}" th:text="${r.order.orderNumber}"></a></td>
+                            <td data-label="Order"><a th:href="@{/orders/{id}(id=${r.order.ref})}" th:text="${r.order.orderNumber}"></a></td>
                             <td class="small" data-label="Items">
                                 <div th:each="ri : ${r.items}" th:text="${ri.quantity} + ' × ' + ${ri.orderItem.medicineName}"></div>
                             </td>

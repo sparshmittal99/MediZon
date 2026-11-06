@@ -1,11 +1,13 @@
 package com.medizon.web;
 
 import com.medizon.domain.Order;
+import com.medizon.domain.OrderRef;
 import com.medizon.domain.SupportTicket;
 import com.medizon.domain.TicketAttachment;
 import com.medizon.domain.TicketTopic;
 import com.medizon.domain.User;
 import com.medizon.service.BusinessException;
+import com.medizon.service.NotFoundException;
 import com.medizon.service.CurrentUser;
 import com.medizon.service.OrderService;
 import com.medizon.service.SupportService;
@@ -42,8 +44,8 @@ public class SupportController {
      * only the tickets whose number matches.
      */
     @GetMapping
-    public String index(@RequestParam(required = false) Long order, @RequestParam(required = false) String q, Model model) {
-        if (order != null) model.addAttribute("order", orderService.getForUser(order, currentUser.get()));
+    public String index(@RequestParam(required = false) String order, @RequestParam(required = false) String q, Model model) {
+        if (order != null && !order.isBlank()) model.addAttribute("order", orderService.getForUser(orderId(order), currentUser.get()));
         List<SupportTicket> all = support.forCustomer(currentUser.get()).stream().filter(t -> SupportService.numberMatches(t, q)).toList();
         model.addAttribute("q", q == null || q.isBlank() ? null : q.trim());
         model.addAttribute("openTickets", all.stream().filter(t -> !t.getStatus().isClosed()).toList());
@@ -52,10 +54,17 @@ public class SupportController {
     }
 
     @GetMapping("/new")
-    public String form(@RequestParam(required = false) Long order, @RequestParam(required = false) TicketTopic topic, Model model) {
+    public String form(@RequestParam(required = false) String order, @RequestParam(required = false) TicketTopic topic, Model model) {
         User me = currentUser.get();
-        Order o = order == null ? null : orderService.getForUser(order, me);
+        Order o = order == null || order.isBlank() ? null : orderService.getForUser(orderId(order), me);
         return form(model, topic != null ? topic : o != null ? TicketTopic.ORDER : null, o == null ? null : o.getId(), null, null);
+    }
+
+    /** {@code ?order=} carries the order's {@link OrderRef} (or a plain id from an older link). */
+    private static Long orderId(String ref) {
+        Long id = OrderRef.decode(ref);
+        if (id == null) throw new NotFoundException("Order not found.");
+        return id;
     }
 
     private String form(Model model, TicketTopic topic, Long orderId, String subject, String description) {

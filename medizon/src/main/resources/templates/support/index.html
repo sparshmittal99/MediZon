@@ -19,7 +19,7 @@
     <!-- Came from an order's "Get help" -->
     <div th:if="${order != null}" class="mz-panel mz-panel-soft d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-4">
         <i class="bi bi-box-seam text-primary" aria-hidden="true"></i>
-        <span class="flex-grow-1">Getting help with order <a th:href="@{/orders/{id}(id=${order.id})}" class="fw-semibold" th:text="${order.orderNumber}"></a>
+        <span class="flex-grow-1">Getting help with order <a th:href="@{/orders/{id}(id=${order.ref})}" class="fw-semibold" th:text="${order.orderNumber}"></a>
             <span class="badge ms-1" th:classappend="${order.status.badge}" th:text="${order.status.label}"></span></span>
         <a th:href="@{/support}" class="small">Not about this order</a>
     </div>
@@ -52,7 +52,7 @@
                     <h2 class="h5 mb-1" id="raiseTitle">Still need help?</h2>
                     <p class="text-muted small mb-3">For a problem with an order, a payment, a return or anything else, raise a ticket. A real person
                         from our support team will reply, and bring in the pharmacy, payments or store team if needed.</p>
-                    <a class="btn btn-primary" th:href="${order != null} ? @{/support/new(order=${order.id})} : @{/support/new}">
+                    <a class="btn btn-primary" th:href="${order != null} ? @{/support/new(order=${order.ref})} : @{/support/new}">
                         <i class="bi bi-plus-lg me-1"></i>Raise a ticket</a>
                 </div>
             </section>

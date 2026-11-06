@@ -211,9 +211,10 @@ public class OrderController {
         return "orders/list";
     }
 
-    @GetMapping("/orders/{id}")
-    public String detail(@PathVariable Long id, Model model) {
-        Order o = orderService.getForUser(id, currentUser.get());
+    @GetMapping("/orders/{ref}")
+    public String detail(@PathVariable String ref, Model model) {
+        if (OrderRef.isPlainId(ref)) return "redirect:/orders/" + OrderRef.encode(orderId(ref));
+        Order o = orderService.getForUser(orderId(ref), currentUser.get());
         model.addAttribute("o", o);
         model.addAttribute("tickets", supportService.forOrder(currentUser.get(), o));
         model.addAttribute("placedWith", orderService.placedWith(o));
@@ -226,42 +227,45 @@ public class OrderController {
         return "orders/detail";
     }
 
-    @GetMapping("/orders/{id}/invoice")
-    public String invoice(@PathVariable Long id, Model model) {
-        Order o = orderService.getForUser(id, currentUser.get());
+    @GetMapping("/orders/{ref}/invoice")
+    public String invoice(@PathVariable String ref, Model model) {
+        if (OrderRef.isPlainId(ref)) return "redirect:/orders/" + OrderRef.encode(orderId(ref)) + "/invoice";
+        Order o = orderService.getForUser(orderId(ref), currentUser.get());
         model.addAttribute("inv", invoiceService.forOrder(o));
         model.addAttribute("adminView", false);
         return "orders/invoice";
     }
 
     /** Emails the tax invoice, as a PDF, to the customer's account email. */
-    @PostMapping("/orders/{id}/invoice/email")
-    public String emailInvoice(@PathVariable Long id, @RequestParam(defaultValue = "invoice") String from, RedirectAttributes ra) {
+    @PostMapping("/orders/{ref}/invoice/email")
+    public String emailInvoice(@PathVariable String ref, @RequestParam(defaultValue = "invoice") String from, RedirectAttributes ra) {
         User user = currentUser.get();
-        Order o = orderService.getForUser(id, user);
+        Order o = orderService.getForUser(orderId(ref), user);
         String to = invoiceEmailService.send(o, user);
         ra.addFlashAttribute("success", "Invoice " + o.getInvoiceNumber() + " is on its way to " + to + " as a PDF.");
-        return "redirect:/orders/" + id + ("order".equals(from) ? "" : "/invoice");
+        return "redirect:" + o.getCustomerPath() + ("order".equals(from) ? "" : "/invoice");
     }
 
-    @PostMapping("/orders/{id}/cancel")
-    public String cancel(@PathVariable Long id, RedirectAttributes ra) {
+    @PostMapping("/orders/{ref}/cancel")
+    public String cancel(@PathVariable String ref, RedirectAttributes ra) {
+        Long id = orderId(ref);
         orderService.cancelByCustomer(id, currentUser.get());
         ra.addFlashAttribute("success", "Order cancelled.");
-        return "redirect:/orders/" + id;
+        return "redirect:/orders/" + OrderRef.encode(id);
     }
 
-    @PostMapping("/orders/{id}/review")
-    public String review(@PathVariable Long id, @RequestParam int rating,
+    @PostMapping("/orders/{ref}/review")
+    public String review(@PathVariable String ref, @RequestParam int rating,
                          @RequestParam(required = false) String comment, RedirectAttributes ra) {
+        Long id = orderId(ref);
         reviewService.submit(id, currentUser.get(), rating, comment);
         ra.addFlashAttribute("success", "Thanks for your review!");
-        return "redirect:/orders/" + id;
+        return "redirect:/orders/" + OrderRef.encode(id);
     }
 
-    @PostMapping("/orders/{id}/buy-again")
-    public String buyAgain(@PathVariable Long id, HttpServletRequest request, RedirectAttributes ra) {
-        int added = orderService.reorderToCart(id, currentUser.get(), deliveryLocations.pincode(request));
+    @PostMapping("/orders/{ref}/buy-again")
+    public String buyAgain(@PathVariable String ref, HttpServletRequest request, RedirectAttributes ra) {
+        int added = orderService.reorderToCart(orderId(ref), currentUser.get(), deliveryLocations.pincode(request));
         if (added == 0) ra.addFlashAttribute("error", "None of these items are available right now.");
         else ra.addFlashAttribute("success", added + " item(s) added to your cart.");
         return "redirect:/cart";
@@ -269,13 +273,14 @@ public class OrderController {
 
     // ---------------------------------------------------------------- returns
 
-    @GetMapping("/orders/{id}/return")
-    public String returnForm(@PathVariable Long id, Model model, RedirectAttributes ra) {
-        Order o = orderService.getForUser(id, currentUser.get());
+    @GetMapping("/orders/{ref}/return")
+    public String returnForm(@PathVariable String ref, Model model, RedirectAttributes ra) {
+        if (OrderRef.isPlainId(ref)) return "redirect:/orders/" + OrderRef.encode(orderId(ref)) + "/return";
+        Order o = orderService.getForUser(orderId(ref), currentUser.get());
         String blocker = returnService.blocker(o).orElse(null);
         if (blocker != null) {
             ra.addFlashAttribute("error", blocker);
-            return "redirect:/orders/" + id;
+            return "redirect:" + o.getCustomerPath();
         }
         model.addAttribute("o", o);
         model.addAttribute("returnable", returnService.returnable(o));
@@ -306,8 +311,8 @@ public class OrderController {
         return "orders/return";
     }
 
-    @PostMapping("/orders/{id}/return")
-    public String requestReturn(@PathVariable Long id,
+    @PostMapping("/orders/{ref}/return")
+    public String requestReturn(@PathVariable String ref,
                                 @RequestParam(required = false) List<Long> itemId,
                                 @RequestParam(required = false) List<Integer> qty,
                                 @RequestParam(required = false) ReturnReason reason,
@@ -315,11 +320,19 @@ public class OrderController {
                                 @RequestParam(required = false) List<MultipartFile> images,
                                 @ModelAttribute ReturnPickupForm pickup,
                                 RedirectAttributes ra) {
+        Long id = orderId(ref);
         ReturnRequest r = returnService.request(currentUser.get(), id, itemId, qty, reason, details, images, pickup);
         ra.addFlashAttribute("success", "Return " + r.getReturnNumber() + " requested. Pickup is planned for "
                 + r.getPickupDate().format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH))
                 + "; we'll let you know once it's reviewed.");
-        return "redirect:/orders/" + id;
+        return "redirect:/orders/" + OrderRef.encode(id);
+    }
+
+    /** The order id in a customer link: an {@link OrderRef}, or the plain id from a link sent before those. */
+    private static Long orderId(String ref) {
+        Long id = OrderRef.decode(ref);
+        if (id == null) throw new NotFoundException("Order not found.");
+        return id;
     }
 
     /** Return photos: streamed to the customer who sent them and to admins only. */

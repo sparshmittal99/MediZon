@@ -31,6 +31,7 @@ class MonitoringTest {
         assertThat(p.pageKey("/medicines/42")).isEqualTo("/medicines/{id}");
         assertThat(p.pageKey("/medicines/57?q=x")).isEqualTo("/medicines/{id}");
         assertThat(p.pageKey("/orders/7/invoice")).isEqualTo("/orders/{id}/invoice");
+        assertThat(p.pageKey("/orders/" + com.medizon.domain.OrderRef.encode(7) + "/invoice")).isEqualTo("/orders/{id}/invoice");
         assertThat(p.pageKey("/")).isEqualTo("/");
     }
 

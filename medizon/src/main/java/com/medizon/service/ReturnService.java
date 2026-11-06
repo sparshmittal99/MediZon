@@ -188,7 +188,7 @@ public class ReturnService {
         notifications.notify(user, NotificationType.RETURN_UPDATE, "Return requested",
                 "We got your return request " + r.getReturnNumber() + " for order " + o.getOrderNumber()
                         + ". A pharmacist will review it, usually within a day. Pickup is planned for "
-                        + day(r.getPickupDate()) + ".", "/orders/" + o.getId());
+                        + day(r.getPickupDate()) + ".", o.getCustomerPath());
         staffAlerts.notifyStore(o.getStore(), true, NotificationType.RETURN_UPDATE, "Return to review: " + r.getReturnNumber(),
                 user.getFullName() + " wants to return " + r.getPackCount() + " pack(s) from order " + o.getOrderNumber()
                         + " (" + reason.getLabel().toLowerCase() + ").", "/admin/returns/" + r.getId());
@@ -407,7 +407,7 @@ public class ReturnService {
         BigDecimal walletLeft = o.getWalletUsed().subtract(o.getWalletRefunded()).max(BigDecimal.ZERO);
         BigDecimal toWallet = r.getRefundMode() == RefundMode.WALLET ? r.getRefundAmount() : r.getRefundAmount().min(walletLeft);
         if (toWallet.signum() > 0) {
-            wallet.credit(r.getUser(), toWallet, "Refund for return " + r.getReturnNumber(), "/orders/" + o.getId());
+            wallet.credit(r.getUser(), toWallet, "Refund for return " + r.getReturnNumber(), o.getCustomerPath());
             o.setWalletRefunded(o.getWalletRefunded().add(toWallet.min(walletLeft)));
             r.setWalletRefund(toWallet);
         }
@@ -499,7 +499,7 @@ public class ReturnService {
     }
 
     private void notifyCustomer(ReturnRequest r, String title, String message) {
-        notifications.notify(r.getUser(), NotificationType.RETURN_UPDATE, title, message, "/orders/" + r.getOrder().getId());
+        notifications.notify(r.getUser(), NotificationType.RETURN_UPDATE, title, message, r.getOrder().getCustomerPath());
     }
 
     private static String day(LocalDate d) {
