@@ -172,8 +172,10 @@
         busyBar.hidden = false;
         clearTimeout(busy.timer);
         busy.timer = setTimeout(idle, 30000);   // a download, or a page that never came: don't leave it spinning
-        // No spinner on search buttons: the top bar is enough there
-        if (button && !button.classList.contains('is-busy') && !button.closest('[role=search]')) {
+        // No spinner on search buttons or the coupon buttons (Apply / Remove on the coupons screen, Remove on
+        // checkout): the top bar is enough there
+        if (button && !button.classList.contains('is-busy')
+                && !button.closest('[role=search], .mz-coupons-page, .mz-coupon-remove')) {
             button.classList.add('is-busy');
             button.insertAdjacentHTML('afterbegin', '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>');
         }
