@@ -85,6 +85,13 @@ public class NotificationService {
     /** {@code member} tags alerts about one family member, so each device can choose whose alerts it pops up. */
     @Transactional
     public Notification notify(User user, NotificationType type, String title, String message, String link, Member member) {
+        return notify(user, type, title, message, link, member, true);
+    }
+
+    /** {@code emailIt = false} keeps the alert to the app, browser and phones only. */
+    @Transactional
+    public Notification notify(User user, NotificationType type, String title, String message, String link, Member member,
+                               boolean emailIt) {
         Notification n = new Notification();
         n.setUser(user);
         n.setMember(member);
@@ -103,7 +110,7 @@ public class NotificationService {
                  title.toLowerCase().startsWith("order ")));
 
         // Dose reminders aren't emailed: they come in the app, the browser and as phone alarms
-        boolean noEmail = isDedicatedOrderEmail || type == NotificationType.DOSE_REMINDER;
+        boolean noEmail = !emailIt || isDedicatedOrderEmail || type == NotificationType.DOSE_REMINDER;
         pushToPhones(n);
 
         // Email service is strictly for customers; admin and staff do not receive email alerts

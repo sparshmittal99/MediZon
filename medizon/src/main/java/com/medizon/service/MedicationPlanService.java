@@ -530,7 +530,7 @@ public class MedicationPlanService {
             notifications.notify(user, NotificationType.INFO, "Added to common medicines",
                     String.join(", ", shelved) + (shelved.size() == 1 ? " is" : " are") + " now on the common medicines shelf at home. "
                             + "If someone needs to take one regularly, add it to their list and we'll move the doses across.",
-                    "/plans?member=" + shelf.getId(), shelf);
+                    "/plans?member=" + shelf.getId(), shelf, false);   // app + phone only, no email
         }
 
         needSetup.forEach((memberId, names) -> {
@@ -541,7 +541,7 @@ public class MedicationPlanService {
                     "Set reminders" + (member.isSelf() ? "" : " for " + member.getLabel()),
                     list + (names.size() == 1 ? " was" : " were") + " delivered and added to " + whose + " list. "
                             + "Set the dose times and days so we can send reminders and refill before it runs out.",
-                    "/plans?member=" + memberId, member);
+                    "/plans?member=" + memberId, member, false);   // app + phone only, no email
         });
     }
 
