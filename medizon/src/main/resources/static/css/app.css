@@ -99,6 +99,13 @@ html.mz-kb body:has(.mz-tabbar) { padding-bottom: 0; }
 .mz-rail-arrow { display: none !important; }
 
 /* ---------- Header ---------- */
+/* One colour drives the header: --mz-head. The bar, the search button and the status bar all follow it
+   (home: the banner showing, set by app.js; every other screen and the compact bar: the brand green). */
+body { --mz-head: #0B3B31; }
+html[data-theme="dark"] body { --mz-head: #0A2A23; }
+html body.mz-home, html[data-theme="dark"] body.mz-home { --mz-head: #0A4E40; }   /* first banner, until app.js runs */
+html body .mz-nav, html body.mz-home .mz-locbar { background-color: var(--mz-head); transition: background-color .45s ease; }
+
 /* No side menu in the app: the tab bar and the "You" page cover everything in it. The brand sits at the left edge. */
 .mz-burger { display: none !important; }
 @media (max-width: 991.98px) {
@@ -108,12 +115,21 @@ html.mz-kb body:has(.mz-tabbar) { padding-bottom: 0; }
     .mz-nav .mz-mark { width: 2rem; height: 2rem; font-size: 1rem; box-shadow: 0 2px 6px rgba(0, 0, 0, .18); }
     .mz-nav-icons { gap: .15rem; }
     .mz-search { border-radius: .8rem; }
-    .mz-search button { border-radius: 0 .8rem .8rem 0; }
 }
 
+/* Search: the magnifier takes the header's colour on a soft tint of it, inside the white field, so it changes
+   with the banner instead of staying mint green */
+.mz-search button { background-color: color-mix(in srgb, var(--mz-head) 11%, #fff); color: var(--mz-head);
+    transition: background-color .45s ease, color .45s ease; }
+.mz-search button:hover, .mz-search button:active { background-color: color-mix(in srgb, var(--mz-head) 20%, #fff); }
+.mz-search:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--mz-head) 35%, #fff); }
+html[data-theme="dark"] .mz-search button { background-color: color-mix(in srgb, var(--mz-head) 55%, var(--mz-surface, #16211E));
+    color: color-mix(in srgb, var(--mz-head) 20%, #fff); }
+html[data-theme="dark"] .mz-search button:hover, html[data-theme="dark"] .mz-search button:active {
+    background-color: color-mix(in srgb, var(--mz-head) 75%, var(--mz-surface, #16211E)); }
+
 /* ---------- Home: the header takes the colour of the banner showing (app.js), like shopping apps ----------
-   The status bar follows too (MediZonApp.setStatusBarColor). Each banner's top edge fades from that same colour,
-   so header and banner read as one surface. */
+   Each banner's top edge fades from that same colour, so header and banner read as one surface. */
 .mz-banner-deals { --mz-banner-top: #0A4E40; }
 .mz-banner-remind { --mz-banner-top: #2E2366; }
 .mz-banner-delivery { --mz-banner-top: #7A3E00; }
@@ -121,30 +137,35 @@ html.mz-kb body:has(.mz-tabbar) { padding-bottom: 0; }
 .mz-home .mz-banner::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3rem; pointer-events: none;
     background: linear-gradient(180deg, var(--mz-banner-top) 0%, transparent 100%); }
 
-html body.mz-home .mz-nav, html body.mz-home .mz-locbar { background-color: var(--mz-head, #0A4E40); transition: background-color .45s ease; }
-html[data-motion="reduce"] body.mz-home .mz-nav, html[data-motion="reduce"] body.mz-home .mz-locbar { transition: none; }
-
 /* "Delivers to" as a soft pill on the same colour, instead of a strip of its own */
 .mz-home .mz-locbar { padding: 0 0 .65rem; }
 .mz-home .mz-locbar .mz-loc { display: inline-flex; width: auto; max-width: 100%; margin: 0; padding: .4rem .8rem .4rem .65rem;
     border-radius: 2rem; background: rgba(255, 255, 255, .14); }
 .mz-home .mz-locbar .mz-loc:active { background: rgba(255, 255, 255, .22); }
 
-/* ---------- Home, scrolled down: only the search box stays, with upload prescription beside it ----------
+/* ---------- Every screen, scrolled down: only the search box stays, with upload prescription beside it ----------
    The bar is sticky with a negative top (set by app.js), so the brand row simply scrolls away above the search
-   box. Nothing changes height, so the page never jumps. Once only the search is left (.is-compact), the bar goes
-   back to the brand green and the prescription button slides in next to the search box. */
+   box. Nothing changes height, so the page never jumps. Once only the search is left (.is-compact), the bar is the
+   brand green and the prescription icon slides in beside the search box, a plain icon as in the full header. */
 @media (max-width: 991.98px) {
-    html body.mz-home .mz-nav { top: var(--mz-nav-top, 0px); }
-    .mz-home .mz-nav-row { position: relative; }
-    .mz-home .mz-search { transition: flex-basis .25s ease; }
-    html body.mz-home .mz-nav.is-compact { background-color: #0B3B31; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
-    html[data-theme="dark"] body.mz-home .mz-nav.is-compact { background-color: #0A2A23; }
-    .mz-home .mz-nav.is-compact:has(.mz-app-rx-li) .mz-search { flex-basis: calc(100% - 3.25rem); }
-    .mz-home .mz-nav.is-compact .mz-app-rx-li { position: absolute; right: 0; bottom: 0; display: flex; animation: mz-rx-in .22s ease-out both; }
-    .mz-home .mz-nav.is-compact .mz-app-rx-li .mz-icon-link { justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0;
-        border-radius: .8rem; background: rgba(255, 255, 255, .14); }
-    .mz-home .mz-nav.is-compact .mz-app-rx-li .mz-icon-link:active { background: rgba(255, 255, 255, .24); }
+    html body .mz-nav { top: var(--mz-nav-top, 0px); }
+    html body .mz-nav.is-compact { --mz-head: #0B3B31; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
+    html[data-theme="dark"] body .mz-nav.is-compact { --mz-head: #0A2A23; }
+    .mz-nav-row { position: relative; }
+    .mz-search { transition: flex-basis .25s ease; }
+    .mz-nav.is-compact:has(.mz-app-rx-li) .mz-search { flex-basis: calc(100% - 2.85rem); }
+    /* Lined up with the search box: right at the container's content edge, the same height, centred */
+    .mz-nav.is-compact .mz-app-rx-li { position: absolute; bottom: 0; right: calc(var(--bs-gutter-x, 1.5rem) * .5);
+        display: flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.75rem;
+        animation: mz-rx-in .22s ease-out both; }
+    .mz-nav.is-compact .mz-app-rx-li .mz-icon-link { padding: 0; border: 0; font-size: 1.45rem; }
 }
 @keyframes mz-rx-in { from { opacity: 0; transform: translateX(.6rem); } to { opacity: 1; transform: none; } }
-html[data-motion="reduce"] .mz-home .mz-search, html[data-motion="reduce"] .mz-home .mz-nav.is-compact .mz-app-rx-li { transition: none; animation: none; }
+html[data-motion="reduce"] body .mz-nav, html[data-motion="reduce"] body .mz-locbar, html[data-motion="reduce"] .mz-search,
+html[data-motion="reduce"] .mz-search button, html[data-motion="reduce"] .mz-nav.is-compact .mz-app-rx-li { transition: none; animation: none; }
+
+/* ---------- Cart tab (bottom bar): the item count sits on the icon's top-right, as on the header icon before ---------- */
+.mz-tabbar a i { position: relative; }
+.mz-tabbar a i .mz-count { top: -.15rem; right: .55rem; left: auto; font-family: var(--bs-body-font-family);
+    font-style: normal; line-height: 1; box-shadow: 0 0 0 2px var(--mz-surface, #fff); }
+html[data-theme="dark"] .mz-tabbar a i .mz-count { box-shadow: 0 0 0 2px var(--mz-surface); }

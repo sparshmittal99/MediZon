@@ -242,11 +242,8 @@
     let bannerColor = null;
     let compact = false;
     let sentColor = null;
-    const headColor = () => {
-        if (home && !compact && bannerColor) return bannerColor;
-        if (home) return brandGreen();
-        return (nav && toHex(getComputedStyle(nav).backgroundColor)) || brandGreen();
-    };
+    // The banner's colour on the home page at the top; the brand green everywhere else and in the compact bar
+    const headColor = () => (home && !compact && bannerColor ? bannerColor : brandGreen());
     const sendColor = (force) => {
         const c = headColor();
         if (!force && c === sentColor) return;
@@ -273,10 +270,12 @@
             // Fires as a slide starts (also for swipes), so header, banner and status bar move together
             carousel.addEventListener('slide.bs.carousel', (e) => showBanner(e.relatedTarget));
         }
+    }
 
-        // Scrolled down: the bar is sticky with a negative top, so the brand row scrolls away and only the
-        // search box stays. Measured, because text size (App settings) changes the row's height.
-        const search = nav.querySelector('.mz-search');
+    // Every screen, scrolled down: the bar is sticky with a negative top, so the brand row scrolls away and only
+    // the search box stays. Measured, because text size (App settings) changes the row's height.
+    const search = nav && nav.querySelector('.mz-search');
+    if (search) {
         let offset = 0;
         const measure = () => {
             if (!search || !phone.matches) { offset = 0; nav.style.removeProperty('--mz-nav-top'); return; }

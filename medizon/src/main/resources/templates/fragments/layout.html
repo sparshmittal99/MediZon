@@ -80,7 +80,8 @@
                         <span class="mz-icon-label mz-icon-label-2 d-none d-xl-inline"><small>Returns</small>&amp; Orders</span>
                     </a>
                 </li>
-                <li sec:authorize="!hasRole('STAFF')">
+                <!-- In the Android app the cart is a tab in the bottom bar instead (tabbar below) -->
+                <li sec:authorize="!hasRole('STAFF')" th:unless="${inApp == true}">
                     <a class="mz-icon-link" th:href="@{/cart}" aria-label="Cart">
                         <i class="bi bi-cart3"></i>
                         <span id="mzCartCount" class="mz-count" th:text="${cartCount}"
@@ -640,16 +641,24 @@
     <a th:href="@{/medicines}" data-mz-tab="/medicines"><i class="bi bi-grid" aria-hidden="true"></i><span>Shop</span></a>
     <th:block sec:authorize="hasRole('CUSTOMER')">
         <a th:href="@{/plans}" data-mz-tab="/plans"><i class="bi bi-capsule-pill" aria-hidden="true"></i><span>Medicines</span></a>
-        <a th:href="@{/orders}" data-mz-tab="/orders"><i class="bi bi-box-seam" aria-hidden="true"></i><span>Orders</span></a>
+        <!-- In the Android app Cart takes this place (its header icon is gone); Orders is under "You" -->
+        <a th:unless="${inApp == true}" th:href="@{/orders}" data-mz-tab="/orders"><i class="bi bi-box-seam" aria-hidden="true"></i><span>Orders</span></a>
+        <th:block th:if="${inApp == true}"><a th:replace="~{fragments/layout :: cartTab}"></a></th:block>
         <!-- In the Android app the tab carries the user's first name and opens the account menu (/you) -->
         <a th:href="${inApp == true} ? @{/you} : @{/account}" data-mz-tab="/account /you /profile /addresses /members /prescriptions /billing-address /notifications">
             <i class="bi bi-person" aria-hidden="true"></i><span th:text="${inApp == true and me != null} ? ${me.firstName} : 'You'">You</span></a>
     </th:block>
     <th:block sec:authorize="!isAuthenticated()">
+        <th:block th:if="${inApp == true}"><a th:replace="~{fragments/layout :: cartTab}"></a></th:block>
         <a th:href="@{/help}" data-mz-tab="/help"><i class="bi bi-question-circle" aria-hidden="true"></i><span>Help</span></a>
         <a th:href="@{/login}" data-mz-tab="/login /register"><i class="bi bi-person" aria-hidden="true"></i><span>Sign in</span></a>
     </th:block>
 </nav>
+
+<!-- Android app: the Cart tab, with the count the header icon used to carry (same id, so add-to-cart updates it) -->
+<a th:fragment="cartTab" th:href="@{/cart}" data-mz-tab="/cart" aria-label="Cart">
+    <i class="bi bi-cart3" aria-hidden="true"><span id="mzCartCount" class="mz-count" th:text="${cartCount}"
+          th:classappend="${cartCount == null or cartCount == 0} ? 'd-none'">0</span></i><span>Cart</span></a>
 
 <th:block th:fragment="scripts">
     <nav th:replace="~{fragments/layout :: tabbar}"></nav>
