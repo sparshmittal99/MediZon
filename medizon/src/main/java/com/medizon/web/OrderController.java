@@ -53,8 +53,11 @@ public class OrderController {
      * skipping any we don't deliver to.
      */
     @GetMapping("/checkout")
-    public String checkout(@RequestParam(required = false) Long address, HttpServletRequest request, HttpSession session, Model model) {
+    public String checkout(@RequestParam(required = false) Long address, HttpServletRequest request, HttpSession session, Model model,
+                           RedirectAttributes ra) {
         User user = currentUser.get();
+        String recovered = recovered(user, session, ra);
+        if (recovered != null) return recovered;
         List<Address> addresses = addressService.list(user);
         Map<Long, Boolean> serviceable = new HashMap<>();
         addresses.forEach(a -> serviceable.put(a.getId(), deliveryAreas.isServiceable(a.getPincode())));
@@ -147,6 +150,8 @@ public class OrderController {
     @GetMapping("/checkout/payment")
     public String payment(@RequestParam(required = false) Long addressId, HttpSession session, Model model, RedirectAttributes ra) {
         User user = currentUser.get();
+        String recovered = recovered(user, session, ra);
+        if (recovered != null) return recovered;
         String coupon = (String) session.getAttribute(COUPON);
         OrderService.Ready ready;
         try {
@@ -165,6 +170,18 @@ public class OrderController {
         boolean razorpayUpi = online.contains(PaymentMethod.UPI) && !paymentService.isUpiTestMode();
         model.addAttribute("razorpayOn", razorpayUpi || online.stream().anyMatch(m -> m != PaymentMethod.UPI));
         return "payment";
+    }
+
+    /**
+     * A payment that went through just before the app closed (so the browser never confirmed it) is placed as soon as
+     * the customer is back, instead of them paying again: on to its order, saying so. Null when there was none.
+     */
+    private String recovered(User user, HttpSession session, RedirectAttributes ra) {
+        List<PaymentService.Placed> placed = paymentService.recover(user);
+        if (placed.isEmpty()) return null;
+        session.removeAttribute(COUPON);
+        ra.addFlashAttribute("success", PaymentService.recoveredMessage(placed));
+        return "redirect:" + placed.get(placed.size() - 1).redirect();
     }
 
     /** Order sections on the customer's Orders page. */

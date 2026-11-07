@@ -15,8 +15,9 @@ import java.util.Map;
 
 /**
  * The payment page's calls. Online: {@code /pay} opens a payment with the gateway that takes the method, then
- * {@code /pay/confirm} (Razorpay) or {@code /upi/approve} (MediZon UPI) places the orders once it's paid. Pay on
- * delivery and MediZon Money: {@code /place}. Each answers where to go next.
+ * {@code /pay/confirm} (Razorpay) or {@code /upi/approve} (MediZon UPI) places the orders once it's paid, and
+ * {@code /pay/status} finds out when the browser couldn't hear back. Pay on delivery and MediZon Money: {@code /place}.
+ * Each answers where to go next.
  */
 @RestController
 @RequestMapping("/api/checkout")
@@ -43,6 +44,17 @@ public class CheckoutApi {
     @PostMapping("/pay/confirm")
     public PaymentService.Placed confirm(@RequestBody Paid p, HttpSession session) {
         return placed(paymentService.confirm(currentUser.get(), p.orderId(), p.paymentId(), p.signature()), session);
+    }
+
+    /**
+     * Where a payment stands, checked with the gateway if it isn't confirmed yet: asked when the browser couldn't
+     * confirm it itself (the connection dropped, or the gateway's window closed after paying).
+     */
+    @PostMapping("/pay/status")
+    public PaymentService.Check status(@RequestBody Paid p, HttpSession session) {
+        PaymentService.Check c = paymentService.check(currentUser.get(), p.orderId());
+        if (c.placed() != null) session.removeAttribute(OrderController.COUPON);
+        return c;
     }
 
     /** Checks a UPI ID before paying: {@code {upiId, name}}, the name being who it belongs to. */

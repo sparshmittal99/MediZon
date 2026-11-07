@@ -57,7 +57,7 @@ All settings are in `application.properties` and can be overridden with environm
 | `AI_PROVIDER`, `AI_FAST_TRACK_SCORE` | Which AI reads prescriptions (default `gemini`); AI score from which a prescription is fast-tracked (default 80) |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_METHODS` | Razorpay API keys (`rzp_test_...` for test payments), and what the account takes of `UPI`, `CARD`, `NETBANKING` (default `CARD,NETBANKING`: Razorpay turns UPI on after KYC). Empty keys: cards and net banking aren't offered |
 | `UPI_TEST_MODE` | MediZon UPI, the built-in test-mode UPI checkout (default `true`). It takes UPI unless Razorpay does |
-| `PAYMENT_SETTLE_MINUTES` | A payment still unconfirmed this long is checked with Razorpay and refunded if it took money without an order (default 20) |
+| `PAYMENT_SETTLE_MINUTES` | How long a payment the browser didn't confirm keeps being checked with the gateway (every minute; paid → the order is placed) before, still unpaid, it's closed (default 20) |
 | `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_USER`, `MAIL_PASSWORD` | Email copies of reminders and alerts (logged only when disabled) |
 | `UPLOAD_DIR` | Where prescription files and return photos are stored |
 | `SELLER_NAME`, `SELLER_GSTIN`, `SELLER_DRUG_LICENSE`, `SELLER_ADDRESS`, `SELLER_STATE`, `SELLER_PHONE`, `SELLER_EMAIL` | Seller details on GST invoices and in the site footer. `SELLER_STATE` decides CGST + SGST (same state as the customer) or IGST. Placeholder values are set in `application.properties` until real ones are given |
@@ -282,10 +282,16 @@ Pay on delivery / all MediZon Money:  Place order ──► POST /api/checkout/p
 
 Throughout:
 
+- A payment that went through always becomes its order, even if the app is closed or goes offline right after the
+  OTP (so the browser never confirms it). The server finds out by itself, whichever comes first: the customer
+  coming back to the cart, checkout or payment page (`PaymentService.recover`, so they're not asked to pay twice), or
+  `PaymentService.reconcileOpen`, which every minute asks the gateway about payments not confirmed within a minute
+  (authorized payments are captured). The payment page itself, if it can't hear back, asks
+  `POST /api/checkout/pay/status` until the order shows.
 - Money is never kept without an order. If the orders can't be placed after paying (stock ran out, the cart changed),
-  the payment is refunded at once. `PaymentService.settleLeftovers` (every 5 minutes) checks payments still unconfirmed
-  after `PAYMENT_SETTLE_MINUTES` and refunds them.
-- A confirmation sent twice places the orders once (`checkout_payments.status` moves CREATED → PLACING → PLACED).
+  the payment is refunded at once.
+- The browser, the page check and the reconciler place the orders once between them
+  (`checkout_payments.status` moves CREATED → PLACING → PLACED, and only one of them wins the move to PLACING).
 - **Refunds** go back through the gateway that took the payment (`Order.paymentGateway`): the amount paid online when
   an order is cancelled, and a return's refund to the original method on its refund day. Orders paid on delivery
   refund to MediZon Money, a UPI ID or a bank account.
@@ -409,8 +415,7 @@ Run the tests with `mvn test` (they are plain unit tests and need no database).
 ## Before production
 
 - Replace `ddl-auto=update` with Flyway migrations.
-- Switch to live gateway keys (needs business KYC) and add the gateways' webhooks, so a payment completed after the
-  browser closes becomes an order instead of being refunded by `PaymentService.settleLeftovers`. Refunds to a UPI ID or bank
+- Switch to live gateway keys (needs business KYC). Refunds to a UPI ID or bank
   account for cash-on-delivery returns still need a payout service (RazorpayX); they're marked paid on their day.
 - Move prescription files to object storage (S3) and keep them encrypted. On hosts with a wiped disk (e.g. Render
   without a persistent disk) uploads are lost on every deploy.

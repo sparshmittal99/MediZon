@@ -16,6 +16,7 @@ class MediZonUpiGatewayTest {
         String order = upi.createOrder(17600, "MZ-1-1");
         assertThatThrownBy(() -> upi.confirm(order, null, null)).isInstanceOf(BusinessException.class);
         assertThat(upi.paidPayments(order)).isEmpty();
+        assertThat(upi.findPaid(order)).isEmpty();
 
         PaymentGateway.Paid paid = upi.approve(order, "9876543210@ybl");
         assertThat(paid.amountPaise()).isEqualTo(17600);
@@ -25,6 +26,8 @@ class MediZonUpiGatewayTest {
         assertThat(upi.confirm(order, null, null)).isEqualTo(paid);
         assertThat(upi.approve(order, "9876543210@ybl")).isEqualTo(paid);
         assertThat(upi.paidPayments(order)).containsExactly(paid);
+        // The server finds it by itself too, as when the browser closed right after paying
+        assertThat(upi.findPaid(order)).contains(paid);
     }
 
     @Test

@@ -15,8 +15,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -24,14 +27,27 @@ import java.util.stream.Collectors;
  * and net banking, MediZon UPI for UPI; see {@link PaymentGateways}) and the orders are placed only once the payment is
  * confirmed with it. Pay on delivery and MediZon Money place them straight away.
  *
- * <p>Money is never kept without an order: a payment whose orders can't be placed (the cart changed, stock ran out)
- * is refunded at once, and {@link #settleLeftovers()} refunds any payment left unconfirmed, e.g. when the browser was
- * closed right after paying.
+ * <p>A payment that went through always becomes its orders, even when the browser never comes back to say so (the app
+ * was closed, or the connection dropped, right after the OTP). The server learns of it on its own, whichever comes
+ * first, and each goes through {@link #reconcile} so the orders are placed exactly once:
+ * <ul>
+ *   <li>the browser's confirmation ({@link #confirm});</li>
+ *   <li>the gateway's webhook ({@link #onGatewayPaid}), within seconds of the payment;</li>
+ *   <li>the customer coming back to the cart, checkout or payment page ({@link #recover});</li>
+ *   <li>a check every minute of payments not yet confirmed ({@link #reconcileOpen}).</li>
+ * </ul>
+ * Money is never kept without an order: a payment whose orders can't be placed (the cart changed, stock ran out) is
+ * refunded at once.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentService {
+
+    /** How long the browser has to confirm a payment itself before the server checks it with the gateway. */
+    private static final Duration BROWSER_GRACE = Duration.ofMinutes(1);
+    /** A placing that hasn't finished in this long stopped half way (the app restarted) and is taken over. */
+    private static final Duration STUCK = Duration.ofMinutes(5);
 
     private final PaymentGateways gateways;
     private final RazorpayGateway razorpay;
@@ -41,7 +57,7 @@ public class PaymentService {
     private final OrderService orderService;
     private final NotificationService notifications;
 
-    /** Minutes a payment may stay unconfirmed before it's checked with its gateway and refunded if it went through. */
+    /** Minutes a payment is checked for before, still unpaid, it's closed. A later payment still arrives by webhook. */
     @Value("${medizon.payment.settle-minutes:20}")
     private int settleMinutes;
 
@@ -62,8 +78,17 @@ public class PaymentService {
     /** Orders placed: where to go next, their numbers and how they were paid, for the "Order placed" screen. */
     public record Placed(String redirect, List<String> orderNumbers, String paid) {}
 
+    /**
+     * Where a payment stands, for the payment page when it couldn't hear back directly: {@code PLACED} (with the orders),
+     * {@code PENDING} (being placed right now), {@code REFUNDED} (with why) or {@code UNPAID} (nothing paid yet).
+     */
+    public record Check(String state, Placed placed, String message) {}
+
     /** Starts paying the cart online: a gateway order for what MediZon Money doesn't cover. Nothing is placed yet. */
     public Opened open(User user, Long addressId, PaymentMethod method, boolean useWallet, String couponCode) {
+        // An earlier payment that went through (its app closed before it could say so) is placed first, not paid twice
+        List<Placed> earlier = recover(user);
+        if (!earlier.isEmpty()) throw new BusinessException(recoveredMessage(earlier) + " Check My orders before paying again.");
         PaymentGateway gateway = (method == null ? java.util.Optional.<PaymentGateway>empty() : gateways.forMethod(method))
                 .orElseThrow(() -> new BusinessException((method == null ? "That way to pay" : method.getLabel())
                         + " isn't available right now. Choose another way to pay."));
@@ -112,31 +137,177 @@ public class PaymentService {
     public Placed confirm(User user, String gatewayOrderId, String paymentId, String signature) {
         CheckoutPayment p = payments.findByGatewayOrderIdAndUser(gatewayOrderId, user)
                 .orElseThrow(() -> new NotFoundException("Payment not found."));
-        if (p.getStatus() == CheckoutPayment.Status.PLACED) return placedFrom(p);   // sent twice: the orders are there
-        if (p.getStatus() == CheckoutPayment.Status.REFUNDED) {
-            throw new BusinessException("This payment couldn't become an order and was refunded (refund id " + p.getGatewayRefundId() + ").");
-        }
+        if (p.getStatus() == CheckoutPayment.Status.PLACED) return placedFrom(p);   // sent twice, or placed by the webhook
+        if (p.getStatus() == CheckoutPayment.Status.REFUNDED) throw new BusinessException(refundedMessage(p));
+        CheckoutPayment.Status from = p.getStatus();
         // Only one confirmation places the orders; a payment given up on may still be confirmed if it's paid after all
-        if (payments.moveStatus(p.getId(), CheckoutPayment.Status.CREATED, CheckoutPayment.Status.PLACING) != 1
-                && payments.moveStatus(p.getId(), CheckoutPayment.Status.EXPIRED, CheckoutPayment.Status.PLACING) != 1) {
+        if (!claim(p)) {
             throw new BusinessException("This payment is already being confirmed. Your order will show under My orders in a moment.");
         }
-
         PaymentGateway gateway = gateways.get(p.getGateway());
         PaymentGateway.Paid pay;
         try {
             pay = gateway.confirm(gatewayOrderId, paymentId, signature);
-            if (pay.amountPaise() != paise(p.getAmount())) throw new BusinessException("That payment doesn't match this order.");
-        } catch (BusinessException e) {
-            payments.moveStatus(p.getId(), CheckoutPayment.Status.PLACING, CheckoutPayment.Status.CREATED);   // can be tried again
+        } catch (RuntimeException e) {
+            release(p, from);   // checked again with the gateway by the reconciler, or tried again
             throw e;
         }
+        return place(p, user, gateway, pay);
+    }
+
+    /**
+     * Where the payment for {@code gatewayOrderId} stands, checked with the gateway first if it isn't confirmed yet: the
+     * payment page asks when the browser couldn't confirm it itself (connection dropped, the gateway's window closed).
+     */
+    public Check check(User user, String gatewayOrderId) {
+        CheckoutPayment p = payments.findWithUserByGatewayOrderId(gatewayOrderId)
+                .filter(x -> x.getUser().getId().equals(user.getId()))
+                .orElseThrow(() -> new NotFoundException("Payment not found."));
+        if (p.getStatus() == CheckoutPayment.Status.CREATED || p.getStatus() == CheckoutPayment.Status.EXPIRED) {
+            try {
+                reconcile(p, user, false);
+            } catch (RuntimeException e) {
+                log.warn("Couldn't check payment {}: {}", gatewayOrderId, e.getMessage());
+            }
+            p = payments.findById(p.getId()).orElseThrow();
+        }
+        return switch (p.getStatus()) {
+            case PLACED -> new Check("PLACED", placedFrom(p), null);
+            case REFUNDED -> new Check("REFUNDED", null, refundedMessage(p));
+            case PLACING -> new Check("PENDING", null, null);
+            default -> new Check("UNPAID", null, null);
+        };
+    }
+
+    /**
+     * The gateway says {@code gatewayOrderId} was paid (its webhook): the orders are placed now, whether or not the
+     * customer's browser is still there. Nothing happens for a payment already placed, refunded or being placed.
+     *
+     * @throws RuntimeException when the gateway can't be reached, so the webhook is sent again
+     */
+    public void onGatewayPaid(String gatewayOrderId) {
+        CheckoutPayment p = payments.findWithUserByGatewayOrderId(gatewayOrderId).orElse(null);
+        if (p == null) {
+            log.info("Webhook for gateway order {}, which isn't a checkout payment", gatewayOrderId);
+            return;
+        }
+        if (p.getStatus() == CheckoutPayment.Status.CREATED || p.getStatus() == CheckoutPayment.Status.EXPIRED) {
+            reconcile(p, p.getUser(), false);
+        }
+    }
+
+    /**
+     * The customer is back (the cart, checkout, the payment page, or paying again): each payment of theirs not yet
+     * confirmed is checked with its gateway now, so one paid just before the app closed becomes its orders before they
+     * shop on, rather than them paying a second time. Returns what got placed. Never throws.
+     */
+    public List<Placed> recover(User user) {
+        List<Placed> out = new ArrayList<>();
+        try {
+            for (CheckoutPayment p : payments.findByUserAndStatusInOrderByIdAsc(user, List.of(CheckoutPayment.Status.CREATED))) {
+                try {
+                    reconcile(p, user, false);
+                    payments.findById(p.getId()).filter(x -> x.getStatus() == CheckoutPayment.Status.PLACED)
+                            .ifPresent(x -> out.add(placedFrom(x)));
+                } catch (RuntimeException e) {
+                    log.warn("Couldn't check payment {}: {}", p.getGatewayOrderId(), e.getMessage());
+                }
+            }
+        } catch (RuntimeException e) {
+            log.warn("Couldn't check open payments of user {}: {}", user.getId(), e.getMessage());
+        }
+        return out;
+    }
+
+    /** "Your earlier payment went through: ₹120.00 paid by Card. Order MZ123 is placed." */
+    public static String recoveredMessage(List<Placed> placed) {
+        List<String> numbers = placed.stream().flatMap(p -> p.orderNumbers().stream()).toList();
+        return "Your earlier payment went through: " + placed.stream().map(Placed::paid).collect(Collectors.joining(" "))
+                + (numbers.size() == 1 ? " Order " + numbers.get(0) + " is placed." : " Orders " + String.join(", ", numbers) + " are placed.");
+    }
+
+    /** Pay on delivery or all MediZon Money, placed at once. */
+    public Placed placeWithoutGateway(User user, Long addressId, PaymentMethod method, boolean useWallet, String couponCode) {
+        if (method != PaymentMethod.COD && method != PaymentMethod.WALLET) {
+            throw new BusinessException(method != null && method.isOnline()
+                    ? "Pay by " + method.getLabel() + " first; the order is placed once it's paid." : "Choose how you'd like to pay.");
+        }
+        boolean allWallet = method == PaymentMethod.WALLET;
+        return placed(orderService.checkout(user, allWallet ? null : method, addressId, couponCode, allWallet || useWallet));
+    }
+
+    /**
+     * Every minute: payments the browser hasn't confirmed within {@link #BROWSER_GRACE} (it closed, or lost its
+     * connection) and placings stuck half way are checked with their gateway. One paid becomes its orders (or is refunded
+     * if they can't be placed); one still unpaid after {@code settle-minutes} is closed.
+     */
+    @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
+    public void reconcileOpen() {
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            List<CheckoutPayment> open = payments.findToReconcile(CheckoutPayment.Status.CREATED, now.minus(BROWSER_GRACE),
+                    CheckoutPayment.Status.PLACING, now.minus(STUCK));
+            for (CheckoutPayment p : open) {
+                try {
+                    reconcile(p, p.getUser(), p.getCreatedAt().isBefore(now.minusMinutes(settleMinutes)));
+                } catch (Exception e) {
+                    log.warn("Couldn't check payment {}: {}", p.getGatewayOrderId(), e.getMessage());   // tried again next run
+                }
+            }
+        } catch (Exception e) {
+            log.error("Payment reconciling failed", e);
+        }
+    }
+
+    /**
+     * Checks a payment the browser hasn't confirmed with its gateway, without the browser: paid, its orders are placed
+     * (or it's refunded if they can't be); unpaid, it's left open, or closed when {@code mayExpire}. A payment someone
+     * else is confirming right now is left to them; a stuck placing ({@link #reconcileOpen} only) is taken over.
+     */
+    private void reconcile(CheckoutPayment p, User user, boolean mayExpire) {
+        CheckoutPayment.Status from = p.getStatus() == CheckoutPayment.Status.PLACING ? CheckoutPayment.Status.CREATED : p.getStatus();
+        if (p.getStatus() != CheckoutPayment.Status.PLACING && !claim(p)) return;
+        // Placed before the app stopped, but not marked so
+        List<Order> placed = orders.findByGatewayOrderIdOrderByIdAsc(p.getGatewayOrderId());
+        if (!placed.isEmpty()) {
+            finish(p, CheckoutPayment.Status.PLACED, null, placed);
+            return;
+        }
+        PaymentGateway gateway = gateways.get(p.getGateway());
+        Optional<PaymentGateway.Paid> pay;
+        try {
+            pay = gateway.findPaid(p.getGatewayOrderId());
+        } catch (RuntimeException e) {
+            release(p, from);
+            throw e;
+        }
+        if (pay.isEmpty()) {
+            if (mayExpire) finish(p, CheckoutPayment.Status.EXPIRED, null, null);
+            else release(p, from);
+            return;
+        }
+        try {
+            place(p, user, gateway, pay.get());
+            log.info("Placed the orders of payment {} ({}) without the browser", pay.get().id(), p.getGatewayOrderId());
+        } catch (BusinessException e) {
+            // Refunded and the customer told; or the refund failed, and the placing is taken over once it's stuck
+            log.info("Payment {} ({}) couldn't become orders: {}", pay.get().id(), p.getGatewayOrderId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Places the orders paid by {@code pay}, as chosen when the payment was opened, and marks the payment PLACED. If they
+     * can't be placed the payment is refunded, the customer told, and the reason thrown. Called while holding PLACING.
+     */
+    private Placed place(CheckoutPayment p, User user, PaymentGateway gateway, PaymentGateway.Paid pay) {
         p.setGatewayPaymentId(pay.id());
         PaymentMethod paidBy = pay.method() != null ? pay.method() : p.getMethod();
+        String gatewayOrderId = p.getGatewayOrderId();
 
         // The cart, its prices or the MediZon Money balance may have changed while the customer was paying
         List<Order> placed;
         try {
+            if (pay.amountPaise() != paise(p.getAmount())) throw new BusinessException("That payment doesn't match this order.");
             OrderService.Ready ready = orderService.ready(user, p.getAddressId(), p.getCouponCode());
             BigDecimal rest = orderService.due(user, ready.cart().getTotal(), p.isUseWallet()).rest();
             if (rest.compareTo(p.getAmount()) != 0) {
@@ -145,7 +316,7 @@ public class PaymentService {
             placed = orderService.checkout(user, paidBy, p.getAddressId(), p.getCouponCode(), p.isUseWallet(),
                     gateway.id(), gatewayOrderId, pay.id());
         } catch (BusinessException e) {
-            // If the refund itself fails the payment stays PLACING, and settleLeftovers refunds it later
+            // If the refund itself fails the payment stays PLACING, and reconcileOpen takes it over once it's stuck
             String refundId = gateway.refund(gatewayOrderId, pay.id(), pay.amountPaise(), "Order couldn't be placed");
             finish(p, CheckoutPayment.Status.REFUNDED, refundId, null);
             notifications.notify(user, NotificationType.ORDER_UPDATE, "Payment refunded",
@@ -162,59 +333,20 @@ public class PaymentService {
         return placed(placed);
     }
 
-    /** Pay on delivery or all MediZon Money, placed at once. */
-    public Placed placeWithoutGateway(User user, Long addressId, PaymentMethod method, boolean useWallet, String couponCode) {
-        if (method != PaymentMethod.COD && method != PaymentMethod.WALLET) {
-            throw new BusinessException(method != null && method.isOnline()
-                    ? "Pay by " + method.getLabel() + " first; the order is placed once it's paid." : "Choose how you'd like to pay.");
-        }
-        boolean allWallet = method == PaymentMethod.WALLET;
-        return placed(orderService.checkout(user, allWallet ? null : method, addressId, couponCode, allWallet || useWallet));
+    /** Takes a payment to place it (from CREATED, or EXPIRED if it was paid after all); true when this caller won. */
+    private boolean claim(CheckoutPayment p) {
+        return payments.moveStatus(p.getId(), CheckoutPayment.Status.CREATED, CheckoutPayment.Status.PLACING) == 1
+                || payments.moveStatus(p.getId(), CheckoutPayment.Status.EXPIRED, CheckoutPayment.Status.PLACING) == 1;
     }
 
-    /**
-     * Every 5 minutes: payments left unconfirmed past {@code settle-minutes} are checked with their gateway. One that
-     * became orders after all is marked so; one that took money without orders is refunded; one never paid is closed.
-     */
-    @Scheduled(fixedDelayString = "PT5M", initialDelayString = "PT1M")
-    public void settleLeftovers() {
-        try {
-            List<CheckoutPayment> open = payments.findOpenBefore(
-                    List.of(CheckoutPayment.Status.CREATED, CheckoutPayment.Status.PLACING), LocalDateTime.now().minusMinutes(settleMinutes));
-            for (CheckoutPayment p : open) {
-                try {
-                    settle(p);
-                } catch (Exception e) {
-                    log.warn("Couldn't settle payment {}: {}", p.getGatewayOrderId(), e.getMessage());   // tried again next run
-                }
-            }
-        } catch (Exception e) {
-            log.error("Payment settling failed", e);
-        }
+    /** Gives a claimed payment back, to be checked again. */
+    private void release(CheckoutPayment p, CheckoutPayment.Status to) {
+        payments.moveStatus(p.getId(), CheckoutPayment.Status.PLACING, to);
     }
 
-    private void settle(CheckoutPayment p) {
-        // A stuck PLACING one is taken over; a CREATED one only if the customer isn't confirming it right now
-        if (p.getStatus() == CheckoutPayment.Status.CREATED
-                && payments.moveStatus(p.getId(), CheckoutPayment.Status.CREATED, CheckoutPayment.Status.PLACING) != 1) return;
-        List<Order> placed = orders.findByGatewayOrderIdOrderByIdAsc(p.getGatewayOrderId());
-        if (!placed.isEmpty()) {
-            finish(p, CheckoutPayment.Status.PLACED, null, placed);
-            return;
-        }
-        PaymentGateway gateway = gateways.get(p.getGateway());
-        String refundId = null;
-        for (PaymentGateway.Paid pay : gateway.paidPayments(p.getGatewayOrderId())) {
-            refundId = gateway.refund(p.getGatewayOrderId(), pay.id(), pay.amountPaise(), "Paid but no order was placed");
-            p.setGatewayPaymentId(pay.id());
-        }
-        finish(p, refundId != null ? CheckoutPayment.Status.REFUNDED : CheckoutPayment.Status.EXPIRED, refundId, null);
-        if (refundId != null) {
-            log.info("Refunded payment {} of {} left without orders", p.getGatewayPaymentId(), p.getGatewayOrderId());
-            notifications.notify(p.getUser(), NotificationType.ORDER_UPDATE, "Payment refunded",
-                    "Your payment of ₹" + p.getAmount() + " wasn't confirmed, so no order was placed. It's refunded (refund id "
-                            + refundId + "); banks take up to 5-7 working days to show it.", "/cart");
-        }
+    private static String refundedMessage(CheckoutPayment p) {
+        return "This payment couldn't become an order and was refunded (refund id " + p.getGatewayRefundId()
+                + "). Banks take up to 5-7 working days to show it.";
     }
 
     private void finish(CheckoutPayment p, CheckoutPayment.Status status, String refundId, List<Order> placed) {

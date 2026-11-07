@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Razorpay (razorpay.com). Set {@code RAZORPAY_KEY_ID} and {@code RAZORPAY_KEY_SECRET}; test-mode keys
@@ -29,6 +30,10 @@ import java.util.Map;
  * <p>Razorpay Checkout hands back a signature of "order id|payment id" made with the key secret; the payment is only
  * trusted once it checks out, and taken (captured) if the account doesn't capture by itself. Refunds go back to the
  * card or account that paid.
+ *
+ * <p>The browser isn't trusted to come back: it may close or lose its connection right after the customer pays. So the
+ * server also learns of payments itself, from Razorpay's webhook ({@code RAZORPAY_WEBHOOK_SECRET}, signed with that
+ * secret) and by looking the order up ({@link #findPaid}).
  */
 @Slf4j
 @Component
@@ -36,6 +41,7 @@ public class RazorpayGateway implements PaymentGateway {
 
     private final String keyId;
     private final String keySecret;
+    private final String webhookSecret;
     private final RestClient http;
 
     @Value("${medizon.payment.razorpay.methods:CARD,NETBANKING}")
@@ -43,9 +49,11 @@ public class RazorpayGateway implements PaymentGateway {
 
     public RazorpayGateway(@Value("${medizon.payment.razorpay.key-id:}") String keyId,
                            @Value("${medizon.payment.razorpay.key-secret:}") String keySecret,
+                           @Value("${medizon.payment.razorpay.webhook-secret:}") String webhookSecret,
                            @Value("${medizon.payment.razorpay.url:https://api.razorpay.com/v1}") String baseUrl) {
         this.keyId = keyId.trim();
         this.keySecret = keySecret.trim();
+        this.webhookSecret = webhookSecret.trim();
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5_000);
         factory.setReadTimeout(15_000);
@@ -113,6 +121,23 @@ public class RazorpayGateway implements PaymentGateway {
         return paid(p);
     }
 
+    /**
+     * The order's successful payment: a captured one, else an authorized one, which is captured now (accounts that
+     * don't capture by themselves). Payments still pending with the bank, or failed, don't count.
+     */
+    @Override
+    public Optional<Paid> findPaid(String orderId) {
+        JsonNode authorized = null;
+        for (JsonNode p : get("/orders/{id}/payments", orderId).path("items")) {
+            String status = p.path("status").asText();
+            if ("captured".equals(status)) return Optional.of(paid(p));
+            if ("authorized".equals(status) && authorized == null) authorized = p;
+        }
+        if (authorized == null) return Optional.empty();
+        capture(authorized.path("id").asText(), authorized.path("amount").asLong());
+        return Optional.of(paid(authorized));
+    }
+
     @Override
     public List<Paid> paidPayments(String orderId) {
         List<Paid> out = new ArrayList<>();
@@ -177,11 +202,25 @@ public class RazorpayGateway implements PaymentGateway {
                 signature.trim().toLowerCase().getBytes(StandardCharsets.UTF_8));
     }
 
+    /** A webhook secret is set (Razorpay dashboard > Webhooks), so webhooks are taken. */
+    public boolean takesWebhooks() { return isConfigured() && !webhookSecret.isEmpty(); }
+
+    /** Razorpay signs a webhook's raw body with the webhook secret (HMAC-SHA256, hex, in X-Razorpay-Signature). */
+    public boolean isGenuineWebhook(byte[] body, String signature) {
+        if (!takesWebhooks() || body == null || signature == null) return false;
+        return MessageDigest.isEqual(hmac(webhookSecret, body).getBytes(StandardCharsets.UTF_8),
+                signature.trim().toLowerCase().getBytes(StandardCharsets.UTF_8));
+    }
+
     String sign(String payload) {
+        return hmac(keySecret, payload.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String hmac(String secret, byte[] payload) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(keySecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            return HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return HexFormat.of().formatHex(mac.doFinal(payload));
         } catch (Exception e) {
             throw new IllegalStateException("HmacSHA256 unavailable", e);
         }

@@ -1,7 +1,8 @@
 /* The payment page. MediZon Money pays what it can; the rest is paid by UPI (MediZon UPI's checkout, below), card or
    net banking (Razorpay Checkout, showing only that method), or on delivery. Online orders are placed once the server
    has confirmed the payment; the rest with "Place order". Either way an "Order placed" screen shows, then the order
-   opens. No inline scripts: the CSP blocks them. */
+   opens. The server doesn't depend on this page to place a paid order: if it closes or goes offline right after paying,
+   Razorpay's webhook and the server's own checks place it. No inline scripts: the CSP blocks them. */
 (function () {
     const page = document.querySelector('[data-mz-payment]');
     if (!page) return;
@@ -95,6 +96,34 @@
         return /^[6-9]\d{9}$/.test(digits) ? '+91' + digits : null;
     };
 
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const STILL_CONFIRMING = "We're still confirming your payment with the bank. Please don't pay again: if money left your account, "
+        + 'your order is placed automatically in a few minutes and shows under My orders (we will notify you), or the money is refunded.';
+
+    /**
+     * The browser couldn't hear back directly (the connection dropped while confirming, or the payment window closed):
+     * asks the server where the payment stands. The server checks with the gateway itself, so a payment that went
+     * through becomes its order either way. {@code paid}: the gateway said it was paid, so keep asking for a while.
+     */
+    const settle = async (orderId, fallback, paid) => {
+        showBusy('Confirming your payment');
+        let deadline = Date.now() + (paid ? 60000 : 6000), unpaid = false;
+        for (;;) {
+            try {
+                const s = await post('/api/checkout/pay/status', { orderId });
+                if (s.state === 'PLACED') return done(s.placed);
+                if (s.state === 'REFUNDED') return fail(s.message);
+                unpaid = s.state === 'UNPAID';
+                if (unpaid && !paid) return fail(fallback);
+                if (s.state === 'PENDING' && !paid) { paid = true; deadline = Date.now() + 60000; }
+            } catch (e) {
+                unpaid = false;   // offline for a moment, or the server busy: keep asking
+            }
+            if (Date.now() > deadline) return fail(unpaid ? fallback : STILL_CONFIRMING);
+            await wait(3000);
+        }
+    };
+
     // ------------------------------------------------------------------ Razorpay: cards and net banking
 
     /** Razorpay Checkout showing only the method picked. Contact and email come from the account, so it doesn't ask. */
@@ -127,15 +156,16 @@
                     done(await post('/api/checkout/pay/confirm',
                         { orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id, signature: r.razorpay_signature }));
                 } catch (e) {
-                    fail(e.message);
+                    // Razorpay took the payment; the server places the order even if this page can't hear back
+                    await settle(o.orderId, e.message, true);
                 }
             },
             modal: {
                 ondismiss: () => {
                     if (confirming) return;
-                    setBusy(false);
-                    showError(lastFailure ? 'Payment failed: ' + lastFailure + ' No order was placed. Try again or choose another way to pay.'
-                        : 'Payment cancelled. No order was placed; you can try again or choose another way to pay.');
+                    // Closed after paying (e.g. while the bank page was returning) still counts: ask the server first
+                    settle(o.orderId, lastFailure ? 'Payment failed: ' + lastFailure + ' No order was placed. Try again or choose another way to pay.'
+                        : 'Payment cancelled. No order was placed; you can try again or choose another way to pay.', false);
                 },
             },
         });

@@ -5,6 +5,7 @@ import com.medizon.service.CartService;
 import com.medizon.service.CurrentUser;
 import com.medizon.service.MemberService;
 import com.medizon.service.OrderSettingsService;
+import com.medizon.service.PaymentService;
 import com.medizon.dto.CartSummary;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -26,6 +27,7 @@ public class CartController {
     private final CurrentUser currentUser;
     private final DeliveryLocations deliveryLocations;
     private final OrderSettingsService orderSettings;
+    private final PaymentService paymentService;
 
     /** The cart, the minimum order value and how far below it the cart is (zero once it's reached). */
     private void addCart(Model model, CartSummary cart) {
@@ -48,6 +50,9 @@ public class CartController {
             return "cart";
         }
         User user = signedIn.get();
+        // A payment that went through just before the app closed becomes its order now, not a cart to pay for again
+        java.util.List<PaymentService.Placed> recovered = paymentService.recover(user);
+        if (!recovered.isEmpty()) model.addAttribute("success", PaymentService.recoveredMessage(recovered));
         addCart(model, cartService.summary(user, pin));
         model.addAttribute("people", memberService.people(user));
         model.addAttribute("common", memberService.common(user));

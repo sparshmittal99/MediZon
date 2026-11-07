@@ -129,6 +129,8 @@ public class SecurityConfig {
                 // The Android app's background sync and alarm screen: a bearer sync token, checked in AppApi
                 .requestMatchers("/api/app/schedule", "/api/app/doses", "/api/app/push-token").permitAll()
                 .requestMatchers("/api/app/link", "/api/app/unlink").hasRole("CUSTOMER")
+                // Razorpay's webhook: signed with the webhook secret, checked in RazorpayWebhookApi
+                .requestMatchers(HttpMethod.POST, com.medizon.api.RazorpayWebhookApi.PATH).permitAll()
                 .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/settings", "/register", "/login", "/forgot-password", "/verify-code", "/reset-password", "/resend-code", "/api/auth/**",
                         "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/error").permitAll()
                 // Site icons, also under their content-hashed names (favicon-3f9a….svg) from the resource chain
@@ -160,8 +162,10 @@ public class SecurityConfig {
                         "/prescriptions/**", "/support", "/support/**", "/members/**", "/addresses/**", "/billing-address/**", "/notifications/settings", "/notifications/devices/**",
                         "/stock-alerts/**", "/api/stock-alerts/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
-            // sendBeacon can't send the CSRF header (telemetry); the app's sync sends a bearer token and no cookies
-            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**", "/api/auth/**", "/api/app/schedule", "/api/app/doses", "/api/app/push-token"))
+            // sendBeacon can't send the CSRF header (telemetry); the app's sync sends a bearer token and no cookies;
+            // Razorpay's webhook is signed instead
+            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/monitoring/**", "/api/auth/**", "/api/app/schedule", "/api/app/doses", "/api/app/push-token",
+                    com.medizon.api.RazorpayWebhookApi.PATH))
             // On top of Spring's defaults (nosniff, X-Frame-Options DENY, HSTS over HTTPS, no-store)
             .headers(headers -> headers
                 .addHeaderWriter((request, response) -> response.setHeader("Content-Security-Policy",

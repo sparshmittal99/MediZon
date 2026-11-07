@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
@@ -105,6 +106,12 @@ public class MediZonUpiGateway implements PaymentGateway {
             throw new BusinessException("Your UPI payment hasn't been approved, so no order was placed. Please try again.");
         }
         return r.paid();
+    }
+
+    @Override
+    public Optional<Paid> findPaid(String orderId) {
+        Request r = requests.get(orderId);
+        return r == null ? Optional.empty() : Optional.ofNullable(r.paid());
     }
 
     @Override

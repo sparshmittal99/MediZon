@@ -3,6 +3,7 @@ package com.medizon.payment;
 import com.medizon.domain.PaymentMethod;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Something the payment page can pay online through. The server opens a payment for the amount, the browser takes it,
@@ -36,7 +37,16 @@ public interface PaymentGateway {
      */
     Paid confirm(String orderId, String paymentId, String signature);
 
-    /** Every successful payment of {@code orderId}, to refund money left without an order. */
+    /**
+     * The payment that paid {@code orderId}, looked up with the gateway by the server alone (no browser involved) and
+     * taken (captured) if it needs to be; empty while nothing has been paid. This is how a payment whose browser
+     * closed, or lost its connection, right after paying still becomes an order.
+     *
+     * @throws com.medizon.service.BusinessException when the gateway can't be reached, so it can be tried again
+     */
+    Optional<Paid> findPaid(String orderId);
+
+    /** Every successful payment of {@code orderId}. */
     List<Paid> paidPayments(String orderId);
 
     /**

@@ -15,4 +15,12 @@ public interface NotificationDeviceRepository extends JpaRepository<Notification
     List<NotificationDevice> findByPushToken(String pushToken);
     List<NotificationDevice> findByUserAndPushTokenIsNotNull(User user);
     List<NotificationDevice> findByUser(User user);
+
+    /** The push tokens of Android apps signed in to active customer accounts, each once. */
+    @org.springframework.data.jpa.repository.Query("select distinct d.pushToken from NotificationDevice d join d.user u"
+            + " where d.pushToken is not null and u.role = :role and u.enabled = true and u.deleted = false")
+    List<String> findPushTokens(@org.springframework.data.repository.query.Param("role") com.medizon.domain.Role role);
+
+    /** The push tokens of Android apps signed in to active customer accounts, each once. */
+    default List<String> findCustomerPushTokens() { return findPushTokens(com.medizon.domain.Role.CUSTOMER); }
 }

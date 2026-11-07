@@ -16,9 +16,21 @@ import java.util.Optional;
 public interface CheckoutPaymentRepository extends JpaRepository<CheckoutPayment, Long> {
     Optional<CheckoutPayment> findByGatewayOrderIdAndUser(String gatewayOrderId, User user);
 
-    /** Payments still open since before {@code before}, for the check that nothing paid is left without orders. */
-    @Query("select p from CheckoutPayment p join fetch p.user where p.status in :statuses and p.createdAt < :before")
-    List<CheckoutPayment> findOpenBefore(@Param("statuses") Collection<CheckoutPayment.Status> statuses, @Param("before") LocalDateTime before);
+    /** The payment for a gateway order, with its customer: the webhook knows only the gateway's order id. */
+    @Query("select p from CheckoutPayment p join fetch p.user where p.gatewayOrderId = :gatewayOrderId")
+    Optional<CheckoutPayment> findWithUserByGatewayOrderId(@Param("gatewayOrderId") String gatewayOrderId);
+
+    /** A customer's payments in {@code statuses}, oldest first. */
+    List<CheckoutPayment> findByUserAndStatusInOrderByIdAsc(User user, Collection<CheckoutPayment.Status> statuses);
+
+    /**
+     * What the reconciler checks with the gateway: payments started before {@code createdBefore} and not confirmed yet,
+     * and placings stuck since before {@code stuckBefore} (the app stopped half way).
+     */
+    @Query("select p from CheckoutPayment p join fetch p.user where (p.status = :created and p.createdAt < :createdBefore)"
+            + " or (p.status = :placing and p.updatedAt < :stuckBefore) order by p.id")
+    List<CheckoutPayment> findToReconcile(@Param("created") CheckoutPayment.Status created, @Param("createdBefore") LocalDateTime createdBefore,
+                                          @Param("placing") CheckoutPayment.Status placing, @Param("stuckBefore") LocalDateTime stuckBefore);
 
     /** Moves a payment from one status to another only if it's still in the first; 1 when this caller won. */
     @Modifying
