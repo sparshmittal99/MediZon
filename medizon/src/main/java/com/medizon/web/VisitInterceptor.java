@@ -28,6 +28,7 @@ public class VisitInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         if (!"GET".equals(request.getMethod()) || !(handler instanceof HandlerMethod)) return true;
+        if (request.getHeader(com.medizon.config.StartupWarmup.HEADER) != null) return true;   // the server warming itself up
 
         LocalDate today = LocalDate.now();
         HttpSession session = request.getSession();
