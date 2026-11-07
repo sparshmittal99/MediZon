@@ -40,6 +40,7 @@ services:
       MAIL_USER: ${MAIL_USER:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_DOMAIN: ${MAIL_DOMAIN:-}
       UPLOAD_DIR: /data/uploads
     volumes:
       - medizon-uploads:/data/uploads

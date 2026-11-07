@@ -57,7 +57,7 @@ public class InvoiceEmailService {
         String text = "Hi " + user.getFirstName() + ",\n\n"
                 + "Your MediZon tax invoice " + order.getInvoiceNumber() + " for order " + order.getOrderNumber()
                 + " is attached as a PDF.\n\nView the order: " + orderUrl + "\n\nRegards,\nMediZon";
-        emailService.sendHtmlWithAttachment(to, "Tax invoice " + order.getInvoiceNumber() + " | MediZon", html, text,
+        emailService.sendHtmlWithAttachment(EmailService.Sender.STORE, to, "Tax invoice " + order.getInvoiceNumber() + " | MediZon", html, text,
                 InvoicePdfService.fileName(order), pdf, "application/pdf");
         return to;
     }

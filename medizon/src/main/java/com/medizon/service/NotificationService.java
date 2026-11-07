@@ -146,9 +146,25 @@ public class NotificationService {
                     + (actionUrl != null ? "\n\nOpen MediZon: " + actionUrl : "")
                     + "\n\n- MediZon";
 
-            email.sendTemplate(user.getEmail(), "MediZon: " + title, "emails/notification", variables, fallback);
+            email.sendTemplate(senderFor(type, title), user.getEmail(), "MediZon: " + title, "emails/notification", variables, fallback);
         }
         return n;
+    }
+
+    /**
+     * Which address an emailed alert comes from: support@ for the support desk, refund@ for anything refunded,
+     * return@ for returns, payments@ for money received, store@ for other order news, noreply@ for the rest.
+     */
+    static EmailService.Sender senderFor(NotificationType type, String title) {
+        String t = title == null ? "" : title.toLowerCase(java.util.Locale.ROOT);
+        return switch (type) {
+            case SUPPORT_UPDATE, SUPPORT_TICKET -> EmailService.Sender.SUPPORT;
+            case RETURN_UPDATE -> t.contains("refund") ? EmailService.Sender.REFUNDS : EmailService.Sender.RETURNS;
+            case ORDER_UPDATE -> t.contains("refund") ? EmailService.Sender.REFUNDS
+                    : t.startsWith("payment") || t.startsWith("paid") ? EmailService.Sender.PAYMENTS
+                    : EmailService.Sender.STORE;
+            default -> EmailService.Sender.NOREPLY;
+        };
     }
 
     /** The notification centre: a customer's newest 20 (all they keep), staff's newest 50. */

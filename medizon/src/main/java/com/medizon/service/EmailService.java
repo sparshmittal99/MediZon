@@ -26,6 +26,28 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class EmailService {
 
+    /**
+     * Who an email comes from. With {@code MAIL_DOMAIN} set (e.g. medizon.dpdns.org) each kind of email has its own
+     * address on that domain: orders from store@, returns from return@ and so on. Without it, every email comes from
+     * {@code MAIL_FROM} as before.
+     */
+    public enum Sender {
+        STORE("MediZon Store", "store"),
+        RETURNS("MediZon Returns", "return"),
+        REFUNDS("MediZon Refunds", "refund"),
+        PAYMENTS("MediZon Payments", "payments"),
+        SUPPORT("MediZon Support", "support"),
+        NOREPLY("MediZon", "noreply");
+
+        private final String label;
+        private final String mailbox;
+
+        Sender(String label, String mailbox) { this.label = label; this.mailbox = mailbox; }
+
+        /** "MediZon Store <store@medizon.dpdns.org>". */
+        public String address(String domain) { return label + " <" + mailbox + "@" + domain + ">"; }
+    }
+
     private final ObjectProvider<JavaMailSender> mailSender;
     private final TemplateEngine templateEngine;
 
@@ -37,6 +59,9 @@ public class EmailService {
 
     @Value("${spring.mail.username:}")
     private String mailUsername;
+
+    @Value("${medizon.mail.domain:}")
+    private String mailDomain;
 
     private static final byte[] LOGO_BYTES = loadLogoBytes();
 
@@ -64,9 +89,19 @@ public class EmailService {
         return from != null && !from.isBlank() ? from : "MediZon <no-reply@medizon.in>";
     }
 
+    /** The From address for {@code sender}: its own mailbox on MAIL_DOMAIN, else the one MAIL_FROM address. */
+    String fromFor(Sender sender) {
+        String domain = mailDomain == null ? "" : mailDomain.trim().replaceFirst("^@", "");
+        return domain.isEmpty() ? resolveFrom() : sender.address(domain);
+    }
+
     /** Plain-text fire-and-forget. With mail disabled the email is only logged. */
     @Async
-    public void send(String to, String subject, String body) {
+    public void send(String to, String subject, String body) { send(Sender.NOREPLY, to, subject, body); }
+
+    /** Plain-text fire-and-forget from {@code sender}. With mail disabled the email is only logged. */
+    @Async
+    public void send(Sender sender, String to, String subject, String body) {
         JavaMailSender sender = mailSender.getIfAvailable();
         if (!enabled || sender == null) {
             log.info("[mail disabled] to={} subject='{}' body=\n{}", to, subject, body);
@@ -74,7 +109,7 @@ public class EmailService {
         }
         try {
             SimpleMailMessage msg = new SimpleMailMessage();
-            msg.setFrom(resolveFrom());
+            msg.setFrom(fromFor(sender));
             msg.setTo(to);
             msg.setSubject(subject);
             msg.setText(body);
@@ -91,6 +126,12 @@ public class EmailService {
      */
     @Async
     public void sendHtml(String to, String subject, String htmlBody, String textBody) {
+        sendHtml(Sender.NOREPLY, to, subject, htmlBody, textBody);
+    }
+
+    /** {@link #sendHtml(String, String, String, String)} from {@code sender}. */
+    @Async
+    public void sendHtml(Sender sender, String to, String subject, String htmlBody, String textBody) {
         JavaMailSender sender = mailSender.getIfAvailable();
         if (!enabled || sender == null) {
             log.info("[mail disabled] to={} subject='{}' (html)", to, subject);
@@ -99,7 +140,7 @@ public class EmailService {
         try {
             MimeMessage msg = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
-            helper.setFrom(resolveFrom());
+            helper.setFrom(fromFor(sender));
             helper.setTo(to);
             helper.setSubject(subject);
             if (textBody != null && !textBody.isBlank()) {
@@ -124,6 +165,13 @@ public class EmailService {
     @Async
     public void sendHtmlWithAttachment(String to, String subject, String htmlBody, String textBody,
                                        String fileName, byte[] file, String contentType) {
+        sendHtmlWithAttachment(Sender.NOREPLY, to, subject, htmlBody, textBody, fileName, file, contentType);
+    }
+
+    /** {@link #sendHtmlWithAttachment(String, String, String, String, String, byte[], String)} from {@code sender}. */
+    @Async
+    public void sendHtmlWithAttachment(Sender sender, String to, String subject, String htmlBody, String textBody,
+                                       String fileName, byte[] file, String contentType) {
         JavaMailSender sender = mailSender.getIfAvailable();
         if (!enabled || sender == null) {
             log.info("[mail disabled] to={} subject='{}' attachment={} ({} bytes)", to, subject, fileName, file.length);
@@ -132,7 +180,7 @@ public class EmailService {
         try {
             MimeMessage msg = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
-            helper.setFrom(resolveFrom());
+            helper.setFrom(fromFor(sender));
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(textBody == null || textBody.isBlank() ? subject : textBody, htmlBody);
@@ -160,18 +208,25 @@ public class EmailService {
      */
     @Async
     public void sendTemplate(String to, String subject, String templateName, Map<String, Object> variables, String fallbackText) {
+        sendTemplate(Sender.NOREPLY, to, subject, templateName, variables, fallbackText);
+    }
+
+    /** {@link #sendTemplate(String, String, String, Map, String)} from {@code sender}. */
+    @Async
+    public void sendTemplate(Sender sender, String to, String subject, String templateName, Map<String, Object> variables,
+                             String fallbackText) {
         try {
             Context context = new Context();
             if (variables != null) {
                 context.setVariables(variables);
             }
             String htmlContent = templateEngine.process(templateName, context);
-            sendHtml(to, subject, htmlContent, fallbackText != null ? fallbackText : subject);
+            sendHtml(sender, to, subject, htmlContent, fallbackText != null ? fallbackText : subject);
         } catch (Exception e) {
             log.warn("Could not render/send template '{}' to {}: {}", templateName, to, e.getMessage());
             // Fallback to plain text if HTML rendering failed
             if (fallbackText != null && !fallbackText.isBlank()) {
-                send(to, subject, fallbackText);
+                send(sender, to, subject, fallbackText);
             }
         }
     }

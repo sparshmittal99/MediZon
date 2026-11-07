@@ -134,11 +134,11 @@ public class OrderEmailService {
     private void send(Order order, String subject, String template, Map<String, Object> variables, String fallbackText) {
         String to = order.getUser().getEmail();
         try {
-            emailService.sendHtml(to, subject, emailService.render(template, variables), fallbackText);
+            emailService.sendHtml(EmailService.Sender.STORE, to, subject, emailService.render(template, variables), fallbackText);
             log.info("Email '{}' queued for order {}", template, order.getOrderNumber());
         } catch (RuntimeException ex) {
             log.warn("Could not render '{}' for order {}; sending plain text", template, order.getOrderNumber(), ex);
-            emailService.send(to, subject, fallbackText);
+            emailService.send(EmailService.Sender.STORE, to, subject, fallbackText);
         }
     }
 }
