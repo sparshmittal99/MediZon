@@ -48,6 +48,8 @@ public class PaymentService {
     private static final Duration BROWSER_GRACE = Duration.ofMinutes(1);
     /** A placing that hasn't finished in this long stopped half way (the app restarted) and is taken over. */
     private static final Duration STUCK = Duration.ofMinutes(5);
+    /** How often the cart and checkout pages may ask the gateway about the same open payment. */
+    private static final Duration RECHECK = Duration.ofSeconds(30);
 
     private final PaymentGateways gateways;
     private final RazorpayGateway razorpay;
@@ -204,7 +206,11 @@ public class PaymentService {
     public List<Placed> recover(User user) {
         List<Placed> out = new ArrayList<>();
         try {
+            // Each payment is asked about at most every RECHECK, so pages stay fast while one is left open (a payment
+            // cancelled in the gateway's window stays open until it's closed); each check moves updatedAt on
+            LocalDateTime recheckBefore = LocalDateTime.now().minus(RECHECK);
             for (CheckoutPayment p : payments.findByUserAndStatusInOrderByIdAsc(user, List.of(CheckoutPayment.Status.CREATED))) {
+                if (p.getUpdatedAt() != null && p.getUpdatedAt().isAfter(recheckBefore)) continue;
                 try {
                     reconcile(p, user, false);
                     payments.findById(p.getId()).filter(x -> x.getStatus() == CheckoutPayment.Status.PLACED)
