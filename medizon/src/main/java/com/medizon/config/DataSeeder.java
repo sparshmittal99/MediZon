@@ -110,6 +110,7 @@ public class DataSeeder implements CommandLineRunner {
 
     private void dropStaleEnumChecks() {
         jdbc.execute("alter table if exists notification drop constraint if exists notification_type_check");
+        jdbc.execute("alter table if exists announcements drop constraint if exists announcements_kind_check");
         jdbc.execute("alter table if exists family_members drop constraint if exists family_members_kind_check");
         jdbc.execute("alter table if exists users drop constraint if exists users_role_check");
         jdbc.execute("alter table if exists app_errors drop constraint if exists app_errors_severity_check");

@@ -484,7 +484,7 @@
             <li class="nav-item" sec:authorize="hasRole('STAFF')"><a class="nav-link" th:classappend="${active == 'support'} ? 'active'" th:href="@{/admin/support}">Support</a></li>
             <li class="nav-item" sec:authorize="hasAnyRole('ADMIN','SUPPORT')"><a class="nav-link" th:classappend="${active == 'reviews'} ? 'active'" th:href="@{/admin/reviews}">Reviews</a></li>
             <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'monitoring'} ? 'active'" th:href="@{/admin/monitoring}">Monitoring</a></li>
-            <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'maintenance'} ? 'active'" th:href="@{/admin/maintenance}">Maintenance</a></li>
+            <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" th:classappend="${active == 'announcements'} ? 'active'" th:href="@{/admin/announcements}">Announcements</a></li>
         </ul>
     </div>
 </div>

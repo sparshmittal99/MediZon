@@ -42,7 +42,7 @@
 
     <!-- The container against the host plan's limits (Render: 512 MB, 0.1 CPU), read from cgroups -->
     <th:block th:if="${container != null}">
-        <h2 class="mz-section-title">Server resources (plan limits)</h2>
+        <h2 class="mz-section-title">Server resources</h2>
         <div class="row row-cols-1 row-cols-md-3 g-3 mb-4"
              th:with="mb=1048576, memPct=${container.memLimit > 0} ? ${container.memUsed * 100 / container.memLimit} : -1,
                       cpuPct=${container.cpuOfLimit * 100}, throttlePct=${container.totalPeriods > 0} ? ${container.throttledPeriods * 100 / container.totalPeriods} : 0">
@@ -57,7 +57,7 @@
             </div></div>
             <div class="col"><div class="mz-stat" th:classappend="${cpuPct >= 85} ? 'is-attention'">
                 <div class="mz-stat-value" th:text="${container.cpuOfLimit < 0} ? '…' : ${#numbers.formatDecimal(cpuPct, 1, 0)} + '%'">0</div>
-                <div class="mz-stat-label" th:text="${container.cpuLimit > 0} ? 'CPU used of ' + ${container.cpuLimit} + ' CPU allowed' : 'CPU used (no limit set)'">CPU</div>
+                <div class="mz-stat-label" th:text="${container.cpuLimit > 0} ? 'CPU used of ' + ${container.cpuLimit} + ' CPU' : 'CPU used (no limit set)'">CPU</div>
                 <div class="mz-stat-sub" th:text="${container.cpuOfLimit < 0} ? 'Measuring, refresh in 10 s' : 'Last 10 s · peak ' + ${#numbers.formatDecimal(container.cpuOfLimitPeak * 100, 1, 0)} + '%'"></div>
                 <div class="progress mt-2" style="height: 6px" th:if="${container.cpuOfLimit >= 0}">
                     <div class="progress-bar" th:classappend="${cpuPct >= 85} ? 'bg-danger' : (${cpuPct >= 70} ? 'bg-warning' : '')"

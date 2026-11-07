@@ -127,6 +127,7 @@ public class NotificationService {
                 case ERROR_ALERT -> "System Alert";
                 case ORDER_UPDATE -> "Order & Payment";
                 case MAINTENANCE -> "Scheduled Maintenance";
+                case ANNOUNCEMENT -> "Announcement";
                 case INFO -> (title != null && title.toLowerCase().contains("password")) ? "Security Alert" : "Update";
                 default -> "Notification";
             };

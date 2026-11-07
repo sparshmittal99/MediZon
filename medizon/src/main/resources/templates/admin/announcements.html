@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Announcements')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-w-page">
+    <h1 class="mz-page-title mb-2">Announcements</h1>
+    <p class="small text-muted mb-4">Tell every customer about a sale, a discount, something new, or planned downtime.</p>
+
+    <!-- New announcement -->
+    <form th:action="@{/admin/announcements}" method="post" class="mz-panel mb-4"
+          data-mz-confirm="It goes to every customer straight away." data-mz-confirm-title="Send this announcement?" data-mz-confirm-ok="Send">
+        <h2 class="h6 mb-3">New announcement</h2>
+
+        <span class="form-label small d-block">What's it about?</span>
+        <div class="d-flex flex-wrap gap-2 mb-3" role="radiogroup" aria-label="Announcement type">
+            <th:block th:each="k, st : ${kinds}">
+                <input type="radio" class="btn-check" name="kind" th:id="'kind-' + ${k.name()}" th:value="${k.name()}"
+                       th:checked="${st.first}" required>
+                <label class="btn btn-outline-primary btn-sm rounded-pill" th:for="'kind-' + ${k.name()}">
+                    <i class="bi me-1" th:classappend="${k.icon}" aria-hidden="true"></i><span th:text="${k.label}">Sale</span></label>
+            </th:block>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label small" for="aTitle">Title</label>
+                <input class="form-control" id="aTitle" name="title" maxlength="80" required placeholder="Weekend sale is live">
+            </div>
+            <div class="col-12">
+                <label class="form-label small" for="aMessage">Message</label>
+                <textarea class="form-control" id="aMessage" name="message" rows="3" maxlength="500" required
+                          placeholder="Up to 20% off on vitamins and daily essentials till Sunday."></textarea>
+                <div class="form-text">Up to 500 characters. Keep it short: phones show the first line or two.</div>
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label small" for="aPromo">Promo code <span class="text-muted fw-normal">(optional)</span></label>
+                <input class="form-control text-uppercase" id="aPromo" name="promoCode" maxlength="20" pattern="^[A-Za-z0-9]{3,20}$"
+                       autocomplete="off" placeholder="SAVE20">
+                <div class="form-text">Added as "Use code SAVE20 at checkout." Create it under Promos first.</div>
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label small" for="aLink">Opens page <span class="text-muted fw-normal">(optional)</span></label>
+                <input class="form-control" id="aLink" name="link" maxlength="200" pattern="^/(?!/).*" placeholder="/medicines">
+                <div class="form-text">Where tapping the notification or the email button takes them.</div>
+            </div>
+        </div>
+
+        <span class="form-label small d-block mt-3">Send by <span class="text-muted fw-normal">(choose one or both)</span></span>
+        <div class="d-flex flex-wrap gap-2 mb-1">
+            <input type="checkbox" class="btn-check" id="viaNotification" name="viaNotification" value="true" checked>
+            <label class="btn btn-outline-primary btn-sm" for="viaNotification"><i class="bi bi-bell me-1" aria-hidden="true"></i>Notification</label>
+            <input type="checkbox" class="btn-check" id="viaEmail" name="viaEmail" value="true" checked>
+            <label class="btn btn-outline-primary btn-sm" for="viaEmail"><i class="bi bi-envelope me-1" aria-hidden="true"></i>Email</label>
+        </div>
+        <div class="form-text mb-3">Notification means the bell in the app and site, the browser, and the Android phone app.</div>
+
+        <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Send to all customers</button>
+    </form>
+
+    <!-- Sent announcements -->
+    <h2 class="mz-section-title">Sent</h2>
+    <div th:if="${#lists.isEmpty(announcements)}" class="mz-panel mz-empty mb-4"><i class="bi bi-megaphone"></i>
+        <p class="mb-0">No announcements sent yet.</p></div>
+    <div th:unless="${#lists.isEmpty(announcements)}" class="mz-panel-flush mb-4">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>Announcement</th><th>Sent via</th><th class="text-end">Customers</th><th>When</th></tr></thead>
+                <tbody>
+                <tr th:each="a : ${announcements}">
+                    <td style="min-width: 18rem">
+                        <span class="badge text-bg-light border me-1"><i class="bi me-1" th:classappend="${a.kind.icon}" aria-hidden="true"></i><span
+                                th:text="${a.kind.label}">Sale</span></span>
+                        <strong class="text-break" th:text="${a.title}">Weekend sale</strong>
+                        <div class="small text-muted text-break" th:text="${a.message}"></div>
+                        <div class="small mt-1" th:if="${a.promoCode != null or a.link != null}">
+                            <span th:if="${a.promoCode != null}">Code <code th:text="${a.promoCode}"></code></span>
+                            <span th:if="${a.link != null}" class="ms-2 text-muted">Opens <code th:text="${a.link}"></code></span>
+                        </div>
+                    </td>
+                    <td class="small text-nowrap">
+                        <div th:if="${a.viaNotification}"><i class="bi bi-bell me-1" aria-hidden="true"></i>Notification</div>
+                        <div th:if="${a.viaEmail}"><i class="bi bi-envelope me-1" aria-hidden="true"></i>Email</div>
+                    </td>
+                    <td class="text-end fw-semibold" th:text="${a.recipients}">0</td>
+                    <td class="small text-nowrap">
+                        <div th:text="${#temporals.format(a.sentAt, 'd MMM, h:mm a')}"></div>
+                        <div class="text-muted" th:if="${a.sentBy != null}" th:text="${a.sentBy}"></div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Scheduled maintenance: always by notification and email -->
+    <h2 class="mz-section-title" id="maintenance">Scheduled maintenance</h2>
+    <p class="small text-muted mb-3">Announce downtime ahead of time. Every customer gets a notification and an email straight away,
+        the Android app shows it on the phone, and the site shows a banner until it's over.</p>
+
+    <form th:action="@{/admin/maintenance}" method="post" class="mz-panel mb-4"
+          data-mz-confirm="Notify every customer about this downtime now?" data-mz-confirm-ok="Announce">
+        <h3 class="h6 mb-3">New downtime</h3>
+        <div class="row g-3 align-items-end">
+            <div class="col-sm-6 col-lg-4">
+                <label class="form-label" for="mStart">Starts</label>
+                <input class="form-control" type="datetime-local" id="mStart" name="start" required>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <label class="form-label" for="mEnd">Ends</label>
+                <input class="form-control" type="datetime-local" id="mEnd" name="end" required>
+            </div>
+            <div class="col-lg-4">
+                <button class="btn btn-primary w-100" type="submit"><i class="bi bi-tools me-1"></i>Announce downtime</button>
+            </div>
+        </div>
+        <p class="small text-muted mt-3 mb-0">Sent by notification and email. Customers will read: <em>"MediZon will be down for maintenance on Wed 12 Nov, 2:00 AM – 4:00 AM.
+            The site and app may not work during this time."</em> Up to 48 hours.</p>
+    </form>
+
+    <div th:if="${#lists.isEmpty(windows)}" class="mz-panel mz-empty"><i class="bi bi-tools"></i>
+        <p class="mb-0">No downtime announced yet.</p></div>
+    <div th:unless="${#lists.isEmpty(windows)}" class="mz-panel-flush">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>When</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                <tr th:each="w : ${windows}">
+                    <td th:text="${#strings.capitalize(labels.get(w.id))}">on Wed 12 Nov, 2:00 AM – 4:00 AM</td>
+                    <td>
+                        <span th:if="${w.cancelled}" class="badge text-bg-secondary">Cancelled</span>
+                        <span th:if="${!w.cancelled and w.isOver(now)}" class="badge text-bg-light">Done</span>
+                        <span th:if="${!w.cancelled and w.isUnderway(now)}" class="badge text-bg-warning">Underway</span>
+                        <span th:if="${!w.cancelled and !w.isOver(now) and !w.isUnderway(now)}" class="badge text-bg-info">Announced</span>
+                    </td>
+                    <td class="text-end">
+                        <form th:if="${!w.cancelled and !w.isOver(now)}" th:action="@{/admin/maintenance/{id}/cancel(id=${w.id})}" method="post"
+                              data-mz-confirm="Cancel this downtime and tell customers?" data-mz-confirm-ok="Cancel downtime">
+                            <button class="btn btn-sm btn-outline-danger" type="submit">Cancel</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

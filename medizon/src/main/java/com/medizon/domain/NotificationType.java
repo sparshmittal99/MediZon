@@ -17,7 +17,9 @@ public enum NotificationType {
     BACK_IN_STOCK("bi-bell"),
     /** Scheduled downtime announced by the admin. */
     MAINTENANCE("bi-tools"),
-    INFO("bi-info-circle");
+    INFO("bi-info-circle"),
+    /** A sale, discount, update or other message the admin sent to every customer. */
+    ANNOUNCEMENT("bi-megaphone");
 
     private final String icon;
 
