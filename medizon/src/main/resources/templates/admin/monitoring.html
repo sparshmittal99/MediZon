@@ -36,9 +36,40 @@
                     th:if="${openCritical > 0 and openHigh > 0}">, </span><span class="fw-semibold" th:if="${openHigh > 0}" th:text="${openHigh} + ' high'"></span>
             </div></div></a></div>
         <div class="col"><div class="mz-stat"><div class="mz-stat-value" th:text="${#numbers.formatDecimal(system.heapUsed / 1048576, 1, 0)} + ' MB'">0</div>
-            <div class="mz-stat-label">Memory in use</div>
+            <div class="mz-stat-label">Java heap in use</div>
             <div class="mz-stat-sub" th:text="'of ' + ${#numbers.formatDecimal(system.heapMax / 1048576, 1, 0)} + ' MB · CPU ' + ${#numbers.formatDecimal(system.cpu * 100, 1, 0)} + '%'"></div></div></div>
     </div>
+
+    <!-- The container against the host plan's limits (Render: 512 MB, 0.1 CPU), read from cgroups -->
+    <th:block th:if="${container != null}">
+        <h2 class="mz-section-title">Server resources (plan limits)</h2>
+        <div class="row row-cols-1 row-cols-md-3 g-3 mb-4"
+             th:with="mb=1048576, memPct=${container.memLimit > 0} ? ${container.memUsed * 100 / container.memLimit} : -1,
+                      cpuPct=${container.cpuOfLimit * 100}, throttlePct=${container.totalPeriods > 0} ? ${container.throttledPeriods * 100 / container.totalPeriods} : 0">
+            <div class="col"><div class="mz-stat" th:classappend="${memPct >= 85} ? 'is-attention'">
+                <div class="mz-stat-value" th:text="${#numbers.formatDecimal(container.memUsed / mb, 1, 0)} + ' MB'">0</div>
+                <div class="mz-stat-label" th:text="${container.memLimit > 0} ? 'RAM used of ' + ${#numbers.formatDecimal(container.memLimit / mb, 1, 0)} + ' MB (' + ${#numbers.formatDecimal(memPct, 1, 0)} + '%)' : 'RAM used (no limit set)'">RAM</div>
+                <div class="mz-stat-sub" th:text="'Java process ' + ${#numbers.formatDecimal(container.rss / mb, 1, 0)} + ' MB'
+                        + (${container.memPeak > 0} ? ' · peak ' + ${#numbers.formatDecimal(container.memPeak / mb, 1, 0)} + ' MB' : '')"></div>
+                <div class="progress mt-2" style="height: 6px" th:if="${memPct >= 0}">
+                    <div class="progress-bar" th:classappend="${memPct >= 85} ? 'bg-danger' : (${memPct >= 70} ? 'bg-warning' : '')"
+                         th:style="'width:' + ${memPct > 100 ? 100 : memPct} + '%'"></div></div>
+            </div></div>
+            <div class="col"><div class="mz-stat" th:classappend="${cpuPct >= 85} ? 'is-attention'">
+                <div class="mz-stat-value" th:text="${container.cpuOfLimit < 0} ? '…' : ${#numbers.formatDecimal(cpuPct, 1, 0)} + '%'">0</div>
+                <div class="mz-stat-label" th:text="${container.cpuLimit > 0} ? 'CPU used of ' + ${container.cpuLimit} + ' CPU allowed' : 'CPU used (no limit set)'">CPU</div>
+                <div class="mz-stat-sub" th:text="${container.cpuOfLimit < 0} ? 'Measuring, refresh in 10 s' : 'Last 10 s · peak ' + ${#numbers.formatDecimal(container.cpuOfLimitPeak * 100, 1, 0)} + '%'"></div>
+                <div class="progress mt-2" style="height: 6px" th:if="${container.cpuOfLimit >= 0}">
+                    <div class="progress-bar" th:classappend="${cpuPct >= 85} ? 'bg-danger' : (${cpuPct >= 70} ? 'bg-warning' : '')"
+                         th:style="'width:' + ${cpuPct > 100 ? 100 : cpuPct} + '%'"></div></div>
+            </div></div>
+            <div class="col"><div class="mz-stat" th:classappend="${throttlePct >= 20} ? 'is-attention'">
+                <div class="mz-stat-value" th:text="${#numbers.formatDecimal(throttlePct, 1, 1)} + '%'">0</div>
+                <div class="mz-stat-label">CPU throttled</div>
+                <div class="mz-stat-sub" th:text="'Held back ' + ${#numbers.formatDecimal(container.throttledSeconds, 1, 0)} + ' s in total since start; high means requests wait for CPU'"></div>
+            </div></div>
+        </div>
+    </th:block>
 
     <!-- Health checks -->
     <h2 class="mz-section-title">Health</h2>

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.medizon.ai.AssistantClient;
 import com.medizon.domain.AppError;
 import com.medizon.domain.ErrorSeverity;
+import com.medizon.monitoring.ContainerStats;
 import com.medizon.monitoring.ErrorMonitor;
 import com.medizon.monitoring.PerformanceMonitor;
 import com.medizon.repository.AppErrorRepository;
@@ -67,6 +68,7 @@ public class AdminMonitoringController {
 
     private final HealthEndpoint health;
     private final PerformanceMonitor performance;
+    private final ContainerStats container;
     private final ErrorMonitor errorMonitor;
     private final AppErrorRepository errors;
     private final AssistantClient assistant;
@@ -86,6 +88,7 @@ public class AdminMonitoringController {
         Map<String, Double> system = performance.system();
         model.addAttribute("system", system);
         model.addAttribute("uptime", uptime(system.get("uptimeSeconds").longValue()));
+        model.addAttribute("container", container.isAvailable() ? container.read() : null);
         model.addAttribute("endpoints", performance.endpoints().stream().limit(25).toList());
         model.addAttribute("slowRequests", performance.slowRequests().stream().limit(50).toList());
         model.addAttribute("slowMs", performance.getSlowThresholdMs());
