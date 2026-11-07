@@ -102,8 +102,8 @@ public class EmailService {
     /** Plain-text fire-and-forget from {@code sender}. With mail disabled the email is only logged. */
     @Async
     public void send(Sender sender, String to, String subject, String body) {
-        JavaMailSender sender = mailSender.getIfAvailable();
-        if (!enabled || sender == null) {
+        JavaMailSender mailer = mailSender.getIfAvailable();
+        if (!enabled || mailer == null) {
             log.info("[mail disabled] to={} subject='{}' body=\n{}", to, subject, body);
             return;
         }
@@ -113,7 +113,7 @@ public class EmailService {
             msg.setTo(to);
             msg.setSubject(subject);
             msg.setText(body);
-            sender.send(msg);
+            mailer.send(msg);
             log.info("Email sent to={} subject='{}'", to, subject);
         } catch (Exception e) {
             log.warn("Could not send email to {}: {}", to, e.getMessage());
@@ -132,13 +132,13 @@ public class EmailService {
     /** {@link #sendHtml(String, String, String, String)} from {@code sender}. */
     @Async
     public void sendHtml(Sender sender, String to, String subject, String htmlBody, String textBody) {
-        JavaMailSender sender = mailSender.getIfAvailable();
-        if (!enabled || sender == null) {
+        JavaMailSender mailer = mailSender.getIfAvailable();
+        if (!enabled || mailer == null) {
             log.info("[mail disabled] to={} subject='{}' (html)", to, subject);
             return;
         }
         try {
-            MimeMessage msg = sender.createMimeMessage();
+            MimeMessage msg = mailer.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
             helper.setFrom(fromFor(sender));
             helper.setTo(to);
@@ -151,7 +151,7 @@ public class EmailService {
             if (htmlBody != null && htmlBody.contains("cid:medizonLogo") && LOGO_BYTES.length > 0) {
                 helper.addInline("medizonLogo", new org.springframework.core.io.ByteArrayResource(LOGO_BYTES), "image/png");
             }
-            sender.send(msg);
+            mailer.send(msg);
             log.info("HTML email sent to={} subject='{}'", to, subject);
         } catch (MessagingException e) {
             log.warn("Could not send HTML email to {}: {}", to, e.getMessage());
@@ -172,13 +172,13 @@ public class EmailService {
     @Async
     public void sendHtmlWithAttachment(Sender sender, String to, String subject, String htmlBody, String textBody,
                                        String fileName, byte[] file, String contentType) {
-        JavaMailSender sender = mailSender.getIfAvailable();
-        if (!enabled || sender == null) {
+        JavaMailSender mailer = mailSender.getIfAvailable();
+        if (!enabled || mailer == null) {
             log.info("[mail disabled] to={} subject='{}' attachment={} ({} bytes)", to, subject, fileName, file.length);
             return;
         }
         try {
-            MimeMessage msg = sender.createMimeMessage();
+            MimeMessage msg = mailer.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
             helper.setFrom(fromFor(sender));
             helper.setTo(to);
@@ -188,7 +188,7 @@ public class EmailService {
                 helper.addInline("medizonLogo", new org.springframework.core.io.ByteArrayResource(LOGO_BYTES), "image/png");
             }
             helper.addAttachment(fileName, new org.springframework.core.io.ByteArrayResource(file), contentType);
-            sender.send(msg);
+            mailer.send(msg);
             log.info("Email with attachment sent to={} subject='{}' file={}", to, subject, fileName);
         } catch (Exception e) {
             log.warn("Could not send email with attachment to {}: {}", to, e.getMessage());
