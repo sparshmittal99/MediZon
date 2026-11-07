@@ -322,7 +322,7 @@ public class SupportService {
         m.setAuthor(author);
         m.setAuthorRole(author.getRole());
         m.setBody(body);
-        photos.forEach(f -> m.getAttachments().add(new TicketAttachment(storage.storeSupportImage(f), f.getContentType())));
+        photos.forEach(f -> m.getAttachments().add(new TicketAttachment(storage.storeSupportImage(f), storage.typeOf(f))));
         return m;
     }
 

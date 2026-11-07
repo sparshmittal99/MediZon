@@ -55,7 +55,7 @@ public class PrescriptionService {
         p.setUser(user);
         p.setStoredFileName(storage.store(file));
         p.setOriginalFileName(file.getOriginalFilename());
-        p.setContentType(file.getContentType());
+        p.setContentType(storage.typeOf(file));   // what it really is, not what the browser said
         p.setStatus(PrescriptionStatus.DRAFT);
         return prescriptions.save(p);
     }

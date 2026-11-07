@@ -35,6 +35,23 @@ public interface CheckoutPaymentRepository extends JpaRepository<CheckoutPayment
     /** Moves a payment from one status to another only if it's still in the first; 1 when this caller won. */
     @Modifying
     @Transactional
-    @Query("update CheckoutPayment p set p.status = :to, p.updatedAt = CURRENT_TIMESTAMP where p.id = :id and p.status = :from")
-    int moveStatus(@Param("id") Long id, @Param("from") CheckoutPayment.Status from, @Param("to") CheckoutPayment.Status to);
+    @Query("update CheckoutPayment p set p.status = :to, p.updatedAt = :now where p.id = :id and p.status = :from")
+    int moveStatus(@Param("id") Long id, @Param("from") CheckoutPayment.Status from, @Param("to") CheckoutPayment.Status to,
+                   @Param("now") LocalDateTime now);
+
+    /** Moves a payment from one status to another only if it's still in the first. Stamped with the app's clock, as
+     *  {@code createdAt} is, never the database's (which may be in another time zone). */
+    default int moveStatus(Long id, CheckoutPayment.Status from, CheckoutPayment.Status to) {
+        return moveStatus(id, from, to, LocalDateTime.now());
+    }
+
+    /**
+     * Takes over a placing that has really been stuck since before {@code stuckBefore} (the app stopped half way):
+     * 1 only for the one caller that wins, and only while it's still stuck, so a placing in progress is never taken.
+     */
+    @Modifying
+    @Transactional
+    @Query("update CheckoutPayment p set p.updatedAt = :now where p.id = :id and p.status = :placing and p.updatedAt < :stuckBefore")
+    int takeOverStuck(@Param("id") Long id, @Param("placing") CheckoutPayment.Status placing,
+                      @Param("stuckBefore") LocalDateTime stuckBefore, @Param("now") LocalDateTime now);
 }

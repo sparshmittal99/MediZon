@@ -12,7 +12,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +21,13 @@ import java.util.UUID;
 /**
  * Stores prescription files (private, streamed through a controller) and medicine images
  * (public, served at {@value #MEDICINE_IMAGE_PATH}) on local disk. Swap for S3 / GCS in production.
+ *
+ * <p>Uploads are never trusted: the uploader's file name is thrown away (each file gets a random name), the type is
+ * read from the file's own bytes ({@link UploadInspector}), not its name or the Content-Type the browser sent, and
+ * only images and plain PDFs are kept, with the extension of what they really are. So {@code script.js}, an HTML page or
+ * an SVG renamed to "photo.png" is refused, and no upload can choose where it's written. Nothing uploaded is ever run;
+ * files are served back only with their checked image or PDF type, {@code X-Content-Type-Options: nosniff} and the
+ * site's Content-Security-Policy, so a browser won't treat one as a page or script either.
  */
 @Service
 public class FileStorageService {
@@ -48,15 +55,51 @@ public class FileStorageService {
 
     /** Saves a product photo and returns its public URL path. */
     public String storeMedicineImage(MultipartFile file) {
-        String ext = IMAGES.get(file.getContentType());
-        if (ext == null) throw new BusinessException("Upload the image as JPG, PNG, WebP or GIF.");
-        String name = UUID.randomUUID() + ext;
-        try (InputStream in = file.getInputStream()) {
-            Files.copy(in, imageRoot.resolve(name), StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            throw new BusinessException("The image couldn't be saved. Try again.");
-        }
+        Checked c = check(file, IMAGES, "Upload the image as JPG, PNG, WebP or GIF.");
+        String name = UUID.randomUUID() + c.ext();
+        write(imageRoot.resolve(name), c.bytes(), "The image couldn't be saved. Try again.");
         return MEDICINE_IMAGE_PATH + name;
+    }
+
+    /**
+     * What {@code file} really is, from its bytes: the content type to keep with it and serve it as. Call after storing
+     * it (which refuses anything that isn't allowed).
+     */
+    public String typeOf(MultipartFile file) {
+        try (InputStream in = file.getInputStream()) {
+            String type = UploadInspector.detect(in.readNBytes(16));
+            if (type == null) throw new BusinessException("That file type isn't allowed.");
+            return type;
+        } catch (IOException e) {
+            throw new BusinessException("The file couldn't be read. Try again.");
+        }
+    }
+
+    /** An upload checked from its own bytes: what it is and the bytes to write. */
+    private record Checked(String type, String ext, byte[] bytes) {}
+
+    private static Checked check(MultipartFile file, Map<String, String> allowed, String refusal) {
+        if (file == null || file.isEmpty()) throw new BusinessException("Choose a file to upload.");
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new BusinessException("The file couldn't be read. Try again.");
+        }
+        String type = UploadInspector.detect(bytes);
+        String ext = type == null ? null : allowed.get(type);
+        if (ext == null) throw new BusinessException(refusal);
+        if (type.equals("application/pdf")) UploadInspector.requireSafePdf(bytes);
+        return new Checked(type, ext, bytes);
+    }
+
+    /** Writes a new file; it never replaces one, and the random name keeps it inside its folder. */
+    private static void write(Path target, byte[] bytes, String failure) {
+        try {
+            Files.write(target, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            throw new BusinessException(failure);
+        }
     }
 
     /** Removes a previously uploaded medicine image; external URLs are left alone. */
@@ -74,28 +117,22 @@ public class FileStorageService {
     public String storeSupportImage(MultipartFile file) { return storePrivateImage(file, "support"); }
 
     private String storePrivateImage(MultipartFile file, String folder) {
-        String ext = IMAGES.get(file.getContentType());
-        if (ext == null) throw new BusinessException("Upload photos as JPG, PNG, WebP or GIF.");
-        String name = folder + "/" + UUID.randomUUID() + ext;
-        try (InputStream in = file.getInputStream()) {
+        Checked c = check(file, IMAGES, "Upload photos as JPG, PNG, WebP or GIF.");
+        String name = folder + "/" + UUID.randomUUID() + c.ext();
+        try {
             Files.createDirectories(root.resolve(folder));
-            Files.copy(in, root.resolve(name), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             throw new BusinessException("The photo couldn't be saved. Try again.");
         }
+        write(root.resolve(name), c.bytes(), "The photo couldn't be saved. Try again.");
         return name;
     }
 
+    /** Saves a prescription (a photo or a plain PDF) privately and returns its stored name. */
     public String store(MultipartFile file) {
-        if (file == null || file.isEmpty()) throw new BusinessException("Choose a file to upload.");
-        String ext = ALLOWED.get(file.getContentType());
-        if (ext == null) throw new BusinessException("Upload a JPG, PNG or PDF file.");
-        String name = UUID.randomUUID() + ext;
-        try (InputStream in = file.getInputStream()) {
-            Files.copy(in, root.resolve(name), StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            throw new BusinessException("The file couldn't be saved. Try again.");
-        }
+        Checked c = check(file, ALLOWED, "Upload a JPG, PNG or PDF file.");
+        String name = UUID.randomUUID() + c.ext();
+        write(root.resolve(name), c.bytes(), "The file couldn't be saved. Try again.");
         return name;
     }
 

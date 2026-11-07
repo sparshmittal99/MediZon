@@ -182,7 +182,7 @@ public class ReturnService {
         setRefundTo(r, o, p);
         setPickup(r, user, o, p);   // last check: it may save a new address
 
-        photos.forEach(f -> r.getImages().add(new ReturnImage(storage.storeReturnImage(f), f.getContentType())));
+        photos.forEach(f -> r.getImages().add(new ReturnImage(storage.storeReturnImage(f), storage.typeOf(f))));
         returns.save(r);
 
         notifications.notify(user, NotificationType.RETURN_UPDATE, "Return requested",

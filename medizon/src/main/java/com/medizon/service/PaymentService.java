@@ -266,7 +266,13 @@ public class PaymentService {
      */
     private void reconcile(CheckoutPayment p, User user, boolean mayExpire) {
         CheckoutPayment.Status from = p.getStatus() == CheckoutPayment.Status.PLACING ? CheckoutPayment.Status.CREATED : p.getStatus();
-        if (p.getStatus() != CheckoutPayment.Status.PLACING && !claim(p)) return;
+        if (p.getStatus() == CheckoutPayment.Status.PLACING) {
+            // Only a placing that is still stuck right now, and only by one caller; one in progress is left alone
+            LocalDateTime now = LocalDateTime.now();
+            if (payments.takeOverStuck(p.getId(), CheckoutPayment.Status.PLACING, now.minus(STUCK), now) != 1) return;
+        } else if (!claim(p)) {
+            return;
+        }
         // Placed before the app stopped, but not marked so
         List<Order> placed = orders.findByGatewayOrderIdOrderByIdAsc(p.getGatewayOrderId());
         if (!placed.isEmpty()) {
@@ -304,6 +310,13 @@ public class PaymentService {
         PaymentMethod paidBy = pay.method() != null ? pay.method() : p.getMethod();
         String gatewayOrderId = p.getGatewayOrderId();
 
+        // Already placed for this payment (by another path): never place twice, never refund
+        List<Order> existing = orders.findByGatewayOrderIdOrderByIdAsc(gatewayOrderId);
+        if (!existing.isEmpty()) {
+            finish(p, CheckoutPayment.Status.PLACED, null, existing);
+            return placed(existing);
+        }
+
         // The cart, its prices or the MediZon Money balance may have changed while the customer was paying
         List<Order> placed;
         try {
@@ -316,6 +329,13 @@ public class PaymentService {
             placed = orderService.checkout(user, paidBy, p.getAddressId(), p.getCouponCode(), p.isUseWallet(),
                     gateway.id(), gatewayOrderId, pay.id());
         } catch (BusinessException e) {
+            // A payment whose orders exist is never refunded: they were placed by another path meanwhile
+            List<Order> meanwhile = orders.findByGatewayOrderIdOrderByIdAsc(gatewayOrderId);
+            if (!meanwhile.isEmpty()) {
+                log.warn("Payment {} ({}) was placed meanwhile by another path; not refunded", pay.id(), gatewayOrderId);
+                finish(p, CheckoutPayment.Status.PLACED, null, meanwhile);
+                return placed(meanwhile);
+            }
             // If the refund itself fails the payment stays PLACING, and reconcileOpen takes it over once it's stuck
             String refundId = gateway.refund(gatewayOrderId, pay.id(), pay.amountPaise(), "Order couldn't be placed");
             finish(p, CheckoutPayment.Status.REFUNDED, refundId, null);
