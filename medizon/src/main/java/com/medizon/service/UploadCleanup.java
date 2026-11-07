@@ -68,7 +68,7 @@ public class UploadCleanup {
                 PrescriptionStatus.REJECTED, since));
         keep.addAll(returns.photoNamesInUse(
                 EnumSet.of(ReturnStatus.REQUESTED, ReturnStatus.APPROVED, ReturnStatus.PICKED_UP),
-                ReturnStatus.REJECTED, ReturnStatus.REFUNDED, since));
+                ReturnStatus.REJECTED, ReturnStatus.REFUNDED, ReturnStatus.CANCELLED, since));
         keep.addAll(ticketMessages.photoNamesInUse(TicketStatus.CLOSED, since));
 
         // Only files older than a day: one uploaded moments ago may not have its record saved yet

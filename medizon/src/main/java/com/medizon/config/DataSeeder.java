@@ -139,6 +139,7 @@ public class DataSeeder implements CommandLineRunner {
         jdbc.execute("alter table if exists password_reset_tokens drop constraint if exists password_reset_tokens_token_key");
         jdbc.execute("alter table if exists orders drop constraint if exists orders_payment_method_check");
         jdbc.execute("alter table if exists return_requests drop constraint if exists return_requests_refund_mode_check");
+        jdbc.execute("alter table if exists return_requests drop constraint if exists return_requests_status_check");
         jdbc.execute("alter table if exists checkout_payments drop constraint if exists checkout_payments_method_check");
         jdbc.execute("alter table if exists checkout_payments drop constraint if exists checkout_payments_status_check");
         jdbc.execute("alter table if exists checkout_payments drop constraint if exists checkout_payments_gateway_check");

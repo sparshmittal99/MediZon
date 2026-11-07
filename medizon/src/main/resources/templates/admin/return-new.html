@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Raise a return')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page">
+    <a th:href="@{/admin/orders/{id}(id=${o.id})}" class="small"><i class="bi bi-arrow-left"></i> Order <span th:text="${o.orderNumber}"></span></a>
+    <h1 class="mz-page-title mt-2 mb-1">Raise a return</h1>
+    <p class="text-muted mb-4">
+        For <strong th:text="${o.user.fullName}"></strong> on order <strong th:text="${o.orderNumber}"></strong>,
+        e.g. after a support ticket about a rejected return. It is approved at once and the customer sees an ordinary
+        return; who raised it and why stay in the back office.
+    </p>
+
+    <div class="row g-4">
+        <form class="col-lg-8" th:action="@{/admin/returns/new}" method="post">
+            <input type="hidden" name="order" th:value="${o.id}">
+
+            <section class="mz-panel-flush table-responsive mb-4">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Medicine</th><th>Ordered</th><th>Can return</th><th style="width: 8rem">Take back</th></tr></thead>
+                    <tbody>
+                    <tr th:each="i : ${o.items}" th:with="n=${left.get(i.id) != null ? left.get(i.id) : 0}">
+                        <td>
+                            <span th:text="${i.medicineName}"></span>
+                            <span th:unless="${i.returnable}" class="badge text-bg-light border fw-normal ms-1">Not returnable for customers</span>
+                        </td>
+                        <td th:text="${i.quantity} + ' pack(s)'"></td>
+                        <td th:text="${n} + ' pack(s)'"></td>
+                        <td>
+                            <th:block th:if="${n > 0}">
+                                <input type="hidden" name="itemId" th:value="${i.id}">
+                                <input class="form-control form-control-sm" type="number" name="qty" min="0" th:max="${n}" value="0"
+                                       th:aria-label="'Packs of ' + ${i.medicineName} + ' to take back'">
+                            </th:block>
+                            <span th:if="${n == 0}" class="small text-muted">All returned</span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="mz-panel mb-4">
+                <h2 class="h6">Reason</h2>
+                <div class="form-check mb-2" th:each="r, s : ${reasons}">
+                    <input class="form-check-input" type="radio" name="reason" th:id="'reason' + ${s.index}" th:value="${r}" required>
+                    <label class="form-check-label" th:for="'reason' + ${s.index}" th:text="${r.label}">Damaged</label>
+                </div>
+            </section>
+
+            <section class="mz-panel mb-4">
+                <h2 class="h6">Pickup</h2>
+                <p class="small mb-2">From where the order was delivered:
+                    <span class="text-muted" th:text="${o.deliverTo} + ', ' + ${o.shippingAddress}"></span></p>
+                <label class="form-label small" for="pickupDay">Pickup day</label>
+                <input class="form-control" style="max-width: 14rem" type="date" id="pickupDay" name="pickupDay" required
+                       th:value="${pickupDay}" th:min="${#temporals.format(#temporals.createToday(), 'yyyy-MM-dd')}"
+                       th:max="${#temporals.format(#temporals.createToday().plusDays(30), 'yyyy-MM-dd')}">
+            </section>
+
+            <section class="mz-panel mb-4">
+                <h2 class="h6">Refund to</h2>
+                <p class="small text-muted" th:text="'Paid by ' + ${o.paymentLabel} + '.'"></p>
+
+                <!-- Paid all in MediZon Money: it goes back there -->
+                <th:block th:if="${o.paymentMethod.name() == 'WALLET'}">
+                    <input type="hidden" name="refundMode" value="WALLET">
+                    <p class="small mb-0">MediZon Money, at pickup.</p>
+                </th:block>
+
+                <!-- Paid online: back to that payment, or MediZon Money -->
+                <th:block th:if="${o.paymentMethod.name() != 'WALLET' and !o.paymentMethod.onDelivery}">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="refundMode" id="rmOriginal" value="ORIGINAL" checked>
+                        <label class="form-check-label" for="rmOriginal" th:text="'Original payment method (' + ${o.paymentMethod.label} + ')'"></label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="refundMode" id="rmWallet" value="WALLET">
+                        <label class="form-check-label" for="rmWallet">MediZon Money, at pickup</label>
+                    </div>
+                </th:block>
+
+                <!-- Paid on delivery: MediZon Money, a UPI ID or a bank account -->
+                <th:block th:if="${o.paymentMethod.onDelivery}">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="refundMode" id="rmWallet2" value="WALLET" checked>
+                        <label class="form-check-label" for="rmWallet2">MediZon Money, at pickup</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="refundMode" id="rmUpi" value="UPI">
+                        <label class="form-check-label" for="rmUpi">UPI ID</label>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="radio" name="refundMode" id="rmBank" value="BANK">
+                        <label class="form-check-label" for="rmBank">Bank account</label>
+                    </div>
+                    <p class="small text-muted mb-2">Fill in only the one chosen, with the details the customer gave.</p>
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label class="form-label small" for="upiId">UPI ID</label>
+                            <input class="form-control" id="upiId" name="upiId" maxlength="60" placeholder="name@okbank" autocomplete="off">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="accountName">Account holder's name</label>
+                            <input class="form-control" id="accountName" name="accountName" maxlength="80" autocomplete="off">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="ifsc">IFSC</label>
+                            <input class="form-control text-uppercase" id="ifsc" name="ifsc" maxlength="11" placeholder="HDFC0001234" autocomplete="off">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="accountNumber">Account number</label>
+                            <input class="form-control" id="accountNumber" name="accountNumber" maxlength="18" inputmode="numeric" autocomplete="off">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="confirmAccountNumber">Account number again</label>
+                            <input class="form-control" id="confirmAccountNumber" name="confirmAccountNumber" maxlength="18" inputmode="numeric" autocomplete="off">
+                        </div>
+                    </div>
+                </th:block>
+            </section>
+
+            <section class="mz-panel mb-4">
+                <h2 class="h6">Notes</h2>
+                <label class="form-label small" for="staffNote">Why you're raising it <span class="text-muted">(staff only)</span></label>
+                <textarea class="form-control mb-3" id="staffNote" name="staffNote" rows="3" maxlength="1000" required
+                          placeholder="e.g. Ticket SP-1042: customer sent clearer photos of the broken seal after RT26110700123 was rejected"></textarea>
+                <label class="form-label small" for="customerNote">Note to the customer <span class="text-muted">(optional, they see it)</span></label>
+                <textarea class="form-control" id="customerNote" name="customerNote" rows="2" maxlength="1000"
+                          placeholder="e.g. Sorry for the trouble. Please keep the packs ready for pickup."></textarea>
+            </section>
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit"><i class="bi bi-check2 me-1" aria-hidden="true"></i>Raise and approve return</button>
+                <a th:href="@{/admin/orders/{id}(id=${o.id})}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+
+        <aside class="col-lg-4">
+            <div class="mz-panel">
+                <h2 class="h6">Earlier returns on this order</h2>
+                <p th:if="${#lists.isEmpty(previous)}" class="small text-muted mb-0">None.</p>
+                <div th:each="p : ${previous}" class="small border-top pt-2 mt-2">
+                    <div class="d-flex justify-content-between gap-2">
+                        <a th:href="@{/admin/returns/{id}(id=${p.id})}" th:text="${p.returnNumber}"></a>
+                        <span class="badge" th:classappend="${p.status.badge}" th:text="${p.status.label}"></span>
+                    </div>
+                    <div class="text-muted" th:text="${#temporals.format(p.createdAt, 'd MMM yyyy')} + ' · ' + ${p.reason.label}"></div>
+                    <div th:if="${p.adminNote}" th:text="'Note: ' + ${p.adminNote}"></div>
+                    <div th:if="${p.cancelReason}" th:text="'Cancelled: ' + ${p.cancelReason}"></div>
+                </div>
+            </div>
+        </aside>
+    </div>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

@@ -101,6 +101,27 @@ public class ReturnRequest {
     private LocalDateTime pickedUpAt;
     private LocalDateTime refundedAt;
 
+    /**
+     * The staff member who raised the return for the customer (a manual return, e.g. after a rejected return and a
+     * support ticket), as "name, store". Null when the customer asked for it. Only the back office sees this.
+     */
+    @Column(length = 160)
+    private String raisedBy;
+
+    /** Why staff raised it, e.g. the ticket it settles. Back office only. */
+    @Column(length = 1000)
+    private String staffNote;
+
+    private LocalDateTime cancelledAt;
+
+    /** Who cancelled it, as "name, store". Back office only. */
+    @Column(length = 160)
+    private String cancelledBy;
+
+    /** Why it was cancelled; the customer sees this. */
+    @Column(length = 1000)
+    private String cancelReason;
+
     /** The gateway's refund, when the order was paid online and the refund went back to that payment. */
     @Column(length = 40)
     private String gatewayRefundId;
@@ -111,6 +132,9 @@ public class ReturnRequest {
     }
 
     public boolean isOpen() { return status.isOpen(); }
+
+    /** Raised by staff on the customer's behalf rather than by the customer. */
+    public boolean isRaisedByStaff() { return raisedBy != null; }
 
     public int getPackCount() { return items.stream().mapToInt(ReturnItem::getQuantity).sum(); }
 

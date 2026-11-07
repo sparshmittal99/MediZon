@@ -37,7 +37,8 @@
                 <thead><tr><th>Return</th><th>Order</th><th>Customer</th><th>Requested</th><th>Reason</th><th>Packs</th><th>Refund</th><th>Status</th></tr></thead>
                 <tbody>
                 <tr th:each="r : ${returns}">
-                    <td><a class="fw-semibold" th:href="@{/admin/returns/{id}(id=${r.id})}" th:text="${r.returnNumber}"></a></td>
+                    <td><a class="fw-semibold" th:href="@{/admin/returns/{id}(id=${r.id})}" th:text="${r.returnNumber}"></a>
+                        <span th:if="${r.raisedByStaff}" class="badge text-bg-light border d-block mt-1 fw-normal" th:title="${r.raisedBy}">Raised by staff</span></td>
                     <td><a th:href="@{/admin/orders/{id}(id=${r.order.id})}" th:text="${r.order.orderNumber}"></a></td>
                     <td th:text="${r.user.fullName}"></td>
                     <td class="text-nowrap" th:text="${#temporals.format(r.createdAt, 'd MMM, h:mm a')}"></td>

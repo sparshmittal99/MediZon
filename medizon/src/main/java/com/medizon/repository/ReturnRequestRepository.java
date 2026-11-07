@@ -34,20 +34,22 @@ public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Lo
     @Query("select min(r.createdAt) from ReturnRequest r")
     LocalDateTime firstCreatedAt();
 
-    /** Packs of an order line already returned or on their way back (anything not rejected). */
-    @Query("select coalesce(sum(i.quantity), 0) from ReturnItem i where i.orderItem = :item and i.request.status <> :rejected")
-    long returnedQuantity(@Param("item") OrderItem item, @Param("rejected") ReturnStatus rejected);
+    /** Packs of an order line already returned or on their way back (anything not rejected or cancelled). */
+    @Query("select coalesce(sum(i.quantity), 0) from ReturnItem i where i.orderItem = :item and i.request.status not in :notReturned")
+    long returnedQuantity(@Param("item") OrderItem item, @Param("notReturned") Collection<ReturnStatus> notReturned);
 
     @Query("select coalesce(sum(r.refundAmount), 0) from ReturnRequest r where r.status = :refunded")
     BigDecimal totalRefunded(@Param("refunded") ReturnStatus refunded);
 
     List<ReturnRequest> findByStatusAndRefundDueOnLessThanEqual(ReturnStatus status, LocalDate day);
 
-    /** Photos still needed: returns being worked on, and ones rejected or refunded after {@code since}. */
+    /** Photos still needed: returns being worked on, and ones rejected, refunded or cancelled after {@code since}. */
     @Query("""
             select i.storedFileName from ReturnRequest r join r.images i where r.status in :open
               or (r.status = :rejected and (r.decidedAt is null or r.decidedAt > :since))
-              or (r.status = :refunded and (r.refundedAt is null or r.refundedAt > :since))""")
+              or (r.status = :refunded and (r.refundedAt is null or r.refundedAt > :since))
+              or (r.status = :cancelled and (r.cancelledAt is null or r.cancelledAt > :since))""")
     List<String> photoNamesInUse(@Param("open") Collection<ReturnStatus> open, @Param("rejected") ReturnStatus rejected,
-                                 @Param("refunded") ReturnStatus refunded, @Param("since") LocalDateTime since);
+                                 @Param("refunded") ReturnStatus refunded, @Param("cancelled") ReturnStatus cancelled,
+                                 @Param("since") LocalDateTime since);
 }

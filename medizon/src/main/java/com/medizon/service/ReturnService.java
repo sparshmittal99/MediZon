@@ -97,7 +97,7 @@ public class ReturnService {
     private Map<Long, Integer> remaining(Order o) {
         Map<Long, Integer> out = new LinkedHashMap<>();
         for (OrderItem i : o.getItems()) {
-            long done = returns.returnedQuantity(i, ReturnStatus.REJECTED);
+            long done = returns.returnedQuantity(i, EnumSet.of(ReturnStatus.REJECTED, ReturnStatus.CANCELLED));
             out.put(i.getId(), (int) Math.max(0, i.getQuantity() - done));
         }
         return out;
@@ -314,6 +314,135 @@ public class ReturnService {
     }
 
     public Resource file(ReturnImage image) { return storage.load(image.getStoredFileName()); }
+
+    // ------------------------------------------------------------------ raised or cancelled by staff
+
+    /**
+     * Why staff can't raise a return on the order right now, or empty if they can. Unlike the customer, staff aren't
+     * held to the return window and may take back any line, returnable or not: it's their call, e.g. after a support
+     * ticket about a rejected return.
+     */
+    public Optional<String> staffBlocker(Order o) {
+        if (o.getStatus() != OrderStatus.DELIVERED) return Optional.of("A return can be raised once the order is delivered.");
+        if (returns.findByOrderOrderByCreatedAtDesc(o).stream().anyMatch(ReturnRequest::isOpen)) {
+            return Optional.of("A return for this order is already in progress. Cancel it first to raise a new one.");
+        }
+        if (remaining(o).values().stream().allMatch(q -> q == 0)) return Optional.of("Everything in this order has been returned.");
+        return Optional.empty();
+    }
+
+    /** Packs of every order line (by id) staff can still take back. */
+    public Map<Long, Integer> staffReturnable(Order o) { return remaining(o); }
+
+    /**
+     * A return raised by staff for the customer. It is approved at once and from then on runs like any other: the
+     * customer sees an ordinary approved return with its pickup and refund, while the back office keeps who raised it
+     * and why ({@link ReturnRequest#getRaisedBy()}, {@link ReturnRequest#getStaffNote()}). The packs are collected from
+     * where the order was delivered.
+     */
+    @Transactional
+    public ReturnRequest raiseForCustomer(User staff, Long orderId, List<Long> itemIds, List<Integer> quantities,
+                                         ReturnReason reason, String customerNote, String staffNote, LocalDate pickupDay,
+                                         ReturnPickupForm refund) {
+        Order o = orderService.get(orderId);
+        staffBlocker(o).ifPresent(b -> { throw new BusinessException(b); });
+        if (reason == null) throw new BusinessException("Choose a reason for the return.");
+        String why = clean(staffNote);
+        if (why == null) throw new BusinessException("Say why you're raising this return, e.g. the support ticket it settles. Only staff see this.");
+        String note = clean(customerNote);
+        if (why.length() > 1000 || (note != null && note.length() > 1000)) throw new BusinessException("Keep each note under 1000 characters.");
+        LocalDate day = pickupDay == null ? pickupDate() : pickupDay;
+        if (day.isBefore(LocalDate.now())) throw new BusinessException("Choose today or a later day for the pickup.");
+        if (day.isAfter(LocalDate.now().plusDays(30))) throw new BusinessException("Choose a pickup day within the next 30 days.");
+
+        ReturnRequest r = new ReturnRequest();
+        r.setReturnNumber(newReturnNumber());
+        r.setOrder(o);
+        r.setUser(o.getUser());
+        r.setReason(reason);
+
+        Map<Long, Integer> left = remaining(o);
+        Map<Long, OrderItem> byId = new HashMap<>();
+        o.getItems().forEach(i -> byId.put(i.getId(), i));
+        BigDecimal total = BigDecimal.ZERO;
+        for (int k = 0; itemIds != null && k < itemIds.size(); k++) {
+            int qty = quantities != null && k < quantities.size() && quantities.get(k) != null ? quantities.get(k) : 0;
+            if (qty <= 0) continue;
+            OrderItem item = byId.get(itemIds.get(k));
+            if (item == null) throw new BusinessException("That item isn't part of this order.");
+            if (qty > left.getOrDefault(item.getId(), 0)) {
+                throw new BusinessException("At most " + left.get(item.getId()) + " pack(s) of " + item.getMedicineName() + " can be returned.");
+            }
+            ReturnItem ri = new ReturnItem();
+            ri.setOrderItem(item);
+            ri.setQuantity(qty);
+            ri.setAmount(paidFor(item, qty));
+            r.addItem(ri);
+            total = total.add(ri.getAmount());
+        }
+        if (r.getItems().isEmpty()) throw new BusinessException("Choose the packs to take back.");
+        r.setRefundAmount(total);
+        setRefundTo(r, o, refund == null ? new ReturnPickupForm() : refund);
+
+        r.setPickupName(o.getDeliverTo());
+        r.setPickupPhone(o.getContactPhone());
+        r.setPickupAddress(o.getShippingAddress());
+        r.setPickupDate(day);
+        r.setRefundDays(r.getRefundMode().days(o.getPaymentMethod(), settings.get()));
+
+        r.setRaisedBy(staffName(staff));
+        r.setStaffNote(why);
+        r.setStatus(ReturnStatus.APPROVED);
+        r.setDecidedAt(LocalDateTime.now());
+        r.setAdminNote(note);
+        returns.save(r);
+
+        notifyCustomer(r, "Return approved", "Return " + r.getReturnNumber() + " for order " + o.getOrderNumber()
+                + " is approved. Keep the packs ready; our delivery partner will pick them up on " + day(day) + "."
+                + " Refund: ₹" + total + (r.getRefundTo() == null ? "." : " to " + r.getRefundTo() + ".")
+                + (note == null ? "" : " Note: " + note));
+        if (!staff.isStoreStaff()) {
+            staffAlerts.notifyStore(o.getStore(), false, NotificationType.RETURN_UPDATE, "Return raised: " + r.getReturnNumber(),
+                    staffName(staff) + " raised a return of " + r.getPackCount() + " pack(s) from order " + o.getOrderNumber()
+                            + ". Pickup " + day(day) + ".", "/admin/returns/" + r.getId());
+        }
+        return r;
+    }
+
+    /**
+     * Calls off a return before its packs are collected: nothing is picked up or refunded, and the packs count as not
+     * returned, so another return can be raised for them. The customer is told why.
+     */
+    @Transactional
+    public ReturnRequest cancel(Long id, User staff, String reason) {
+        String why = clean(reason);
+        if (why == null) throw new BusinessException("Say why the return is cancelled; the customer sees this.");
+        if (why.length() > 1000) throw new BusinessException("Keep the reason under 1000 characters.");
+        ReturnRequest r = get(id);
+        if (!r.getStatus().isCancellable()) {
+            throw new BusinessException("A return that is " + r.getStatus().getLabel().toLowerCase()
+                    + " can't be cancelled; only one whose packs haven't been collected can.");
+        }
+        r.setStatus(ReturnStatus.CANCELLED);
+        r.setCancelledAt(LocalDateTime.now());
+        r.setCancelledBy(staffName(staff));
+        r.setCancelReason(why);
+        notifyCustomer(r, "Return cancelled", "Return " + r.getReturnNumber() + " for order " + r.getOrder().getOrderNumber()
+                + " is cancelled, so nothing will be picked up. Reason: " + why);
+        return r;
+    }
+
+    /** "Asha Rao, Main Store" for a store's staff, "Asha Rao, Admin" for the admin. */
+    static String staffName(User staff) {
+        String name = staff.getFullName() == null || staff.getFullName().isBlank() ? staff.getEmail() : staff.getFullName();
+        String where = staff.isStoreStaff() && staff.getStore() != null ? staff.getStore().getName() : staff.isAdmin() ? "Admin" : "Staff";
+        String s = name + ", " + where;
+        return s.length() > 160 ? s.substring(0, 160) : s;
+    }
+
+    private static String clean(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
 
     // ------------------------------------------------------------------ admin
 

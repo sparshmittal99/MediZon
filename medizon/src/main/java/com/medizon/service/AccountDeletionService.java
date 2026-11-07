@@ -1,6 +1,7 @@
 package com.medizon.service;
 
 import com.medizon.domain.User;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -30,6 +31,7 @@ public class AccountDeletionService {
     private final UserService userService;
     private final FileStorageService storage;
     private final PasswordEncoder encoder;
+    private final EntityManager em;
 
     /** A customer deleting their own account, confirmed with their password. */
     @Transactional
@@ -54,6 +56,10 @@ public class AccountDeletionService {
     private void delete(User u) {
         long id = u.getId();
         userService.signOutEverywhere(u);
+        // Signing out changes the account and its phones through JPA. Write that now, before the SQL below deletes
+        // the phones and anonymises the account; otherwise it would be written at commit, on top of the SQL: an
+        // update of a phone already deleted (StaleObjectStateException) or the account's old name and email again.
+        em.flush();
 
         // Uploaded files first, while we still know which they are
         List<String> files = jdbc.queryForList("select stored_file_name from prescription where user_id = ?", String.class, id);
@@ -116,6 +122,7 @@ public class AccountDeletionService {
                 "Deleted " + role, "deleted-" + id + "@deleted.invalid", encoder.encode(UUID.randomUUID().toString()),
                 LocalDateTime.now(), id);
 
+        em.clear();   // nothing loaded before the SQL may be written back over it
         files.forEach(storage::delete);
         log.info("Deleted account {} ({})", id, role);
     }

@@ -20,7 +20,7 @@
         <span class="badge fs-6" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span>
     </div>
 
-    <div class="mz-panel mb-4" th:if="${r.status.name() != 'REJECTED'}">
+    <div class="mz-panel mb-4" th:unless="${r.status.closedWithoutReturn}">
         <ol class="mz-track">
             <li th:each="s : ${r.trackSteps}" th:classappend="${r.reached(s)} ? 'done'"
                 th:text="${s.name() == 'REQUESTED'} ? 'Requested' : (${s.name() == 'APPROVED'} ? 'Approved' : ${s.label})">Step</li>
@@ -96,6 +96,23 @@
                 </dl>
             </div>
 
+            <!-- Back office only: the customer sees an ordinary return -->
+            <div class="mz-panel mb-3 border-start border-4 border-info" th:if="${r.raisedByStaff}">
+                <h2 class="h6"><i class="bi bi-person-badge me-1" aria-hidden="true"></i>Raised by staff</h2>
+                <p class="small mb-1" th:text="${r.raisedBy}"></p>
+                <p class="small mb-1 mz-review-text" th:text="${r.staffNote}"></p>
+                <p class="small text-muted mb-0">Only staff see this. The customer sees an ordinary return.</p>
+            </div>
+
+            <div class="mz-panel mb-3" th:if="${r.status.name() == 'CANCELLED'}">
+                <h2 class="h6">Cancelled</h2>
+                <p class="small mb-1" th:text="${#temporals.format(r.cancelledAt, 'd MMM yyyy, h:mm a')} + (${r.cancelledBy} != null ? ' by ' + ${r.cancelledBy} : '')"></p>
+                <p class="small mb-0" th:text="${r.cancelReason}"></p>
+            </div>
+
+            <a th:if="${canRaise}" th:href="@{/admin/returns/new(order=${r.order.id})}" class="btn btn-outline-primary w-100 mb-3">
+                <i class="bi bi-arrow-return-left me-1" aria-hidden="true"></i>Raise a new return for this order</a>
+
             <div class="mz-panel mb-3" th:if="${r.adminNote != null or r.decidedAt != null}">
                 <h2 class="h6">Decision</h2>
                 <p class="small mb-1" th:if="${r.decidedAt}" th:text="${#temporals.format(r.decidedAt, 'd MMM yyyy, h:mm a')}"></p>
@@ -136,6 +153,17 @@
                         + (${r.refundTo} != null ? ' to ' + ${r.refundTo} : ' through the same method')
                         + (${r.refundDueOn} != null ? ' is paid automatically on ' + ${#temporals.format(r.refundDueOn, 'd MMM')} + '. Pay it sooner and mark it here.' : '. Pay it, then mark it done.')"></p>
                 <button class="btn btn-primary w-100" type="submit">Mark refunded now</button>
+            </form>
+
+            <!-- Before pickup: call it off -->
+            <form th:if="${r.status.cancellable}" th:action="@{/admin/returns/{id}/cancel(id=${r.id})}" method="post" class="mz-panel mt-3"
+                  data-mz-confirm="Cancel this return? Nothing will be picked up or refunded, and the customer is told."
+                  data-mz-confirm-title="Cancel return" data-mz-confirm-ok="Cancel return">
+                <h2 class="h6">Cancel return</h2>
+                <label class="form-label small" for="cancelReason">Reason, shown to the customer</label>
+                <textarea class="form-control mb-3" id="cancelReason" name="reason" rows="2" maxlength="1000" required
+                          placeholder="e.g. Raised by mistake, or the customer no longer wants to return it"></textarea>
+                <button class="btn btn-outline-danger w-100" type="submit">Cancel return</button>
             </form>
         </div>
     </div>

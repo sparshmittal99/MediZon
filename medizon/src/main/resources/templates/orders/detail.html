@@ -92,7 +92,7 @@
                     </div>
                     <span class="badge" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span>
                 </div>
-                <ol class="mz-track mz-track-sm my-3" th:if="${r.status.name() != 'REJECTED'}">
+                <ol class="mz-track mz-track-sm my-3" th:unless="${r.status.closedWithoutReturn}">
                     <li th:each="s : ${r.trackSteps}" th:classappend="${r.reached(s)} ? 'done'"
                         th:text="${s.name() == 'REQUESTED'} ? 'Requested' : (${s.name() == 'APPROVED'} ? 'Approved' : ${s.label})">Step</li>
                 </ol>
@@ -101,9 +101,12 @@
                 </ul>
                 <p class="small mb-1" th:if="${r.details}" th:text="${r.details}"></p>
                 <p class="small mb-1" th:if="${r.adminNote}"><strong>Pharmacist:</strong> <span th:text="${r.adminNote}"></span></p>
+                <p class="small mb-1" th:if="${r.cancelReason}"><strong>Cancelled:</strong> <span th:text="${r.cancelReason}"></span></p>
+                <p class="small text-muted mb-1" th:if="${adminView and r.raisedByStaff}">
+                    <i class="bi bi-person-badge me-1" aria-hidden="true"></i><span th:text="'Raised by ' + ${r.raisedBy} + ': ' + ${r.staffNote}"></span></p>
                 <p class="small mb-1" th:if="${r.pickupAddress != null and (r.status.name() == 'REQUESTED' or r.status.name() == 'APPROVED')}">
                     <strong>Pickup</strong> <span th:text="${#temporals.format(r.pickupDate, 'EEE, d MMM')} + ' from ' + ${r.pickupAddress}"></span></p>
-                <p class="small mb-0 fw-semibold" th:text="(${r.status.name() == 'REFUNDED'} ? 'Refunded ' : 'Refund ') + '₹' + ${r.refundAmount}
+                <p class="small mb-0 fw-semibold" th:unless="${r.status.closedWithoutReturn}" th:text="(${r.status.name() == 'REFUNDED'} ? 'Refunded ' : 'Refund ') + '₹' + ${r.refundAmount}
                         + (${r.refundTo} != null ? ' to ' + ${r.refundTo} : '')"></p>
                 <p class="small text-muted mb-0" th:if="${r.walletRefund.signum() > 0 and r.payoutAmount.signum() > 0}"
                    th:text="'₹' + ${r.walletRefund} + ' went back to MediZon Money; ₹' + ${r.payoutAmount} + ' to ' + ${r.refundTo} + '.'"></p>
@@ -112,6 +115,17 @@
                 <p class="small text-muted mb-0" th:if="${(r.status.name() == 'REQUESTED' or r.status.name() == 'APPROVED') and r.refundTiming != null}"
                    th:text="'Refund timing: ' + ${#strings.toLowerCase(r.refundTiming)}"></p>
             </section>
+
+            <!-- Staff: raise a return for the customer, e.g. after a support ticket -->
+            <div th:if="${adminView and canManage and o.status.name() == 'DELIVERED'}" class="mz-panel mt-4 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                    <h2 class="h6 mb-0">Return for the customer</h2>
+                    <div class="small text-muted" th:if="${staffReturnBlocker == null}">Raise a return on the customer's behalf. It is approved at once and looks like an ordinary return to them.</div>
+                    <div class="small text-muted" th:if="${staffReturnBlocker != null}" th:text="${staffReturnBlocker}"></div>
+                </div>
+                <a th:if="${staffReturnBlocker == null}" th:href="@{/admin/returns/new(order=${o.id})}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-return-left me-1" aria-hidden="true"></i>Raise a return</a>
+            </div>
 
             <div th:if="${!adminView and hasReturnable and o.status.name() == 'DELIVERED'}" class="mz-panel mt-4 d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>

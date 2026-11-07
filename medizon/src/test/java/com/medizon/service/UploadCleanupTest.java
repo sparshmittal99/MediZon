@@ -35,7 +35,7 @@ class UploadCleanupTest {
         returns = mock(ReturnRequestRepository.class);
         tickets = mock(TicketMessageRepository.class);
         when(prescriptions.fileNamesInUse(any(), any(), any())).thenReturn(List.of());
-        when(returns.photoNamesInUse(any(), any(), any(), any())).thenReturn(List.of());
+        when(returns.photoNamesInUse(any(), any(), any(), any(), any())).thenReturn(List.of());
         when(tickets.photoNamesInUse(any(), any())).thenReturn(List.of());
         cleanup = new UploadCleanup(storage, prescriptions, returns, tickets);
     }
@@ -66,7 +66,7 @@ class UploadCleanupTest {
         Path openReturn = file("returns/open.jpg", Duration.ofDays(3));
         Path openTicket = file("support/open.jpg", Duration.ofDays(3));
         when(prescriptions.fileNamesInUse(any(), any(), any())).thenReturn(List.of("pending.pdf"));
-        when(returns.photoNamesInUse(any(), any(), any(), any())).thenReturn(List.of("returns/open.jpg"));
+        when(returns.photoNamesInUse(any(), any(), any(), any(), any())).thenReturn(List.of("returns/open.jpg"));
         when(tickets.photoNamesInUse(any(), any())).thenReturn(List.of("support/open.jpg"));
 
         assertEquals(0, cleanup.run(now));

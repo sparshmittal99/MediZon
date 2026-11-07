@@ -444,6 +444,7 @@ public class AdminController {
         model.addAttribute("canManage", me.isAdmin() || me.isStoreStaff());
         model.addAttribute("review", reviewService.forOrder(o).orElse(null));
         model.addAttribute("returns", returnService.forOrder(o));
+        model.addAttribute("staffReturnBlocker", returnService.staffBlocker(o).orElse(null));
         model.addAttribute("adminView", true);
         return "orders/detail";
     }
