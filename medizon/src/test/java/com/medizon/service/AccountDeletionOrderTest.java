@@ -28,11 +28,15 @@ class AccountDeletionOrderTest {
         EntityManager em = mock(EntityManager.class);
         PasswordEncoder encoder = mock(PasswordEncoder.class);
         when(encoder.encode(any())).thenReturn("x");
-        AccountDeletionService service = new AccountDeletionService(jdbc, users, mock(FileStorageService.class), encoder, em);
+        EmailService email = mock(EmailService.class);
+        AccountDeletionService service = new AccountDeletionService(jdbc, users, mock(FileStorageService.class), encoder, em, email);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "baseUrl", "https://medizon.test");
 
         User u = new User();
         u.setId(9L);
         u.setRole(Role.CUSTOMER);
+        u.setFullName("Asha Rao");
+        u.setEmail("asha@example.com");
         when(users.checkPassword(u, "pw")).thenReturn(true);
 
         service.deleteOwn(u, "pw");
@@ -43,5 +47,9 @@ class AccountDeletionOrderTest {
         order.verify(jdbc).update(startsWith("delete from notification_devices"), eq(9L));
         order.verify(jdbc).update(contains("update users set full_name"), any(Object[].class));
         order.verify(em).clear();
+
+        // The customer is told, at the address the account had
+        verify(email).sendTemplate(eq(EmailService.Sender.NOREPLY), eq("asha@example.com"), eq("Your MediZon account has been deleted"),
+                eq("emails/account-deleted"), argThat(m -> "Asha".equals(m.get("firstName"))), contains("https://medizon.test/help"));
     }
 }

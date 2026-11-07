@@ -4,13 +4,19 @@ import com.medizon.domain.User;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -32,13 +38,50 @@ public class AccountDeletionService {
     private final FileStorageService storage;
     private final PasswordEncoder encoder;
     private final EntityManager em;
+    private final EmailService email;
+
+    @Value("${medizon.base-url:http://localhost:8080}")
+    private String baseUrl;
 
     /** A customer deleting their own account, confirmed with their password. */
     @Transactional
     public void deleteOwn(User user, String password) {
         if (!user.isCustomer()) throw new BusinessException("Staff accounts are deleted by the admin.");
         if (!userService.checkPassword(user, password)) throw new BusinessException("That password isn't right.");
+        String to = user.getEmail();
+        String firstName = user.getFirstName();
         delete(user);
+        // Only once the deletion is saved: a deletion that fails and rolls back sends nothing
+        afterCommit(() -> sendDeletedEmail(to, firstName));
+    }
+
+    /** Confirms to the address the account had that it's gone, and what MediZon keeps. */
+    private void sendDeletedEmail(String to, String firstName) {
+        if (to == null || to.isBlank()) return;
+        String name = firstName == null || firstName.isBlank() ? "there" : firstName;
+        String when = LocalDateTime.now().format(DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a", Locale.ENGLISH));
+        String base = baseUrl.replaceAll("/+$", "");
+        String text = "Hi " + name + ",\n\n"
+                + "Your MediZon account was deleted on " + when + ", as you asked.\n\n"
+                + "Your addresses, family members, medicines and reminders, prescriptions, cart, reviews, support tickets "
+                + "and any MediZon Money balance are gone, and you have been signed out everywhere.\n\n"
+                + "As the law requires, we keep your past orders and their tax invoices and refunds, without your "
+                + "contact details.\n\n"
+                + "Didn't delete your account? Contact us right away: " + base + "/help\n\n"
+                + "You're always welcome back: sign up again with this email any time.\n\n- MediZon";
+        email.sendTemplate(EmailService.Sender.NOREPLY, to, "Your MediZon account has been deleted", "emails/account-deleted",
+                Map.of("firstName", name, "when", when, "baseUrl", base), text);
+    }
+
+    private static void afterCommit(Runnable r) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            r.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() { r.run(); }
+        });
     }
 
     /** The admin deleting another account; returns the name it had. */

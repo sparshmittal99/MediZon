@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>Your MediZon account has been deleted</title>
+    <style>
+        @media only screen and (max-width: 520px) {
+            .mz-wrap { padding: 12px 6px !important; }
+            .mz-card { width: 100% !important; max-width: 100% !important; border-radius: 8px !important; }
+            .mz-header { padding: 22px 20px !important; }
+            .mz-body { padding: 22px 18px !important; }
+            .mz-footer { padding: 18px 20px !important; }
+            .mz-btn { display: block !important; width: 100% !important; box-sizing: border-box !important; text-align: center !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F6F9F7; font-family: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #17302A; line-height: 1.5; -webkit-font-smoothing: antialiased;">
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #F6F9F7; padding: 32px 16px;" class="mz-wrap">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" class="mz-card" style="max-width: 560px; background-color: #ffffff; border-radius: 12px; border: 1px solid #D3E3DB; overflow: hidden; box-shadow: 0 4px 12px rgba(23, 48, 42, 0.05);" cellspacing="0" cellpadding="0">
+
+                    <!-- Header -->
+                    <tr>
+                        <td class="mz-header" style="background-color: #0E6B57; padding: 28px 30px; text-align: center;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" style="display: inline-table; vertical-align: middle; margin: 0 auto;">
+                                <tr>
+                                    <td style="vertical-align: middle; padding-right: 11px; line-height: 0;">
+                                        <img src="cid:medizonLogo" width="36" height="36" alt="MediZon"
+                                             style="display: block; width: 36px; height: 36px; border: 0; outline: none; background: transparent;" />
+                                    </td>
+                                    <td style="vertical-align: middle; line-height: 1;">
+                                        <span style="font-size: 26px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; display: inline-block; vertical-align: middle; line-height: 1;">MediZon</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td class="mz-body" style="padding: 30px;">
+                            <h1 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 700; color: #17302A;">Your account has been deleted</h1>
+                            <p style="margin: 0 0 16px 0; font-size: 15px; color: #5B716A;">
+                                Hi <span th:text="${firstName}">there</span>,
+                            </p>
+                            <p style="margin: 0 0 20px 0; font-size: 15px; color: #17302A; line-height: 1.6;">
+                                Your MediZon account was deleted on <strong th:text="${when}">8 Nov 2026, 1:35 AM</strong>, as you asked,
+                                and you have been signed out on every browser and phone.
+                            </p>
+
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 20px; background-color: #F6F9F7; border: 1px solid #D3E3DB; border-radius: 8px;">
+                                <tr>
+                                    <td style="padding: 16px 18px; font-size: 14px; color: #17302A; line-height: 1.6;">
+                                        <strong>What's gone</strong><br>
+                                        <span style="color: #5B716A;">Your addresses, family members, medicines and reminders, prescriptions, cart, reviews, support tickets and any MediZon Money balance.</span>
+                                        <br><br>
+                                        <strong>What we keep</strong><br>
+                                        <span style="color: #5B716A;">As the law requires, your past orders with their tax invoices and refunds, without your contact details.</span>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 0 0 24px 0; font-size: 14px; color: #5B716A; line-height: 1.6;">
+                                <strong style="color: #17302A;">Didn't delete your account?</strong> Contact us right away so we can look into it.
+                            </p>
+
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td align="center">
+                                        <a th:href="${baseUrl} + '/help'" target="_blank" class="mz-btn" style="display: inline-block; background-color: #0E6B57; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 13px 32px; border-radius: 8px; box-shadow: 0 2px 6px rgba(14, 107, 87, 0.25);">
+                                            Contact support
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td class="mz-footer" style="background-color: #F6F9F7; border-top: 1px solid #D3E3DB; padding: 22px 30px; text-align: center; font-size: 12px; color: #5B716A;">
+                            <p style="margin: 0 0 6px 0;">You're always welcome back: sign up again with this email any time.</p>
+                            <p style="margin: 0; color: #7B908A;">MediZon Pharmacy &bull; Healthcare with Care</p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>
