@@ -22,6 +22,12 @@ public class DoseSlot {
         return past ? "due" : "upcoming";
     }
 
+    /** Already answered: offers the opposite answer, to fix a wrong tap. */
+    public boolean isChangeable() {
+        String s = getState();
+        return s.equals("taken") || s.equals("skipped");
+    }
+
     public boolean isAnswerable() {
         String s = getState();
         return s.equals("pending") || s.equals("due");

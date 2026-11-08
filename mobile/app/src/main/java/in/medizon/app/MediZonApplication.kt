@@ -1,7 +1,6 @@
 package `in`.medizon.app
 
 import android.app.Application
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.media.AudioAttributes
@@ -27,7 +26,6 @@ class MediZonApplication : Application() {
             description = getString(R.string.channel_calls_desc)
             setSound(null, null as AudioAttributes?)
             enableVibration(false)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setBypassDnd(true)
         }
         // "Ring phone" OFF: a normal heads-up notification with the default sound, once.
@@ -36,25 +34,21 @@ class MediZonApplication : Application() {
         ).apply {
             description = getString(R.string.channel_reminders_desc)
             enableVibration(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         val missed = NotificationChannel(
             Notifications.CHANNEL_MISSED, getString(R.string.channel_missed), NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description = getString(R.string.channel_missed_desc)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         val announcements = NotificationChannel(
             Notifications.CHANNEL_ANNOUNCEMENTS, getString(R.string.channel_announcements), NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description = getString(R.string.channel_announcements_desc)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         val updates = NotificationChannel(
             Notifications.CHANNEL_UPDATES, getString(R.string.channel_updates), NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = getString(R.string.channel_updates_desc)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         // 30 min after an unanswered dose alarm: heads-up with sound.
         val missedDoses = NotificationChannel(
@@ -62,7 +56,6 @@ class MediZonApplication : Application() {
         ).apply {
             description = getString(R.string.channel_missed_doses_desc)
             enableVibration(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         // "Taken by you at 9:05 AM" right after answering an alarm: pops up. (A channel's importance can't be
         // raised after creation, so the earlier default-importance channel is replaced.)
@@ -71,7 +64,6 @@ class MediZonApplication : Application() {
             Notifications.CHANNEL_DOSE_UPDATES, getString(R.string.channel_dose_updates), NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = getString(R.string.channel_dose_updates_desc)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         // Unanswered alarms after the ring stops: alerting (shown on the lock screen), but no sound or vibration.
         val due = NotificationChannel(
@@ -80,7 +72,6 @@ class MediZonApplication : Application() {
             description = getString(R.string.channel_due_desc)
             setSound(null, null as AudioAttributes?)
             enableVibration(false)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         nm.createNotificationChannels(listOf(calls, reminders, due, missed, missedDoses, doseUpdates, announcements, updates))
     }

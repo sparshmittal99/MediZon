@@ -73,6 +73,14 @@
                     <button class="btn btn-primary" name="status" value="TAKEN" th:text="${d.state == 'upcoming'} ? 'Take now' : 'Taken'">Taken</button>
                     <button th:if="${d.answerable}" class="btn btn-outline-secondary" name="status" value="SKIPPED">Skip</button>
                 </form>
+                <form th:if="${d.changeable}" th:action="@{/plans/{id}/dose(id=${d.plan.id})}" method="post">
+                    <input type="hidden" name="time" th:value="${#temporals.format(d.time, 'HH:mm')}">
+                    <input type="hidden" name="returnTo" th:value="${selected != null} ? '/plans?member=' + ${selected.id} : '/plans'">
+                    <button class="btn btn-outline-secondary" name="status"
+                            th:value="${d.state == 'taken'} ? 'SKIPPED' : 'TAKEN'"
+                            th:title="${d.state == 'taken'} ? 'Marked taken. Change to skipped' : 'Marked skipped. Change to taken'"
+                            th:text="${d.state == 'taken'} ? 'Mark skipped' : 'Mark taken'">Mark skipped</button>
+                </form>
             </li>
         </ol>
     </section>

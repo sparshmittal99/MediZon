@@ -103,7 +103,7 @@ object Notifications {
             .setStyle(NotificationCompat.BigTextStyle().bigText(items.joinToString("\n") { "${it.title} · ${it.body}" }))
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setOngoing(true)
             // Not setSilent(): that marks it a silent group alert, and Android then blocks both the heads-up and the
             // full-screen popup. The "Medicine calls" channel has no sound; AlarmService plays the ringtone.
@@ -139,7 +139,7 @@ object Notifications {
             .addAction(0, AppSettings.snoozeLabel(c), action(c, AlarmActions.SNOOZE, first))
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setOngoing(true)
             // Not setSilent(): that marks it a silent group alert, and Android then blocks both the heads-up and the
             // full-screen popup. The "Medicine calls" channel has no sound; AlarmService plays the ringtone.
@@ -163,7 +163,7 @@ object Notifications {
 
     /**
      * After the ring stops (time out, or Back/Home on the popup): same alarms, silent, with the answer
-     * buttons. Tapping it reopens the popup (silently). Swiping it away forgets them.
+     * buttons. Tapping it reopens the popup (silently). Stays for 2 minutes, then the alarms are forgotten.
      */
     fun pending(c: Context, items: List<AlarmItem>, timeoutMs: Long? = null): Notification {
         val first = items.first()
@@ -177,7 +177,7 @@ object Notifications {
             .setStyle(NotificationCompat.BigTextStyle().bigText(items.joinToString("\n") { "${it.title} · ${it.body}" }))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setOnlyAlertOnce(true)
             .setWhen(first.atMillis)
             .setShowWhen(true)
@@ -185,8 +185,9 @@ object Notifications {
             .setDeleteIntent(PendingIntent.getBroadcast(
                 c, 7003, Intent(c, AlarmActionReceiver::class.java).setAction(AlarmActions.CLEAR_DUE), FLAGS
             ))
-        // Ring stopped with a phone button: the notification only stays a short while.
-        if (timeoutMs != null) b.setTimeoutAfter(timeoutMs)
+        // Within its 2 minutes: can't be cleared (Clear all skips it; a swipe on Android 14+ re-posts it via
+        // the delete intent), then removed by the system.
+        if (timeoutMs != null) b.setOngoing(true).setTimeoutAfter(timeoutMs)
         addAnswerActions(c, b, first)
         return b.build()
     }
@@ -205,7 +206,7 @@ object Notifications {
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
             .setContentIntent(open)
@@ -225,7 +226,7 @@ object Notifications {
             .setStyle(NotificationCompat.BigTextStyle().bigText(item.body))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setOnlyAlertOnce(true)
             .setAutoCancel(true)
@@ -272,7 +273,7 @@ object Notifications {
                     .setContentText(n.body)
                     .setStyle(NotificationCompat.BigTextStyle().bigText(n.body))
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                     .setAutoCancel(true)
                     .setContentIntent(open)
                     .build()
@@ -317,7 +318,7 @@ object Notifications {
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
             .setWhen(t)
@@ -334,15 +335,30 @@ object Notifications {
         } catch (e: SecurityException) { /* notifications not permitted */ }
     }
 
-    /** Right after Taken / Skip on an alarm: "Metformin — taken · Taken by Asha at 9:05 AM (9:00 AM dose)". */
+    /** "9:00 AM", or "8 Nov, 9:00 PM" when it isn't today. */
+    private fun whenText(c: Context, millis: Long): String =
+        if (android.text.format.DateUtils.isToday(millis)) timeText(c, millis)
+        else java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault()).format(java.util.Date(millis)) +
+            ", " + timeText(c, millis)
+
+    /**
+     * Right after Taken / Skip on an alarm:
+     *   Dose taken · Metformin
+     *   1 tablet of Metformin was taken by you at 9:05 AM. Scheduled for 9:00 AM.
+     */
     @SuppressLint("MissingPermission")
     fun doseMarked(c: Context, item: AlarmItem, taken: Boolean) {
         val planId = item.planId ?: return
         val t = item.doseInstant ?: return
         val now = System.currentTimeMillis()
         val by = item.memberName ?: "you"
-        val title = "${item.medicineName} — ${if (taken) "taken" else "skipped"}"
-        val text = "${if (taken) "Taken" else "Skipped"} by $by at ${timeText(c, now)} (${timeText(c, t)} dose)."
+        val name = item.medicineName
+        // The server sends the body as "Take 1 tablet · after food"; the amount is "1 tablet".
+        val first = item.body.substringBefore(" · ").trim()
+        val amount = if (first.startsWith("Take ")) first.removePrefix("Take ").trim().ifBlank { "1 dose" } else "1 dose"
+        val title = "${if (taken) "Dose taken" else "Dose skipped"} · $name"
+        val text = "$amount of $name was ${if (taken) "taken" else "skipped"} by $by at ${timeText(c, now)}. " +
+            "Scheduled for ${whenText(c, t)}."
         val open = PendingIntent.getActivity(
             c, ("done-open-$planId@$t").hashCode(), MainActivity.openIntent(c, item.path), FLAGS
         )
@@ -354,7 +370,7 @@ object Notifications {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .setWhen(now)
             .setShowWhen(true)
@@ -375,7 +391,7 @@ object Notifications {
             .setContentText(item.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(item.body))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setWhen(item.atMillis)
             .setShowWhen(true)
             .setAutoCancel(true)

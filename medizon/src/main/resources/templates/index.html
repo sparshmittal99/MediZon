@@ -118,6 +118,14 @@
                             <button class="btn btn-primary btn-sm" name="status" value="TAKEN">Taken</button>
                             <button class="btn btn-outline-secondary btn-sm" name="status" value="SKIPPED" aria-label="Skip"><i class="bi bi-x-lg"></i></button>
                         </form>
+                        <form th:if="${d.changeable}" th:action="@{/plans/{id}/dose(id=${d.plan.id})}" method="post" class="mz-dose-act">
+                            <input type="hidden" name="time" th:value="${#temporals.format(d.time, 'HH:mm')}">
+                            <input type="hidden" name="returnTo" value="/">
+                            <button class="btn btn-outline-secondary btn-sm" name="status"
+                                    th:value="${d.state == 'taken'} ? 'SKIPPED' : 'TAKEN'"
+                                    th:title="${d.state == 'taken'} ? 'Marked taken. Change to skipped' : 'Marked skipped. Change to taken'"
+                                    th:text="${d.state == 'taken'} ? 'Mark skipped' : 'Mark taken'">Mark skipped</button>
+                        </form>
                     </li>
                 </ol>
                 <div th:unless="${#lists.isEmpty(lowPlans)}" class="mz-low-banner mt-3 d-flex align-items-center justify-content-between gap-2">

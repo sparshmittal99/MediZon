@@ -47,8 +47,14 @@ class AlarmService : Service() {
         /** Set by AlarmActivity: a phone button stopped the ring, so the popup closes. Main thread only. */
         var closePopup: (() -> Unit)? = null
 
-        /** How long the silent notification stays after a phone button stopped the ring. */
-        private const val BUTTON_KEEP_MS = 2 * 60 * 1000L
+        /**
+         * How long an unanswered alarm stays in the notification after the ring stops (Home, Back, a phone
+         * button or the ring time running out). It can't be cleared before then; afterwards it goes away and
+         * the 30-minute missed-dose reminder takes over.
+         */
+        private const val KEEP_MS = 2 * 60 * 1000L
+        /** A dismissal this close to the end counts as the 2 minutes being over. */
+        private const val KEEP_SLACK_MS = 5_000L
         /** Screen-off right after the ring starts can be the device settling, not the power button. */
         private const val SCREEN_OFF_GRACE_MS = 1_500L
 
@@ -60,7 +66,7 @@ class AlarmService : Service() {
             instance?.buttonSilence()
         }
 
-        /** The 2 minutes are over: drop the alarms that were ringing when the button was pressed. */
+        /** The 2 minutes are over: drop the alarms that were in the notification. */
         fun expire(c: Context, ids: Set<String>) {
             val list = due(c)
             if (!list.removeAll { it.id in ids }) return
@@ -181,8 +187,16 @@ class AlarmService : Service() {
             instance?.silenceNow() ?: showPendingOrCancel(c)
         }
 
-        /** The silent notification was swiped away: forget the unanswered alarms. */
+        /**
+         * The unanswered-alarm notification was dismissed (swipe on Android 14+, which no longer lets apps
+         * block it, or its 2-minute timeout). Within the 2 minutes it is put straight back; after that the
+         * alarms are forgotten.
+         */
         fun clearDue(c: Context) {
+            if (due(c).isNotEmpty() && Store.pendingUntil(c) - System.currentTimeMillis() > KEEP_SLACK_MS) {
+                showPendingOrCancel(c)
+                return
+            }
             due(c).clear()
             saveDue(c)
             instance?.stopAll()
@@ -275,10 +289,7 @@ class AlarmService : Service() {
 
     private fun buttonSilence() {
         if (instance !== this) return
-        val until = System.currentTimeMillis() + BUTTON_KEEP_MS
-        Store.setPendingUntil(this, until)
-        scheduleExpiry(this, due(this).map { it.id }, until)
-        silenceNow() // posts the silent notification with the 2-minute timeout
+        silenceNow() // posts the notification with the 2-minute limit
         closePopup?.invoke()
     }
 
@@ -316,10 +327,18 @@ class AlarmService : Service() {
 
     /** Ring time over, or the user left the popup: quiet now, keep a silent notification. */
     private fun silenceNow() {
-        if (instance === this) instance = null
+        val wasRinging = instance === this
+        if (wasRinging) instance = null
         handler.removeCallbacks(timeout)
         stopRinging()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        val ids = due(this).map { it.id }
+        if (wasRinging && ids.isNotEmpty()) {
+            // However the ring stopped: the alarm stays in the notification for 2 minutes, then goes.
+            val until = System.currentTimeMillis() + KEEP_MS
+            Store.setPendingUntil(this, until)
+            scheduleExpiry(this, ids, until)
+        }
         showPendingOrCancel(this)
         stopSelf()
         listener?.invoke()
