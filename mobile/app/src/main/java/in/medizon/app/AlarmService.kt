@@ -50,7 +50,7 @@ class AlarmService : Service() {
         /** How long the silent notification stays after a phone button stopped the ring. */
         private const val BUTTON_KEEP_MS = 2 * 60 * 1000L
         /** Screen-off right after the ring starts can be the device settling, not the power button. */
-        private const val SCREEN_OFF_GRACE_MS = 3_000L
+        private const val SCREEN_OFF_GRACE_MS = 1_500L
 
         /**
          * Volume / power pressed while ringing: stop the ring and close the popup, keep the alarms in a

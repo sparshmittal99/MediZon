@@ -26,6 +26,8 @@
     <string name="channel_missed_desc">Alarms that rang without an answer.</string>
     <string name="channel_missed_doses">Missed doses</string>
     <string name="channel_missed_doses_desc">A dose still not marked Taken or Skipped 30 minutes after its alarm.</string>
+    <string name="channel_due">Unanswered alarms</string>
+    <string name="channel_due_desc">An alarm that stopped ringing before it was answered. No sound.</string>
     <string name="channel_dose_updates">Dose updates</string>
     <string name="channel_dose_updates_desc">Confirms a dose right after it is marked Taken or Skipped.</string>
 </resources>

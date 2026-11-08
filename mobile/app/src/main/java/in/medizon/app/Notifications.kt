@@ -22,7 +22,10 @@ object Notifications {
     const val CHANNEL_ANNOUNCEMENTS = "announcements"
     const val CHANNEL_UPDATES = "updates"
     const val CHANNEL_MISSED_DOSES = "missed_doses"
-    const val CHANNEL_DOSE_UPDATES = "dose_updates"
+    /** Pop-up (heads-up) channel; replaces the earlier low-key "dose_updates". */
+    const val CHANNEL_DOSE_UPDATES = "dose_confirmations"
+    /** Unanswered alarms after the ring stops: alerting (so it shows on the lock screen) but without sound. */
+    const val CHANNEL_DUE = "due_alarms"
     const val RINGING_ID = 1001
 
     private const val FLAGS = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -164,7 +167,8 @@ object Notifications {
      */
     fun pending(c: Context, items: List<AlarmItem>, timeoutMs: Long? = null): Notification {
         val first = items.first()
-        val b = NotificationCompat.Builder(c, CHANNEL_CALLS)
+        // Not setSilent(): silent notifications are hidden on the lock screen. The channel has no sound.
+        val b = NotificationCompat.Builder(c, CHANNEL_DUE)
             .setSmallIcon(R.drawable.ic_stat_capsule)
             .setLargeIcon(logo(c))
             .setColor(ContextCompat.getColor(c, R.color.mz_green))
@@ -174,7 +178,6 @@ object Notifications {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setSilent(true)
             .setOnlyAlertOnce(true)
             .setWhen(first.atMillis)
             .setShowWhen(true)
@@ -202,6 +205,7 @@ object Notifications {
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
             .setContentIntent(open)
@@ -268,6 +272,7 @@ object Notifications {
                     .setContentText(n.body)
                     .setStyle(NotificationCompat.BigTextStyle().bigText(n.body))
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                     .setAutoCancel(true)
                     .setContentIntent(open)
                     .build()
@@ -347,7 +352,8 @@ object Notifications {
             .setContentTitle(title)
             .setContentText(text)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setWhen(now)

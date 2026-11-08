@@ -91,6 +91,8 @@ class AlarmActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        started = true
+        handler.removeCallbacks(leaveIfStillAwake)
         AlarmService.listener = { render() }
         render()
         startAnimations()
@@ -117,11 +119,23 @@ class AlarmActivity : AppCompatActivity() {
         finish()
     }
 
-    override fun onStop() {
-        // Left the foreground some other way (another app came up). Ignore stops caused by the screen
-        // turning off, so a just-fired alarm is never silenced by the display going to sleep.
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var started = false
+
+    /**
+     * Left the foreground some other way (another app came up). Ignore stops caused by the screen turning
+     * off: the power button is handled by AlarmService (ring stops, notification kept for 2 minutes), and a
+     * just-fired alarm must never be silenced by the display going to sleep. Many phones still report the
+     * screen as on when onStop runs for a power press, so wait a moment before deciding.
+     */
+    private val leaveIfStillAwake = Runnable {
         val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
-        if (!isFinishing && !isChangingConfigurations && pm.isInteractive) leave()
+        if (!started && !isFinishing && !isDestroyed && pm.isInteractive) leave()
+    }
+
+    override fun onStop() {
+        started = false
+        if (!isFinishing && !isChangingConfigurations) handler.postDelayed(leaveIfStillAwake, 800)
         AlarmService.listener = null
         animators.forEach { it.cancel() }
         animators.clear()
@@ -131,6 +145,7 @@ class AlarmActivity : AppCompatActivity() {
     private var closeHook: (() -> Unit)? = null
 
     override fun onDestroy() {
+        handler.removeCallbacks(leaveIfStillAwake)
         if (AlarmService.closePopup === closeHook) AlarmService.closePopup = null
         super.onDestroy()
     }
