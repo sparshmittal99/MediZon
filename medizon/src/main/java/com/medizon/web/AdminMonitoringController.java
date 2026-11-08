@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.medizon.ai.AssistantClient;
 import com.medizon.domain.AppError;
 import com.medizon.domain.ErrorSeverity;
+import com.medizon.geo.GeoService;
 import com.medizon.monitoring.ContainerStats;
 import com.medizon.monitoring.ErrorMonitor;
 import com.medizon.monitoring.PerformanceMonitor;
@@ -44,6 +45,7 @@ public class AdminMonitoringController {
                 case "assistant" -> "Assistant service";
                 case "gemini" -> "Gemini (prescriptions)";
                 case "groq" -> "Groq (chat)";
+                case "location" -> "Address lookup";
                 default -> name.isEmpty() ? name : Character.toUpperCase(name.charAt(0)) + name.substring(1);
             };
         }
@@ -72,6 +74,7 @@ public class AdminMonitoringController {
     private final ErrorMonitor errorMonitor;
     private final AppErrorRepository errors;
     private final AssistantClient assistant;
+    private final GeoService geo;
 
     @GetMapping
     public String dashboard(@RequestParam(defaultValue = "open") String errorsView, Model model) {
@@ -107,6 +110,7 @@ public class AdminMonitoringController {
         model.addAttribute("openHigh", errors.countByResolvedFalseAndSeverity(ErrorSeverity.HIGH));
         model.addAttribute("errorsToday", errors.countByResolvedFalseAndLastSeenAfter(LocalDateTime.now().minusHours(24)));
         model.addAttribute("assistant", assistantMetrics());
+        model.addAttribute("geo", geo.status());
         return "admin/monitoring";
     }
 

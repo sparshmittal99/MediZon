@@ -94,6 +94,14 @@ public class Order {
     private String shippingAddress;
     private String contactPhone;
 
+    /** The delivery address's map pin, copied at checkout so the store can open directions; null if it had none. */
+    private Double shippingLatitude;
+    private Double shippingLongitude;
+
+    public String getShippingMapLink() {
+        return shippingLatitude != null && shippingLongitude != null ? MapLinks.of(shippingLatitude, shippingLongitude) : null;
+    }
+
     /** Who receives the parcel; the account holder unless the address was for someone else. */
     @Column(length = 80)
     private String receiverName;

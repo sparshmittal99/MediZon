@@ -1202,23 +1202,52 @@
     });
 
     // ---- delivery location: "Delivers to" in the header ----
-    // The browser turns the device location, a pin on the map or a typed address into a PIN code using
-    // OpenStreetMap's Nominatim geocoder; /api/location checks it against the admin's delivery areas and remembers it.
+    // The browser turns the device location, a pin on the map or a typed address into a PIN code through
+    // /api/location (LocationIQ, or OpenStreetMap when it's off; India Post for PIN codes), which also checks it
+    // against the admin's delivery areas and remembers it.
     // Geocoding helpers shared by the location picker and the address form
-    const OSM = 'https://nominatim.openstreetmap.org';
     const pinOf = (s) => { const p = String(s || '').replace(/\s+/g, ''); return /^[1-9][0-9]{5}$/.test(p) ? p : null; };
-    const labelOf = (a = {}) => {
-        const area = a.suburb || a.neighbourhood || a.residential || a.village || a.city_district || '';
-        const city = a.city || a.town || a.state_district || a.county || '';
-        return [area, city].filter((v, i, all) => v && all.indexOf(v) === i).join(', ');
+    const uniq = (list) => list.filter((v, i, all) => v && all.indexOf(v) === i);
+    const labelOf = (p = {}) => uniq([p.area, p.city]).join(', ');
+    const getJson = async (path) => {
+        const res = await fetch(mzUrl(path), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        return { res, data: res.headers.get('content-type')?.includes('json') ? await res.json() : {} };
     };
 
+    /** The address at a spot: { pincode, label, place }; place is null where the map has no address. */
     async function reverse(lat, lon) {
-        const res = await fetch(`${OSM}/reverse?format=jsonv2&addressdetails=1&accept-language=en&lat=${lat}&lon=${lon}`);
+        const { res, data } = await getJson(`/api/location/reverse?lat=${(+lat).toFixed(6)}&lon=${(+lon).toFixed(6)}`);
+        if (res.status === 404) return { pincode: null, label: '', place: null };
         if (!res.ok) throw new Error('geocoder');
-        const data = await res.json();
-        return { pincode: pinOf(data.address?.postcode), label: labelOf(data.address), address: data.address };
+        return { pincode: pinOf(data.place.pincode), label: labelOf(data.place), place: data.place };
     }
+
+    /** Places matching what's typed: [{ title, subtitle, lat, lon, area, city, state, pincode ... }]. */
+    async function suggestPlaces(q) {
+        const { res, data } = await getJson('/api/location/suggest?q=' + encodeURIComponent(q));
+        const places = res.ok ? (data.places || []) : [];
+        return places;
+    }
+
+
+    // Leaflet + OpenStreetMap tiles, loaded the first time a map opens
+    const loadLeaflet = () => window.L ? Promise.resolve() : new Promise((ok, fail) => {
+        const css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+        css.integrity = 'sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H';
+        css.crossOrigin = 'anonymous';
+        document.head.appendChild(css);
+        const js = document.createElement('script');
+        js.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+        js.integrity = 'sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH';
+        js.crossOrigin = 'anonymous';
+        js.onload = ok;
+        js.onerror = fail;
+        document.head.appendChild(js);
+    });
+    const tiles = () => L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' });
 
     (function locationPicker() {
         const modal = document.getElementById('mzLocModal');
@@ -1326,16 +1355,15 @@
             searchTimer = setTimeout(async () => {
                 const seq = ++searchSeq;
                 try {
-                    const res = await fetch(`${OSM}/search?format=jsonv2&addressdetails=1&countrycodes=in&limit=6&accept-language=en&q=${encodeURIComponent(q)}`);
-                    const places = res.ok ? await res.json() : [];
+                    const places = await suggestPlaces(q);
                     if (seq !== searchSeq) return;          // a newer search is on its way
                     hits.replaceChildren(...places.map(place => {
                         const li = document.createElement('li');
                         const btn = document.createElement('button');
                         btn.type = 'button';
-                        const name = place.display_name.split(', ').slice(0, 4).join(', ');
+                        const name = uniq([place.title, ...String(place.subtitle || '').split(', ')]).slice(0, 4).join(', ');
                         btn.textContent = name;
-                        const pin = pinOf(place.address?.postcode);
+                        const pin = pinOf(place.pincode);
                         if (pin) {
                             const tag = document.createElement('span');
                             tag.className = 'mz-loc-hit-pin';
@@ -1345,10 +1373,10 @@
                         btn.addEventListener('click', async () => {
                             hits.replaceChildren();
                             search.value = name;
-                            if (pin) { choose(pin, labelOf(place.address)); return; }
+                            if (pin) { choose(pin, labelOf(place)); return; }
                             try {
                                 const spot = await reverse(place.lat, place.lon);
-                                if (spot.pincode) choose(spot.pincode, spot.label || labelOf(place.address));
+                                if (spot.pincode) choose(spot.pincode, spot.label || labelOf(place));
                                 else show('off', 'That place has no PIN code on the map. Enter the PIN code instead.');
                             } catch (e) { show('off', 'Couldn’t look up that place. Enter the PIN code instead.'); }
                         });
@@ -1365,23 +1393,8 @@
             }, 450);
         });
 
-        // Pin on the map (Leaflet + OpenStreetMap tiles, loaded the first time the map opens)
+        // Pin on the map
         let map, marker, picked;
-        const loadLeaflet = () => window.L ? Promise.resolve() : new Promise((ok, fail) => {
-            const css = document.createElement('link');
-            css.rel = 'stylesheet';
-            css.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
-            css.integrity = 'sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H';
-            css.crossOrigin = 'anonymous';
-            document.head.appendChild(css);
-            const js = document.createElement('script');
-            js.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
-            js.integrity = 'sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH';
-            js.crossOrigin = 'anonymous';
-            js.onload = ok;
-            js.onerror = fail;
-            document.head.appendChild(js);
-        });
         async function pinned(latlng) {
             picked = null;
             mapConfirm.disabled = true;
@@ -1402,8 +1415,7 @@
             if (!map) {
                 const start = [20.5937, 78.9629];      // centre of India until we know better
                 map = L.map(modal.querySelector('[data-mz-loc-map]')).setView(start, 5);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+                tiles().addTo(map);
                 marker = L.marker(start, { draggable: true }).addTo(map);
                 marker.on('dragend', () => pinned(marker.getLatLng()));
                 map.on('click', (e) => { marker.setLatLng(e.latlng); pinned(e.latlng); });
@@ -1460,56 +1472,252 @@
         };
         form.querySelectorAll('[data-mz-address-type]').forEach(r => r.addEventListener('change', syncType));
 
-        // Live "we deliver here" check on the PIN code
+        const field = (n) => form.querySelector(`[name="${n}"]`);
+        const lat = form.querySelector('[data-mz-addr-lat]');
+        const lon = form.querySelector('[data-mz-addr-lon]');
+        const gpsMsg = form.querySelector('[data-mz-address-gps-msg]');
+        const say = (text, bad) => {
+            gpsMsg.textContent = text || '';
+            gpsMsg.className = 'small mt-2 ' + (bad ? 'text-danger' : 'text-muted');
+            gpsMsg.hidden = !text;
+        };
+
+        // Street, city and state fill in from the map and the PIN code, but never over what the customer typed
+        form.querySelectorAll('[data-mz-addr-auto]').forEach(el => {
+            if (el.value) el.dataset.typed = '1';     // saved values count as the customer's own
+            el.addEventListener('input', () => { el.dataset.typed = el.value ? '1' : ''; });
+        });
+        const fill = (name, value, force) => {
+            const el = field(name);
+            if (!el || !value) return;
+            if (force || !el.dataset.typed) { el.value = value; if (force) el.dataset.typed = ''; }
+        };
+
+        // ---- PIN code: India Post fills city, state and the areas list; we say whether we deliver there ----
         const pin = form.querySelector('[data-mz-address-pin]');
         const pinMsg = form.querySelector('[data-mz-address-pin-msg]');
+        const localities = form.querySelector('[data-mz-addr-localities]');
         let lastPin = '';
-        const checkPin = async () => {
+        const checkPin = async (fromMap) => {
             const p = pinOf(pin.value);
-            if (!p) { pinMsg.textContent = ''; lastPin = ''; return; }
+            if (!p) { pinMsg.textContent = ''; lastPin = ''; localities.replaceChildren(); return; }
             if (p === lastPin) return;
             lastPin = p;
             try {
-                const res = await fetch(mzUrl('/api/location/check?pincode=' + p), { credentials: 'same-origin' });
-                const data = await res.json();
-                if (p !== lastPin) return;
+                const { res, data } = await getJson('/api/location/pincode?pincode=' + p);
+                if (p !== lastPin || !res.ok) return;
+                if (data.known) {
+                    // A typed PIN code is the customer's word: its city and state win over empty or map-filled ones
+                    fill('city', data.city, false);
+                    fill('state', data.state, false);
+                    localities.replaceChildren(...(data.localities || []).map(name => {
+                        const o = document.createElement('option'); o.value = name; return o;
+                    }));
+                }
+                const where = data.known ? ` (${uniq([data.city, data.state]).join(', ')})` : '';
                 pinMsg.className = 'small ' + (data.serviceable ? 'text-success' : 'text-danger');
                 pinMsg.innerHTML = data.serviceable
-                    ? '<i class="bi bi-check-circle-fill me-1"></i>We deliver to this PIN code.'
-                    : '<i class="bi bi-x-circle-fill me-1"></i>Sorry, we don’t deliver to this PIN code yet.';
+                    ? '<i class="bi bi-check-circle-fill me-1"></i><span></span>'
+                    : '<i class="bi bi-x-circle-fill me-1"></i><span></span>';
+                pinMsg.querySelector('span').textContent = data.serviceable
+                    ? `We deliver to ${p}${where}.`
+                    : (data.known || fromMap ? `Sorry, we don’t deliver to ${p}${where} yet.`
+                        : `We couldn’t find ${p}. Check the PIN code.`);
             } catch (e) { pinMsg.textContent = ''; }
         };
-        pin.addEventListener('input', () => { pin.value = pin.value.replace(/[^0-9 ]/g, ''); checkPin(); });
-        checkPin();
+        pin.addEventListener('input', () => { pin.value = pin.value.replace(/[^0-9 ]/g, ''); checkPin(false); });
+        checkPin(false);
 
-        // Fill area, city, state and PIN code from where the device is
+        // ---- Map: the pin stays in the middle; moving the map moves the address ----
+        const box = form.querySelector('[data-mz-addr-mapbox]');
+        const mapEl = form.querySelector('[data-mz-addr-map]');
+        const tip = form.querySelector('[data-mz-addr-map-tip]');
+        const mapOpen = form.querySelector('[data-mz-addr-map-open]');
+        const spot = form.querySelector('[data-mz-addr-spot]');
+        let map, quiet = false, moveTimer, moveSeq = 0;
+
+        const showSpot = (place) => {
+            if (!place) { spot.hidden = true; return; }
+            spot.querySelector('[data-mz-addr-spot-title]').textContent = place.title;
+            spot.querySelector('[data-mz-addr-spot-sub]').textContent =
+                uniq([place.subtitle, place.pincode ? 'PIN ' + place.pincode : '']).join(' · ');
+            spot.hidden = false;
+        };
+
+        /** Fills the address from a place: the map is the source of truth for street, city, state and PIN code. */
+        const apply = (place) => {
+            const street = uniq([place.building, place.road, place.area]);
+            fill('area', street.join(', '), true);
+            fill('city', place.city, true);
+            fill('state', place.state, true);
+            if (pinOf(place.pincode)) { pin.value = place.pincode; checkPin(true); }
+            showSpot(place);
+        };
+
+        const setPin = (la, lo) => { lat.value = (+la).toFixed(6); lon.value = (+lo).toFixed(6); };
+
+        async function openMap(la, lo, zoom) {
+            box.hidden = false;
+            mapOpen.hidden = true;
+            try { await loadLeaflet(); } catch (e) { tip.textContent = 'The map couldn’t load. Type the address below.'; return; }
+            if (!map) {
+                map = L.map(mapEl, { zoomControl: true, attributionControl: true }).setView([la, lo], zoom);
+                tiles().addTo(map);
+                map.on('movestart', () => box.classList.add('is-moving'));
+                map.on('moveend', () => {
+                    box.classList.remove('is-moving');
+                    const c = map.getCenter();
+                    setPin(c.lat, c.lng);
+                    if (quiet) { quiet = false; return; }
+                    clearTimeout(moveTimer);
+                    moveTimer = setTimeout(async () => {
+                        const seq = ++moveSeq;
+                        tip.textContent = 'Finding this address…';
+                        try {
+                            const here = await reverse(c.lat, c.lng);
+                            if (seq !== moveSeq) return;
+                            if (here.place) { apply(here.place); tip.textContent = 'Pin set. Move the map to adjust.'; }
+                            else tip.textContent = 'No address here on the map. Type it below; the pin is still saved.';
+                        } catch (e) { if (seq === moveSeq) tip.textContent = 'Couldn’t look up this spot. The pin is still saved.'; }
+                    }, 350);
+                });
+            } else {
+                // Moving the map ourselves: the place is already known. Without animation Leaflet fires
+                // moveend right here, so the flag can't outlive this call.
+                quiet = true;
+                map.setView([la, lo], zoom, { animate: false });
+                quiet = false;
+            }
+            setPin(la, lo);
+            setTimeout(() => map.invalidateSize(), 60);
+        }
+
+        // Editing an address that already has a pin: show it, don't look it up again
+        if (lat.value && lon.value) openMap(+lat.value, +lon.value, 18);
+
+        // No search hit and no location: start where the device is, else the whole of India
+        mapOpen.addEventListener('click', () => {
+            const india = () => { openMap(20.5937, 78.9629, 5); tip.textContent = 'Zoom in and move the map to put the pin on your entrance'; };
+            if (!navigator.geolocation) { india(); return; }
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const { latitude: la, longitude: lo } = pos.coords;
+                let place = null;
+                try { place = (await reverse(la, lo)).place; } catch (e) { /* the pin still works */ }
+                goTo(place, la, lo);
+            }, india, { timeout: 8000, maximumAge: 60000 });
+        });
+
+        /** A suggestion or the device location: put the map there and fill the form. */
+        async function goTo(place, la, lo) {
+            await openMap(la, lo, 18);
+            if (place) {
+                apply(place);
+                // A suggestion without a PIN code, or without street, area and city marked (partial): the address at
+                // the spot fills them in, keeping the suggestion's own name and PIN code
+                if (!pinOf(place.pincode) || place.partial) {
+                    try {
+                        const here = (await reverse(la, lo)).place;
+                        if (here) apply({ ...here, title: place.title, subtitle: place.subtitle || here.subtitle,
+                            building: place.building || here.building, pincode: pinOf(place.pincode) || here.pincode });
+                    } catch (e) { /* the customer types it */ }
+                }
+            }
+            tip.textContent = 'Move the map to put the pin on your entrance';
+            field('addressLine').focus({ preventScroll: true });
+        }
+
+        // ---- Search suggestions while typing ----
+        const search = form.querySelector('[data-mz-addr-search]');
+        const hits = form.querySelector('[data-mz-addr-hits]');
+        let found = [], active = -1, searchTimer, searchSeq = 0;
+        const closeHits = () => { hits.hidden = true; search.setAttribute('aria-expanded', 'false'); active = -1; };
+        const mark = (i) => {
+            active = i;
+            hits.querySelectorAll('[role="option"]').forEach((o, k) => o.setAttribute('aria-selected', String(k === i)));
+            const el = hits.querySelector(`[data-i="${i}"]`);
+            if (el) { el.scrollIntoView({ block: 'nearest' }); search.setAttribute('aria-activedescendant', el.id); }
+        };
+        const pick = (i) => {
+            const place = found[i];
+            if (!place) return;
+            search.value = place.title;
+            closeHits();
+            say('');
+            goTo(place, place.lat, place.lon);
+        };
+        const render = (places, q) => {
+            found = places;
+            active = -1;
+            if (!places.length) {
+                const li = document.createElement('li');
+                li.className = 'mz-addr-hit-none';
+                li.textContent = `No places found for “${q}”. Try a nearby landmark, or set the location on the map.`;
+                hits.replaceChildren(li);
+            } else {
+                hits.replaceChildren(...places.map((p, i) => {
+                    const li = document.createElement('li');
+                    li.id = 'mzAddrHit' + i;
+                    li.dataset.i = i;
+                    li.setAttribute('role', 'option');
+                    li.setAttribute('aria-selected', 'false');
+                    li.innerHTML = '<i class="bi bi-geo-alt" aria-hidden="true"></i><span class="min-w-0"><strong></strong><small></small></span>';
+                    li.querySelector('strong').textContent = p.title;
+                    li.querySelector('small').textContent = uniq([p.subtitle, pinOf(p.pincode)]).join(' · ');
+                    li.addEventListener('mousedown', (e) => e.preventDefault());      // keep focus in the box
+                    li.addEventListener('click', () => pick(i));
+                    return li;
+                }));
+            }
+            hits.hidden = false;
+            search.setAttribute('aria-expanded', 'true');
+        };
+        search.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            const q = search.value.trim();
+            if (q.length < 3) { closeHits(); return; }
+            searchTimer = setTimeout(async () => {
+                const seq = ++searchSeq;
+                try {
+                    const places = await suggestPlaces(q);
+                    if (seq === searchSeq && search.value.trim() === q) render(places, q);
+                } catch (e) { /* offline: the fields below still work */ }
+            }, 300);
+        });
+        search.addEventListener('keydown', (e) => {
+            if (hits.hidden || !found.length) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); mark(Math.min(found.length - 1, active + 1)); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); mark(Math.max(0, active - 1)); }
+            else if (e.key === 'Enter') { e.preventDefault(); pick(active < 0 ? 0 : active); }
+            else if (e.key === 'Escape') closeHits();
+        });
+        // Enter in the search box must never submit the half-filled form
+        search.addEventListener('keypress', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+        search.addEventListener('blur', () => setTimeout(closeHits, 150));
+        search.addEventListener('focus', () => { if (found.length && search.value.trim().length >= 3) { hits.hidden = false; search.setAttribute('aria-expanded', 'true'); } });
+
+        // ---- This device's location ----
         const gps = form.querySelector('[data-mz-address-gps]');
-        const gpsMsg = form.querySelector('[data-mz-address-gps-msg]');
-        const say = (text, bad) => { gpsMsg.textContent = text; gpsMsg.className = 'small mb-3 ' + (bad ? 'text-danger' : 'text-muted'); gpsMsg.hidden = false; };
         gps.addEventListener('click', () => {
-            if (!navigator.geolocation) { say('This browser can’t share its location.', true); return; }
+            if (!navigator.geolocation) { say('This browser can’t share its location. Search for your address instead.', true); return; }
             gps.disabled = true;
             say('Finding where you are…');
             navigator.geolocation.getCurrentPosition(async (pos) => {
+                const { latitude: la, longitude: lo, accuracy } = pos.coords;
                 try {
-                    const here = await reverse(pos.coords.latitude, pos.coords.longitude);
-                    const a = here.address || {};
-                    const set = (field, value) => { const el = form.querySelector(`[name="${field}"]`); if (value) el.value = value; };
-                    set('area', [a.road, a.suburb || a.neighbourhood].filter(Boolean).join(', '));
-                    set('city', a.city || a.town || a.village || a.state_district);
-                    set('state', a.state);
-                    set('pincode', here.pincode);
-                    say('Filled in from your location. Add your flat or house number and check the rest.');
-                    form.querySelector('[name="addressLine"]').focus();
-                    checkPin();
+                    const here = await reverse(la, lo);
+                    await goTo(here.place, la, lo);
+                    say(accuracy > 100
+                        ? 'Your location is approximate. Move the map so the pin is on your entrance.'
+                        : 'Found you. Check the pin, then add your flat or house number.');
                 } catch (e) {
-                    say('Couldn’t look up your location right now. Type the address instead.', true);
+                    await openMap(la, lo, 18);
+                    say('Couldn’t look up the address here. The pin is set; type the address below.', true);
                 } finally { gps.disabled = false; }
             }, (err) => {
                 gps.disabled = false;
-                say(err.code === err.PERMISSION_DENIED ? 'Location access is blocked. Allow it in your browser, or type the address.'
-                    : 'Couldn’t get your location. Type the address instead.', true);
-            }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+                say(err.code === err.PERMISSION_DENIED ? 'Location access is blocked. Allow it in your settings, or search for your address.'
+                    : 'Couldn’t get your location. Search for your address instead.', true);
+            }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
         });
     });
 

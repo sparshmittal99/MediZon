@@ -3,6 +3,8 @@ package com.medizon.dto;
 import com.medizon.domain.Address;
 import com.medizon.domain.AddressType;
 import com.medizon.domain.User;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -52,6 +54,15 @@ public class AddressForm {
 
     private boolean makeDefault;
 
+    /** The pin on the map; both or neither. */
+    @DecimalMin(value = "6.0", message = "Move the pin onto your address in India")
+    @DecimalMax(value = "37.5", message = "Move the pin onto your address in India")
+    private Double latitude;
+
+    @DecimalMin(value = "68.0", message = "Move the pin onto your address in India")
+    @DecimalMax(value = "97.5", message = "Move the pin onto your address in India")
+    private Double longitude;
+
     /** A new address for the account holder starts with their name and number. */
     public static AddressForm blank(User u) {
         AddressForm f = new AddressForm();
@@ -75,6 +86,8 @@ public class AddressForm {
         f.setState(a.getState());
         f.setPincode(a.getPincode());
         f.setMakeDefault(a.isDefaultAddress());
+        f.setLatitude(a.getLatitude());
+        f.setLongitude(a.getLongitude());
         return f;
     }
 }

@@ -97,6 +97,53 @@
         </div>
     </div>
 
+    <!-- Address lookups: each geocoder's daily limit (Ola Maps, LocationIQ, OpenStreetMap), India Post PIN codes (GeoService) -->
+    <h2 class="mz-section-title">Address lookups</h2>
+    <p class="small text-muted mb-2">Tried in order; the next takes over when one has no key, used today’s limit or just failed.
+        Answering now: <strong th:text="${geo.provider}">Ola Maps</strong></p>
+    <div class="row row-cols-1 row-cols-md-3 g-3 mb-3">
+        <div class="col" th:each="p : ${geo.providers}"><div class="mz-stat"
+                th:classappend="${p.configured and (p.offReason != null or p.usedPercent >= 85)} ? 'is-attention'">
+            <div class="mz-stat-value" th:text="${p.limited} ? ${#numbers.formatInteger(p.usedToday, 1, 'COMMA')} + ' / ' + ${#numbers.formatInteger(p.dailyLimit, 1, 'COMMA')}
+                    : ${#numbers.formatInteger(p.usedToday, 1, 'COMMA')}">0</div>
+            <div class="mz-stat-label" th:text="${p.name} + (${p.limited} ? ' lookups today (' + ${p.usedPercent} + '% of the daily limit)' : ' lookups today (no limit)')">Ola Maps</div>
+            <div class="mz-stat-sub" th:text="${!p.configured} ? 'No key set: skipped'
+                    : (${p.offReason != null} ? ${p.offReason}
+                    : (${p.remainingToday != null} ? ${p.name} + ' account: ' + ${#numbers.formatInteger(p.remainingToday, 1, 'COMMA')} + ' left today'
+                    : 'Working' + (${p.failedToday > 0} ? ' · ' + ${p.failedToday} + ' failed today' : '')))"></div>
+            <div class="progress mt-2" style="height: 6px" th:if="${p.configured and p.limited}">
+                <div class="progress-bar" th:classappend="${p.usedPercent >= 85} ? 'bg-danger' : (${p.usedPercent >= 70} ? 'bg-warning' : '')"
+                     th:style="'width:' + ${p.usedPercent} + '%'"></div></div>
+        </div></div>
+    </div>
+    <p class="small text-muted mb-2" th:with="t=${geo.today}">
+        <span th:text="'Today: ' + ${#numbers.formatInteger(t.total, 1, 'COMMA')} + ' lookups answered · ' + ${t.cached} + ' from memory · '
+            + ${t.answeredBy('India Post')} + ' India Post PIN codes' + (${geo.indiaPostResting} ? ' (not answering now)' : '')
+            + ' · ' + ${t.failedTotal} + ' failed · ' + ${t.refused} + ' refused'"></span>
+        <th:block th:if="${geo.lastProblem != null}"><br><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>Last problem
+            <span th:text="${#temporals.format(geo.lastProblemAt, 'd MMM, h:mm a')}"></span>: <span class="text-break" th:text="${geo.lastProblem}"></span></th:block>
+    </p>
+    <div class="mz-panel-flush mb-2">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0 mz-num-table small">
+                <thead><tr><th>Day</th><th class="text-end" th:each="src : ${geo.sources}" th:text="${src}">Ola Maps</th>
+                    <th class="text-end">From memory</th><th class="text-end">Failed</th>
+                    <th class="text-end" title="Visitors who made too many lookups in 10 minutes">Refused</th></tr></thead>
+                <tbody>
+                <tr th:each="d, s : ${geo.days}">
+                    <td th:text="${s.first} ? 'Today' : ${#temporals.format(d.day, 'EEE d MMM')}">Today</td>
+                    <td class="text-end" th:each="src : ${geo.sources}" th:text="${#numbers.formatInteger(d.answeredBy(src), 1, 'COMMA')}"></td>
+                    <td class="text-end" th:text="${#numbers.formatInteger(d.cached, 1, 'COMMA')}"></td>
+                    <td class="text-end" th:classappend="${d.failedTotal > 0} ? 'text-danger fw-semibold'" th:text="${d.failedTotal}"></td>
+                    <td class="text-end" th:classappend="${d.refused > 0} ? 'text-warning fw-semibold'" th:text="${d.refused}"></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <p class="small text-muted mb-4">Days run midnight to midnight, India time. These counts start again when the server restarts;
+        an “account: … left today” figure comes from the service itself and doesn’t.</p>
+
     <!-- Errors, grouped -->
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2" id="errors">
         <h2 class="mz-section-title mb-0">Errors</h2>

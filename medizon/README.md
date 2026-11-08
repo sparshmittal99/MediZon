@@ -53,6 +53,10 @@ All settings are in `application.properties` and can be overridden with environm
 | `ASSISTANT_TOKEN` | Optional shared secret; set the same value on both services |
 | `GEMINI_API_KEY` | Google Gemini key (web app only): prescription reading and the backup chat fallback. Empty turns both off |
 | `GROQ_API_KEY`, `GROQ_MODEL` | Groq key (web app only) for the chat fallback; models tried in order (default `openai/gpt-oss-120b,openai/gpt-oss-20b`) |
+| `OLA_MAPS_KEY` | Ola Maps API key (Krutrim Cloud > Ola Maps > Maps Credentials): the first choice for address suggestions and the address at a map pin, best for Indian addresses. Empty skips it |
+| `OLA_MAPS_DAILY_LIMIT` | Ola Maps lookups per day before LocationIQ takes over until midnight IST (default `3200`, about 100,000 a month) |
+| `LOCATIONIQ_KEY` | LocationIQ access token (locationiq.com, free plan): second choice after Ola Maps. Empty skips it; OpenStreetMap's Nominatim is the last fallback (slower) |
+| `LOCATIONIQ_DAILY_LIMIT` | LocationIQ lookups per day before switching to OpenStreetMap until midnight IST (default `4800`, the free plan allows 5,000) |
 | `GEMINI_MODEL` | Gemini model (default `gemini-flash-latest`; `gemini-flash-lite-latest` allows more free requests) |
 | `AI_PROVIDER`, `AI_FAST_TRACK_SCORE` | Which AI reads prescriptions (default `gemini`); AI score from which a prescription is fast-tracked (default 80) |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_METHODS` | Razorpay API keys (`rzp_test_...` for test payments), and what the account takes of `UPI`, `CARD`, `NETBANKING` (default `CARD,NETBANKING`: Razorpay turns UPI on after KYC). Empty keys: cards and net banking aren't offered |
@@ -96,6 +100,24 @@ prescription review (AI score and fast-track, medicines and packs pre-filled fro
 cart, doctor, patient and date confirmed, validity date), GST tax invoices, return review (approve or reject, pickup with optional
 restock, moving a pickup to another day, refund), promo codes (admin), return settings (admin: return window,
 pickup range, refund days), a sales and returns report (a date range, a month or a financial year, day-wise or month-wise; Excel export with summary and GST totals plus optional month-wise, day-wise, orders, store-wise, medicines sold, HSN summary and returns sheets; CSV), the master catalogue and each store's catalogue, low-stock list, stores and delivery areas, user accounts by role, customer feedback, monitoring, and a chat assistant for the admin (it reads and analyses reviews and feedback, through Groq or Gemini too). Orders and Returns show the newest 20 for the chosen years, months or days (this year by default), and staff can find one by its number; tickets are found by number too. Every product gets a unique product code (for the admin and stores only, never shown to customers), and catalogues are searched by name or code; a store adds several master products at once by code or name. Both catalogues also import from Excel (.xlsx, .xls), CSV or a text PDF: the admin's sheet adds or updates master products (name, category, price, MRP, tax ...), a store's sets its stock, batch expiry and OTC prices by product code or name; **Download sheet** gives the headings with what's there now, and rows that can't be imported are listed with the reason. The admin can set a new password for any other account. Customers keep their newest 20 notifications. Staff accounts are for running the shop only; they can't shop, order or set reminders.
+
+
+## Addresses and delivery location
+
+- **Header "Delivers to"**: use this device's location, a saved address, a PIN code, an address search or a pin on the map. MediZon checks the PIN code against the delivery areas in Admin > Locations.
+- **Address form**: search for a building, street, area or landmark (suggestions while typing) or use this device's location, then move the map so the centre pin sits on the entrance. Street, area, city, state and PIN code fill in from the map; the flat, floor, block and building are typed by the customer. Typing a PIN code fills city and state from India Post, lists its post office areas as suggestions, and says whether MediZon delivers there.
+- The pin's coordinates are saved with the address and copied to each order, so the order page has a **Directions** link for the store.
+- Lookups go through `/api/location` (`suggest`, `reverse`, `pincode`), so keys stay on the server and customers never see which service answered. Answers are cached in memory; each visitor gets 150 lookups per 10 minutes. Geocoders are tried in order: **Ola Maps → LocationIQ → OpenStreetMap**. One is skipped while it has no key, has used its daily limit (`OLA_MAPS_DAILY_LIMIT`, `LOCATIONIQ_DAILY_LIMIT`) or failed in the last 2 minutes. Ola's suggestions carry coordinates; picking one fills street, area and city from the address at that spot. PIN code details come from India Post (api.postalpincode.in, no key). If India Post is down, the PIN code check still works and city and state are typed by hand.
+- Map tiles are OpenStreetMap's.
+- **Admin > Monitoring > Address lookups**: for each geocoder, lookups today against its daily limit and why it's skipped if it is (LocationIQ also shows what its account says is left today); which one answers now; today's lookups by source (Ola Maps, LocationIQ, OpenStreetMap, India Post, from memory), failures, visitors refused for too many lookups, and the last 7 days. The "Address lookup" health card turns DEGRADED while the preferred geocoder or India Post is off. MediZon's own counts start again on restart; LocationIQ's account figure doesn't.
+
+## Masked ids in customer URLs
+
+Customers never see database ids in the address bar: `/plans/k7Qx2mPaB3/edit`, `/support/tickets/Q8rT1mZpLx`, `/checkout?address=...`. Each id is run through a keyed permutation (`IdMask`, 10 letters and digits; each kind of record has its own key), so URLs don't show or count up how many plans, tickets or customers there are. Ownership is still checked on every page.
+
+- Links, images, forms and redirects the site builds are masked automatically (`MaskedUrlConfig` wraps the `requestDataValueProcessor` that Thymeleaf's `th:href`/`th:src`/`th:action` and `redirect:` go through), so templates and controllers keep using plain ids.
+- `MaskedUrlFilter` turns tokens back into ids before security and controllers see the request, and redirects pages opened with a plain id (old emails, saved notifications, the app) to their masked address.
+- Which URL parts are masked is listed in `MaskedUrls` (`PATHS` and `PARAMS`). **Add a new customer page with an id there.** Orders keep their own references (`OrderRef`, unchanged). Staff pages (`/admin`) and the JSON API (`/api`) keep plain ids. A test fails if a route name could be mistaken for a token.
 
 ## Roles and stores
 

@@ -72,6 +72,9 @@ public class AddressService {
         a.setCity(f.getCity().trim());
         a.setState(trim(f.getState()));
         a.setPincode(DeliveryAreaService.normalize(f.getPincode()));
+        boolean pinned = f.getLatitude() != null && f.getLongitude() != null;
+        a.setLatitude(pinned ? f.getLatitude() : null);
+        a.setLongitude(pinned ? f.getLongitude() : null);
         boolean noDefaultYet = addresses.findFirstByUserAndDefaultAddressTrue(user).isEmpty();
         a = addresses.save(a);
         if (f.isMakeDefault() || noDefaultYet) makeDefault(user, a);

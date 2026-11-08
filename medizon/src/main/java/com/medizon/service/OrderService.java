@@ -410,6 +410,8 @@ public class OrderService {
             order.setShippingState(ship.getState());
             order.setReceiverName(ship.getReceiverName());
             order.setAddressLabel(ship.getLabel());
+            order.setShippingLatitude(ship.getLatitude());
+            order.setShippingLongitude(ship.getLongitude());
         } else {
             order.setShippingAddress(user.getFormattedAddress());
             order.setContactPhone(user.getPhone());

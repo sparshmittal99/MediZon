@@ -124,7 +124,7 @@
                             <button class="btn btn-outline-secondary btn-sm" name="status"
                                     th:value="${d.state == 'taken'} ? 'SKIPPED' : 'TAKEN'"
                                     th:title="${d.state == 'taken'} ? 'Marked taken. Change to skipped' : 'Marked skipped. Change to taken'"
-                                    th:text="${d.state == 'taken'} ? 'Mark skipped' : 'Mark taken'">Mark skipped</button>
+                                    th:text="${d.state == 'taken'} ? 'Skipped' : 'Taken'">Skipped</button>
                         </form>
                     </li>
                 </ol>

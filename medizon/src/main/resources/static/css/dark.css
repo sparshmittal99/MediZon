@@ -245,3 +245,5 @@ html[data-theme="dark"] .mz-pw-match.bad { color: color-mix(in srgb, #991B1B 40%
         --bs-table-striped-color: #17302A; --bs-table-hover-color: #17302A; --bs-table-active-color: #17302A;
     }
 }
+html[data-theme="dark"] .mz-addr-spot { background-color: color-mix(in srgb, #0E6B57 22%, #0F1715); }
+html[data-theme="dark"] .mz-addr-hits [role="option"]:hover, html[data-theme="dark"] .mz-addr-hits [aria-selected="true"] { background-color: color-mix(in srgb, #0E6B57 22%, #0F1715); }

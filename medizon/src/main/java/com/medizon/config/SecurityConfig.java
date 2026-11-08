@@ -61,7 +61,8 @@ public class SecurityConfig {
 
     /**
      * Where pages may load code and data from: this site, jsDelivr (Bootstrap, Bootstrap Icons, Leaflet), Google
-     * Translate (the language picker), OpenStreetMap (address search; map tiles are images), Google Fonts, and Razorpay
+     * Translate (the language picker), OpenStreetMap map tiles (images; address lookups go through /api/location),
+     * Google Fonts, and Razorpay
      * (the checkout window on the payment page). Images may come from any https site, since a product's
      * picture can be a link. No inline scripts or event handlers; inline styles are allowed (Bootstrap and the
      * translator use them). What the browser blocks is reported to Admin > Monitoring as a browser error.
@@ -74,7 +75,7 @@ public class SecurityConfig {
                     + " https://translate.googleapis.com",
             "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
             "img-src 'self' data: blob: https:",
-            "connect-src 'self' https://nominatim.openstreetmap.org https://translate.googleapis.com"
+            "connect-src 'self' https://translate.googleapis.com"
                     + " https://translate-pa.googleapis.com https://*.razorpay.com",
             "frame-src https://translate.google.com https://translate.googleapis.com https://*.razorpay.com",
             "object-src 'none'",

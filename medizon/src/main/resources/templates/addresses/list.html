@@ -34,6 +34,10 @@
                 <div class="fw-semibold small" th:text="${a.receiverName}"></div>
                 <div class="small text-muted" th:text="${a.formatted}"></div>
                 <div class="small text-muted"><i class="bi bi-telephone me-1"></i><span th:text="${a.receiverPhone}"></span></div>
+                <div class="small mt-1" th:if="${a.hasLocation()}">
+                    <a th:href="${a.mapLink}" target="_blank" rel="noopener"><i class="bi bi-geo-alt-fill me-1"></i>Pinned on the map</a></div>
+                <div class="small text-muted mt-1" th:unless="${a.hasLocation()}">
+                    <i class="bi bi-geo-alt me-1"></i><a th:href="@{/addresses/{id}/edit(id=${a.id})}">Pin this address on the map</a> for faster delivery</div>
                 <div class="d-flex flex-wrap gap-2 mt-3">
                     <a th:href="@{/addresses/{id}/edit(id=${a.id})}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil me-1"></i>Edit</a>
                     <form th:unless="${a.defaultAddress}" th:action="@{/addresses/{id}/default(id=${a.id})}" method="post">

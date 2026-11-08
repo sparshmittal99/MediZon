@@ -78,6 +78,7 @@ public class PerformanceMonitor {
     /** "/medicines/42" and "/medicines/57" are the same page: "/medicines/{id}". */
     String pageKey(String path) {
         String p = path == null || path.isBlank() ? "/" : path.replaceAll("[?#].*$", "");
+        p = com.medizon.web.MaskedUrls.unmaskPath(p);        // masked ids count as ids too
         String[] parts = p.split("/");
         for (int i = 0; i < parts.length; i++) {
             // Customer order pages carry a masked reference (OrderRef), not a number

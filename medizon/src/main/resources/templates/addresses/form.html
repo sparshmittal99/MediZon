@@ -48,21 +48,54 @@
         </section>
 
         <section class="mz-panel mb-4">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <h2 class="h5 mb-0">Address</h2>
-                <button type="button" class="btn btn-sm btn-outline-primary" data-mz-address-gps>
-                    <i class="bi bi-crosshair me-1"></i>Use my current location</button>
+            <h2 class="h5 mb-1">Address</h2>
+            <p class="small text-muted mb-3">Find your building or area, then place the pin on your entrance. The delivery partner goes to the pin.</p>
+
+            <!-- 1. Find the place: search suggestions or this device's location -->
+            <div class="mz-addr-find">
+                <div class="mz-addr-search">
+                    <i class="bi bi-search" aria-hidden="true"></i>
+                    <input class="form-control" id="mzAddrSearch" type="search" autocomplete="off" spellcheck="false"
+                           placeholder="Search building, street, area or landmark" aria-label="Search for your address"
+                           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="mzAddrHits" data-mz-addr-search>
+                    <ul class="mz-addr-hits" id="mzAddrHits" role="listbox" data-mz-addr-hits hidden></ul>
+                </div>
+                <button type="button" class="btn btn-outline-primary" data-mz-address-gps>
+                    <i class="bi bi-crosshair me-1" aria-hidden="true"></i>Use my location</button>
             </div>
-            <div class="small mb-3" data-mz-address-gps-msg role="status" aria-live="polite" hidden></div>
-            <div class="row g-3">
+            <div class="small mt-2" data-mz-address-gps-msg role="status" aria-live="polite" hidden></div>
+
+            <!-- 2. Fine-tune on the map: the pin stays in the middle, the map moves under it -->
+            <div class="mz-addr-mapbox mt-3" data-mz-addr-mapbox th:hidden="*{latitude == null}">
+                <div class="mz-addr-map" data-mz-addr-map aria-label="Map. Drag it to put the pin on your entrance."></div>
+                <i class="bi bi-geo-alt-fill mz-addr-map-pin" aria-hidden="true"></i>
+                <div class="mz-addr-map-tip" data-mz-addr-map-tip>Move the map to put the pin on your entrance</div>
+            </div>
+            <div class="mz-addr-spot mt-2" data-mz-addr-spot hidden>
+                <i class="bi bi-geo-alt-fill" aria-hidden="true"></i>
+                <span class="min-w-0"><strong data-mz-addr-spot-title></strong><span class="d-block small text-muted" data-mz-addr-spot-sub></span></span>
+            </div>
+            <button type="button" class="btn btn-link btn-sm px-0 mt-2" data-mz-addr-map-open th:hidden="*{latitude != null}">
+                <i class="bi bi-map me-1" aria-hidden="true"></i>Set the location on a map instead</button>
+            <input type="hidden" th:field="*{latitude}" data-mz-addr-lat>
+            <input type="hidden" th:field="*{longitude}" data-mz-addr-lon>
+            <div class="small text-danger mt-1" th:if="${#fields.hasErrors('latitude') or #fields.hasErrors('longitude')}">
+                Move the pin onto your address in India.</div>
+
+            <!-- 3. What only the customer knows, typed by hand -->
+            <div class="row g-3 mt-1">
                 <div class="col-12">
-                    <label class="form-label" for="addressLine">Flat, house no., floor, building</label>
-                    <input class="form-control" th:field="*{addressLine}" th:errorclass="is-invalid" autocomplete="address-line1">
+                    <label class="form-label" for="addressLine">Flat / house no., floor, block, building</label>
+                    <input class="form-control" th:field="*{addressLine}" th:errorclass="is-invalid" autocomplete="address-line1"
+                           placeholder="Flat 302, 3rd floor, B wing, Sunrise Apartments">
+                    <div class="form-text">Type this yourself so the delivery partner reaches the right door.</div>
                     <div class="invalid-feedback" th:errors="*{addressLine}"></div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label" for="area">Street, area or locality</label>
-                    <input class="form-control" th:field="*{area}" autocomplete="address-line2">
+                    <label class="form-label" for="area">Street and area</label>
+                    <input class="form-control" th:field="*{area}" autocomplete="address-line2" list="mzAddrLocalities"
+                           placeholder="MG Road, Andheri East" data-mz-addr-auto>
+                    <datalist id="mzAddrLocalities" data-mz-addr-localities></datalist>
                 </div>
                 <div class="col-12">
                     <label class="form-label" for="landmark">Landmark <span class="text-muted fw-normal">(optional)</span></label>
@@ -70,12 +103,12 @@
                 </div>
                 <div class="col-md-5">
                     <label class="form-label" for="city">City</label>
-                    <input class="form-control" th:field="*{city}" th:errorclass="is-invalid" autocomplete="address-level2">
+                    <input class="form-control" th:field="*{city}" th:errorclass="is-invalid" autocomplete="address-level2" data-mz-addr-auto>
                     <div class="invalid-feedback" th:errors="*{city}"></div>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="state">State</label>
-                    <input class="form-control" th:field="*{state}" autocomplete="address-level1">
+                    <input class="form-control" th:field="*{state}" autocomplete="address-level1" data-mz-addr-auto>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label" for="pincode">PIN code</label>

@@ -61,6 +61,17 @@ public class Address {
     @Column(nullable = false, length = 6)
     private String pincode;
 
+    /** Where the customer put the pin on the map (their building's entrance); null for addresses typed by hand. */
+    private Double latitude;
+    private Double longitude;
+
+    public boolean hasLocation() { return latitude != null && longitude != null; }
+
+    /** Opens the pin in the phone's maps app (Google Maps on the web), for directions. */
+    public String getMapLink() {
+        return hasLocation() ? MapLinks.of(latitude, longitude) : null;
+    }
+
     /** The address automatic refills go to and checkout starts on. */
     private boolean defaultAddress;
 
