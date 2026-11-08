@@ -165,6 +165,15 @@ public class OrderController {
         model.addAttribute("ship", ready.ship());
         model.addAttribute("walletBalance", walletService.balance(user));
         model.addAttribute("onlineMethods", online);
+        // What each way to pay adds (GST included), and how it's shown beside it: "Free", "₹10 + GST"
+        java.util.Map<String, java.math.BigDecimal> fees = new java.util.LinkedHashMap<>();
+        java.util.Map<String, String> feeLabels = new java.util.LinkedHashMap<>();
+        for (PaymentMethod m : List.of(PaymentMethod.UPI, PaymentMethod.CARD, PaymentMethod.NETBANKING, PaymentMethod.COD)) {
+            fees.put(m.name(), orderSettings.paymentCharge(m).amount());
+            feeLabels.put(m.name(), orderSettings.paymentFeeLabel(m));
+        }
+        model.addAttribute("paymentFees", fees);
+        model.addAttribute("paymentFeeLabels", feeLabels);
         model.addAttribute("upiTestMode", paymentService.isUpiTestMode());
         // Razorpay's script only when it takes something: cards, net banking, or UPI once it does UPI
         boolean razorpayUpi = online.contains(PaymentMethod.UPI) && !paymentService.isUpiTestMode();

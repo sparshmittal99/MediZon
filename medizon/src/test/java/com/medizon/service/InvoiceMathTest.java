@@ -1,5 +1,6 @@
 package com.medizon.service;
 
+import com.medizon.domain.PaymentMethod;
 import com.medizon.domain.*;
 import com.medizon.dto.Invoice;
 import org.junit.jupiter.api.Test;
@@ -138,5 +139,22 @@ class InvoiceMathTest {
         i.setGstRate(new BigDecimal(rate));
         i.setHsnCode("3004");
         return i;
+    }
+
+    @Test
+    void theChargeForTheWayItWasPaidIsItsOwnLineAt18Percent() {
+        Order o = order("Maharashtra");
+        o.setPaymentMethod(PaymentMethod.CARD);
+        o.setPaymentFee(new BigDecimal("11.80"));
+        o.setPaymentFeeGstRate(new BigDecimal("18"));
+        o.setTotal(new BigDecimal("552.30"));
+        Invoice inv = service("Maharashtra").forOrder(o);
+        Invoice.Line fee = inv.getLines().stream().filter(l -> l.getDescription().endsWith(" charges") && !l.getDescription().startsWith("Delivery"))
+                .findFirst().orElseThrow();
+        assertThat(fee.getDescription()).isEqualTo(PaymentMethod.CARD.getLabel() + " charges");
+        assertThat(fee.getHsnCode()).isEqualTo("9971");
+        assertThat(fee.getTaxableValue()).isEqualByComparingTo("10.00");
+        assertThat(fee.getCgst().add(fee.getSgst())).isEqualByComparingTo("1.80");
+        assertThat(inv.getTaxableTotal().add(inv.getTaxTotal())).isEqualByComparingTo("552.30");
     }
 }

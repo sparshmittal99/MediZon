@@ -68,6 +68,8 @@
                     <tr th:if="${o.discounted}" class="text-success"><td colspan="3" class="text-end" th:text="'Promo (' + ${o.couponCode} + ')'">Promo</td>
                         <td class="text-end" th:text="'− ₹' + ${o.discount}"></td></tr>
                     <tr><td colspan="3" class="text-end text-muted">Delivery</td><td class="text-end" th:text="'₹' + ${o.deliveryFee}"></td></tr>
+                    <tr th:if="${o.hasPaymentFee()}"><td colspan="3" class="text-end text-muted" th:text="${o.paymentMethod.label} + ' charges (incl. GST)'">Card charges</td>
+                        <td class="text-end" th:text="'₹' + ${o.paymentFee}"></td></tr>
                     <tr th:if="${o.rounded}"><td colspan="3" class="text-end text-muted">Round off</td><td class="text-end" th:text="${o.roundOffLabel}"></td></tr>
                     <tr><td colspan="3" class="text-end fw-bold">Total</td>
                         <td class="text-end fw-bold" th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td></tr>

@@ -48,14 +48,14 @@ public class OrderApi {
     public record OrderDetail(Long id, String orderNumber, String status, String statusLabel, String store,
                               String paymentMethod, String paymentStatus, LocalDateTime placedAt, LocalDateTime deliveredAt,
                               String deliverTo, String shippingAddress, String contactPhone, List<OrderLine> items,
-                              BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal roundOff, BigDecimal total,
+                              BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal paymentFee, BigDecimal roundOff, BigDecimal total,
                               boolean cancellable, boolean invoiceAvailable, String invoiceNumber) {
         static OrderDetail of(Order o) {
             return new OrderDetail(o.getId(), o.getOrderNumber(), o.getStatus().name(), o.getStatus().getLabel(),
                     o.getStore() != null ? o.getStore().getName() : null, o.getPaymentMethod().getLabel(),
                     o.getPaymentStatus().name(), o.getCreatedAt(), o.getDeliveredAt(), o.getDeliverTo(),
                     o.getShippingAddress(), o.getContactPhone(), o.getItems().stream().map(OrderLine::of).toList(),
-                    o.getSubtotal(), o.getDeliveryFee(), o.getRoundOff(), o.getTotal(), o.isCancellable(),
+                    o.getSubtotal(), o.getDeliveryFee(), o.getPaymentFee(), o.getRoundOff(), o.getTotal(), o.isCancellable(),
                     o.isInvoiceAvailable(), o.getInvoiceNumber());
         }
     }

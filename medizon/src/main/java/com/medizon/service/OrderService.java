@@ -111,12 +111,23 @@ public class OrderService {
      */
     @Transactional
     public List<Order> checkout(User user, PaymentMethod paymentMethod, Long addressId, String couponCode, boolean useWallet) {
-        return checkout(user, paymentMethod, addressId, couponCode, useWallet, null, null, null);
+        return checkout(user, paymentMethod, addressId, couponCode, useWallet, OrderSettingsService.PaymentCharge.NONE, null, null, null);
     }
 
-    /** Places the cart, paid by payment {@code gatewayPaymentId} of {@code gateway}'s order {@code gatewayOrderId} when given. */
+    /** As above, with {@code charge} for the way it's paid added to the biggest order. */
+    public List<Order> checkout(User user, PaymentMethod paymentMethod, Long addressId, String couponCode, boolean useWallet,
+                                OrderSettingsService.PaymentCharge charge) {
+        return checkout(user, paymentMethod, addressId, couponCode, useWallet, charge, null, null, null);
+    }
+
+    /**
+     * Places the cart, paid by payment {@code gatewayPaymentId} of {@code gateway}'s order {@code gatewayOrderId} when given.
+     * {@code charge} (the way it's paid, GST included) goes on the biggest order, like the delivery fee, before
+     * MediZon Money is spent, so the money covers it in turn.
+     */
     @Transactional
     public List<Order> checkout(User user, PaymentMethod paymentMethod, Long addressId, String couponCode, boolean useWallet,
+                                OrderSettingsService.PaymentCharge charge,
                                 Gateway gateway, String gatewayOrderId, String gatewayPaymentId) {
         Ready ready = ready(user, addressId, couponCode);
         Address ship = ready.ship();
@@ -137,6 +148,12 @@ public class OrderService {
 
         List<Order> placed = createOrders(user, lines, paymentMethod == null ? PaymentMethod.UPI : paymentMethod,
                 coverage, OrderSource.CUSTOMER, ship, promo);
+        if (charge != null && !charge.isFree() && !placed.isEmpty()) {
+            Order biggest = placed.get(0);              // createOrders puts the biggest first, with the delivery fee
+            biggest.setPaymentFee(charge.amount());
+            biggest.setPaymentFeeGstRate(charge.gstRate());
+            biggest.setTotal(biggest.getTotal().add(charge.amount()));
+        }
         if (useWallet) {
             for (Order o : placed) {
                 BigDecimal used = wallet.spend(user, o.getTotal(), "Paid for order " + o.getOrderNumber(), o.getCustomerPath());
@@ -451,10 +468,10 @@ public class OrderService {
             throw new BusinessException("An order that is " + o.getStatus().getLabel().toLowerCase()
                     + " can't be marked " + next.getLabel().toLowerCase() + ".");
         }
+        Refund refund = next == OrderStatus.CANCELLED ? cancellationRefund(o) : Refund.NONE;
+        BigDecimal onlineBack = refund.online();
         // Paid online: the money goes back through the gateway first, so a refund that fails leaves the order as it was
-        BigDecimal onlineBack = BigDecimal.ZERO;
-        if (next == OrderStatus.CANCELLED && o.isPaidOnline() && o.getPaymentStatus() == PaymentStatus.PAID && o.getAmountDue().signum() > 0) {
-            onlineBack = o.getAmountDue();
+        if (onlineBack.signum() > 0) {
             o.setGatewayRefundId(gateways.get(o.getPaymentGateway()).refund(o.getGatewayOrderId(), o.getGatewayPaymentId(),
                     onlineBack.movePointRight(2).longValueExact(),
                     "Order " + o.getOrderNumber() + " cancelled"));
@@ -474,26 +491,75 @@ public class OrderService {
             prescriptionService.releaseUse(o);      // the packs can be ordered again on its prescription
             if (o.getPaymentStatus() == PaymentStatus.PAID) o.setPaymentStatus(PaymentStatus.REFUNDED);
         }
-        // MediZon Money spent on a cancelled order goes straight back
-        BigDecimal walletBack = next != OrderStatus.CANCELLED || o.getWalletUsed() == null ? BigDecimal.ZERO
-                : o.getWalletUsed().subtract(o.getWalletRefunded());
+        // MediZon Money spent on a cancelled order goes straight back, less any of the payment charge it paid
+        BigDecimal walletBack = refund.wallet();
         if (walletBack.signum() > 0) {
             wallet.credit(o.getUser(), walletBack, "Order " + o.getOrderNumber() + " cancelled", o.getCustomerPath());
             o.setWalletRefunded(o.getWalletRefunded().add(walletBack));
         }
 
+        boolean refunded = onlineBack.signum() > 0 || walletBack.signum() > 0;
+        // Like "Order placed" then "Payment received": "Order cancelled" then its own "Refund initiated"
         notifications.notify(o.getUser(), NotificationType.ORDER_UPDATE,
                 "Order " + next.getLabel().toLowerCase(),
-                "Order " + o.getOrderNumber() + " is now " + next.getLabel().toLowerCase() + "."
-                        + (walletBack.signum() > 0 ? " ₹" + walletBack + " is back in your MediZon Money." : "")
-                        + (onlineBack.signum() > 0 ? " ₹" + onlineBack + " is refunded to your " + o.getPaymentMethod().getLabel()
-                                + " (refund id " + o.getGatewayRefundId() + "); banks take up to 5-7 working days to show it." : "")
+                (next == OrderStatus.CANCELLED
+                        ? "Order " + o.getOrderNumber() + " for ₹" + o.getTotal() + " is cancelled."
+                        : "Order " + o.getOrderNumber() + " is now " + next.getLabel().toLowerCase() + ".")
                         + (next == OrderStatus.SHIPPED ? " Your tax invoice " + o.getInvoiceNumber() + " is ready on the order page." : "")
                         + (next == OrderStatus.OUT_FOR_DELIVERY ? " Our delivery partner is out for delivery with your package." : "")
                         + (next == OrderStatus.DELIVERED ? " Tell us how it went with a quick review." : ""),
                 o.getCustomerPath());
+        // The refund is its own alert, emailed from the refunds address like a return's refund (the order email
+        // for the cancellation only says the order is cancelled)
+        if (refunded) {
+            notifications.notify(o.getUser(), NotificationType.ORDER_UPDATE, "Refund initiated", refundMessage(o, onlineBack, walletBack),
+                    o.getCustomerPath());
+        }
         events.publishEvent(new OrderEmailService.StatusChanged(o.getId(), next));
         return o;
+    }
+
+    /** What a cancelled order gives back: online, to MediZon Money, and the payment charge kept. */
+    record Refund(BigDecimal online, BigDecimal wallet, BigDecimal kept) {
+        static final Refund NONE = new Refund(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+    }
+
+    /**
+     * What cancelling {@code o} refunds. Everything paid comes back except the charge for the way it was paid (card,
+     * net banking ...): the gateway keeps its fee, so it isn't refunded. It comes off what was paid online first, then
+     * off the MediZon Money when that paid part of it. Nothing online comes back for an unpaid (pay on delivery) order.
+     */
+    static Refund cancellationRefund(Order o) {
+        boolean paid = o.getPaymentStatus() == PaymentStatus.PAID;
+        BigDecimal kept = paid && o.hasPaymentFee() ? o.getPaymentFee() : BigDecimal.ZERO;
+        BigDecimal online = BigDecimal.ZERO, keptOnline = BigDecimal.ZERO;
+        if (o.isPaidOnline() && paid && o.getAmountDue().signum() > 0) {
+            keptOnline = kept.min(o.getAmountDue());
+            online = o.getAmountDue().subtract(keptOnline);
+        }
+        BigDecimal wallet = o.getWalletUsed() == null ? BigDecimal.ZERO
+                : o.getWalletUsed().subtract(o.getWalletRefunded() == null ? BigDecimal.ZERO : o.getWalletRefunded())
+                        .subtract(kept.subtract(keptOnline)).max(BigDecimal.ZERO);
+        return new Refund(online, wallet, kept);
+    }
+
+    /**
+     * A cancelled order's refund, worded like "Payment received": "₹120.00 refunded to your UPI for order MZ1001
+     * (refund id rfnd_9). Banks take up to 5-7 working days to show it."
+     */
+    static String refundMessage(Order o, BigDecimal onlineBack, BigDecimal walletBack) {
+        StringBuilder m = new StringBuilder();
+        if (onlineBack.signum() > 0) {
+            m.append("₹").append(onlineBack).append(" refunded to your ").append(o.getPaymentMethod().getLabel());
+            m.append(" for order ").append(o.getOrderNumber());
+            if (o.getGatewayRefundId() != null) m.append(" (refund id ").append(o.getGatewayRefundId()).append(")");
+            m.append(". Banks take up to 5-7 working days to show it.");
+        }
+        if (walletBack.signum() > 0) {
+            m.append(m.isEmpty() ? "" : " ").append("₹").append(walletBack).append(" is back in your MediZon Money")
+                    .append(onlineBack.signum() > 0 ? "" : " for order " + o.getOrderNumber()).append(", ready to use now.");
+        }
+        return m.toString();
     }
 
     /** Puts packs back on the shelf of the store that sold them. */

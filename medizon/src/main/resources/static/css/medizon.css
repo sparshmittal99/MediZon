@@ -1304,6 +1304,8 @@ html.translated-ltr h1, html.translated-ltr h2, html.translated-ltr h3, html.tra
 .mz-pay-option:has(input:checked) .mz-pay-icon { background: var(--mz-green); color: #fff; }
 .mz-pay-radio { flex: none; width: 1.3rem; height: 1.3rem; border-radius: 50%; border: 2px solid #A9C9BB; transition: border-width .15s, border-color .15s; }
 .mz-pay-option:has(input:checked) .mz-pay-radio { border: 6px solid var(--mz-green); }
+/* What a way to pay costs, just after its name: "Free", "₹10 + GST" */
+.mz-pay-fee { margin-left: .5rem; font-size: .76rem; font-weight: 500; color: var(--mz-muted); vertical-align: middle; white-space: nowrap; }
 .mz-pay-tag { margin-left: .35rem; padding: .1rem .45rem; border-radius: 999px; background: var(--mz-amber-soft); color: #9A5B07;
     font-size: .68rem; font-weight: 700; letter-spacing: .02em; vertical-align: middle; }
 .mz-pay-covered { display: flex; gap: .75rem; align-items: center; padding: 1rem 1.15rem; border-radius: 1rem;

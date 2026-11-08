@@ -9,8 +9,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * How customers order, set by the admin. One row. For now the smallest cart that can be checked out: the medicines'
- * total before any promo or delivery fee must reach it. Zero means any amount.
+ * How customers order, set by the admin. One row: the smallest cart that can be checked out (the medicines' total
+ * before any promo or delivery fee must reach it; zero means any amount), and what each way to pay costs.
  */
 @Entity
 @Table(name = "order_settings")
@@ -25,6 +25,26 @@ public class OrderSettings {
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal minOrderValue = DEFAULT_MIN_ORDER_VALUE;
+
+    /*
+     * Charges for paying a certain way, before GST (shown as "₹10 + GST"); zero means free. Added to what's paid that
+     * way at checkout, with GST at {@link #paymentFeeGstRate}.
+     */
+    @Column(nullable = false, precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 0")
+    private BigDecimal upiFee = BigDecimal.ZERO;
+
+    @Column(nullable = false, precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 10")
+    private BigDecimal cardFee = new BigDecimal("10.00");
+
+    @Column(nullable = false, precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 10")
+    private BigDecimal netbankingFee = new BigDecimal("10.00");
+
+    @Column(nullable = false, precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 0")
+    private BigDecimal codFee = BigDecimal.ZERO;
+
+    /** GST on the payment charges, in percent. */
+    @Column(nullable = false, precision = 5, scale = 2, columnDefinition = "numeric(5,2) not null default 18")
+    private BigDecimal paymentFeeGstRate = new BigDecimal("18.00");
 
     private LocalDateTime updatedAt;
 

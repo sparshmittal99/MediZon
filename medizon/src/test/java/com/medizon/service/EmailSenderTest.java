@@ -15,6 +15,7 @@ class EmailSenderTest {
         assertThat(NotificationService.senderFor(NotificationType.ORDER_UPDATE, "Paid with MediZon Money")).isEqualTo(PAYMENTS);
         assertThat(NotificationService.senderFor(NotificationType.ORDER_UPDATE, "Payment refunded")).isEqualTo(REFUNDS);
         assertThat(NotificationService.senderFor(NotificationType.ORDER_UPDATE, "Order cancelled")).isEqualTo(STORE);
+        assertThat(NotificationService.senderFor(NotificationType.ORDER_UPDATE, "Refund initiated")).isEqualTo(REFUNDS);
         assertThat(NotificationService.senderFor(NotificationType.RETURN_UPDATE, "Return approved")).isEqualTo(RETURNS);
         assertThat(NotificationService.senderFor(NotificationType.RETURN_UPDATE, "Refund processed")).isEqualTo(REFUNDS);
         assertThat(NotificationService.senderFor(NotificationType.RETURN_UPDATE, "Refund added to MediZon Money")).isEqualTo(REFUNDS);

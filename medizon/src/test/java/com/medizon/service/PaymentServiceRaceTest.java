@@ -1,5 +1,6 @@
 package com.medizon.service;
 
+import com.medizon.dto.CartSummary;
 import com.medizon.domain.*;
 import com.medizon.payment.Gateway;
 import com.medizon.payment.MediZonUpiGateway;
@@ -33,7 +34,7 @@ class PaymentServiceRaceTest {
     private final OrderService orderService = mock(OrderService.class);
     private final NotificationService notifications = mock(NotificationService.class);
     private final PaymentService service = new PaymentService(gateways, mock(RazorpayGateway.class), mock(MediZonUpiGateway.class),
-            payments, orders, orderService, notifications);
+            payments, orders, orderService, notifications, mock(OrderSettingsService.class));
 
     private final User user = new User();
     private final CheckoutPayment payment = new CheckoutPayment();
@@ -81,7 +82,7 @@ class PaymentServiceRaceTest {
 
         service.check(user, "order_ABC");
 
-        verify(orderService, never()).checkout(any(), any(), any(), any(), anyBoolean(), any(), any(), any());
+        verify(orderService, never()).checkout(any(), any(), any(), any(), anyBoolean(), any(), any(), any(), any());
         verify(gateway, never()).refund(any(), any(), anyLong(), any());
         assertThat(payment.getStatus()).isEqualTo(CheckoutPayment.Status.PLACED);
     }
@@ -96,7 +97,7 @@ class PaymentServiceRaceTest {
 
         verify(gateway, never()).findPaid(any());
         verify(gateway, never()).refund(any(), any(), anyLong(), any());
-        verify(orderService, never()).checkout(any(), any(), any(), any(), anyBoolean(), any(), any(), any());
+        verify(orderService, never()).checkout(any(), any(), any(), any(), anyBoolean(), any(), any(), any(), any());
     }
 
     @Test
@@ -109,5 +110,27 @@ class PaymentServiceRaceTest {
 
         verify(gateway).refund("order_ABC", "pay_XYZ", 12000, "Order couldn't be placed");
         assertThat(c.state()).isEqualTo("REFUNDED");
+    }
+
+    @Test
+    void theChargeForPayingByCardIsPartOfThePaymentAndTheOrder() {
+        // ₹120 of medicines + ₹10 card charge with 18% GST = ₹131.80, fixed when the payment opened
+        payment.setAmount(new BigDecimal("131.80"));
+        payment.setPaymentFee(new BigDecimal("11.80"));
+        payment.setPaymentFeeGstRate(new BigDecimal("18.00"));
+        when(gateway.findPaid("order_ABC")).thenReturn(Optional.of(new PaymentGateway.Paid("pay_XYZ", "order_ABC", 13180, PaymentMethod.CARD)));
+        when(orders.findByGatewayOrderIdOrderByIdAsc("order_ABC")).thenReturn(List.of());
+        CartSummary cart = mock(CartSummary.class);
+        when(cart.getTotal()).thenReturn(new BigDecimal("120.00"));
+        when(orderService.ready(any(), any(), any())).thenReturn(new OrderService.Ready(null, cart, null, null));
+        when(orderService.due(any(), any(), anyBoolean())).thenReturn(new OrderService.Due(BigDecimal.ZERO, new BigDecimal("120.00")));
+        when(orderService.checkout(any(), any(), any(), any(), anyBoolean(), any(), any(), any(), any())).thenReturn(List.of(order));
+
+        service.check(user, "order_ABC");
+
+        verify(orderService).checkout(eq(user), eq(PaymentMethod.CARD), eq(3L), any(), anyBoolean(),
+                eq(new OrderSettingsService.PaymentCharge(new BigDecimal("11.80"), new BigDecimal("18.00"))),
+                eq(Gateway.RAZORPAY), eq("order_ABC"), eq("pay_XYZ"));
+        verify(gateway, never()).refund(any(), any(), anyLong(), any());
     }
 }

@@ -72,6 +72,16 @@ public class Order {
 
     @Column(precision = 10, scale = 2) private BigDecimal subtotal = BigDecimal.ZERO;
     @Column(precision = 10, scale = 2) private BigDecimal deliveryFee = BigDecimal.ZERO;
+    /**
+     * What the way it was paid added (card, net banking ...), GST included, at {@link #paymentFeeGstRate}. On the
+     * checkout's biggest order, like the delivery fee; zero when that way was free, and on older orders.
+     */
+    @Column(precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 0")
+    private BigDecimal paymentFee = BigDecimal.ZERO;
+    @Column(precision = 5, scale = 2, columnDefinition = "numeric(5,2) not null default 0")
+    private BigDecimal paymentFeeGstRate = BigDecimal.ZERO;
+
+    public boolean hasPaymentFee() { return paymentFee != null && paymentFee.signum() > 0; }
     /** Paise added or taken off to bring the bill to whole rupees; included in {@link #total}. Zero on older orders. */
     @Column(precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 0")
     private BigDecimal roundOff = BigDecimal.ZERO;

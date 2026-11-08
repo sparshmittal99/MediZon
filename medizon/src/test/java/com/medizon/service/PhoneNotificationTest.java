@@ -56,6 +56,32 @@ class PhoneNotificationTest {
     }
 
     @Test
+    void aCancelledOrdersRefundIsEmailedFromTheRefundsAddress() {
+        // The status alert is covered by the order's own email; the refund alert is emailed on its own
+        service.notify(customer, NotificationType.ORDER_UPDATE, "Order cancelled", "Order MZ1 is now cancelled.", "/orders/x");
+        verify(email, never()).sendTemplate(any(), any(), any(), any(), any(), any());
+        service.notify(customer, NotificationType.ORDER_UPDATE, "Refund initiated", "Rs 120 is going back to your UPI.", "/orders/x");
+        verify(email).sendTemplate(eq(EmailService.Sender.REFUNDS), eq("a@b.c"), contains("Refund initiated"), eq("emails/notification"), any(), any());
+    }
+
+    @Test
+    void refundMessageSaysHowMuchWentWhere() {
+        Order o = new Order();
+        o.setOrderNumber("MZ1001");
+        o.setPaymentMethod(PaymentMethod.UPI);
+        o.setGatewayRefundId("rfnd_9");
+        String both = OrderService.refundMessage(o, new java.math.BigDecimal("120.00"), new java.math.BigDecimal("30.00"));
+        org.assertj.core.api.Assertions.assertThat(both)
+                .startsWith("₹120.00 refunded to your " + PaymentMethod.UPI.getLabel() + " for order MZ1001")
+                .doesNotContain("through")
+                .contains("for order MZ1001").contains("(refund id rfnd_9)").contains("5-7 working days")
+                .contains("₹30.00 is back in your MediZon Money");
+        String walletOnly = OrderService.refundMessage(o, java.math.BigDecimal.ZERO, new java.math.BigDecimal("30.00"));
+        org.assertj.core.api.Assertions.assertThat(walletOnly)
+                .isEqualTo("₹30.00 is back in your MediZon Money for order MZ1001, ready to use now.");
+    }
+
+    @Test
     void privateKeysParseFromTheServiceAccountFormat() throws Exception {
         java.security.KeyPairGenerator g = java.security.KeyPairGenerator.getInstance("RSA");
         g.initialize(2048);

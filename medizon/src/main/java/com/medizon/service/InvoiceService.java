@@ -84,7 +84,13 @@ public class InvoiceService {
             lines.add(line(n++, i.getMedicineName(), hsn, i.getExpiryDate(), i.getPatientName(), i.getPrescribedBy(), i.getQuantity(), i.getUnitPrice(), rate, off, i.getNetTotal(), interState));
         }
         if (o.getDeliveryFee() != null && o.getDeliveryFee().signum() > 0) {
-            lines.add(line(n, "Delivery charges", "", null, null, null, 1, o.getDeliveryFee(), topRate, BigDecimal.ZERO, o.getDeliveryFee(), interState));
+            lines.add(line(n++, "Delivery charges", "", null, null, null, 1, o.getDeliveryFee(), topRate, BigDecimal.ZERO, o.getDeliveryFee(), interState));
+        }
+        // The charge for the way it was paid: a service of its own (SAC 9971), at the GST rate it was charged with
+        if (o.hasPaymentFee()) {
+            BigDecimal rate = o.getPaymentFeeGstRate() == null ? BigDecimal.ZERO : o.getPaymentFeeGstRate();
+            lines.add(line(n, o.getPaymentMethod().getLabel() + " charges", "9971", null, null, null, 1, o.getPaymentFee(), rate,
+                    BigDecimal.ZERO, o.getPaymentFee(), interState));
         }
 
         Map<BigDecimal, BigDecimal[]> byRate = new TreeMap<>();

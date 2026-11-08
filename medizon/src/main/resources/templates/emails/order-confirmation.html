@@ -116,6 +116,10 @@
                                     <td style="padding: 4px 0; color: #5B716A;">Delivery Fee</td>
                                     <td style="padding: 4px 0; text-align: right; color: #17302A;" th:text="'₹' + ${order.deliveryFee}">₹30.00</td>
                                 </tr>
+                                <tr th:if="${order.hasPaymentFee()}">
+                                    <td style="padding: 4px 0; color: #5B716A;" th:text="${order.paymentMethod.label} + ' charges (incl. GST)'">Card charges</td>
+                                    <td style="padding: 4px 0; text-align: right; color: #17302A;" th:text="'₹' + ${order.paymentFee}">₹11.80</td>
+                                </tr>
                                 <tr th:if="${order.paidWithWallet}">
                                     <td style="padding: 4px 0; color: #0E6B57;">Paid via MediZon Money</td>
                                     <td style="padding: 4px 0; text-align: right; color: #0E6B57;" th:text="'-₹' + ${order.walletUsed}">-₹50.00</td>

@@ -19,12 +19,19 @@
     const money = (n) => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     let busy = false;
 
-    /** What MediZon Money pays, what's left and how: WALLET when it covers everything. */
+    const feeNames = { UPI: 'UPI', CARD: 'Card', NETBANKING: 'Net banking', COD: 'Pay on delivery' };
+
+    /**
+     * What MediZon Money pays, what's left and how (WALLET when it covers everything), and what the chosen way to pay
+     * adds, GST included. The server works out the same charge itself and takes exactly that.
+     */
     const choice = () => {
         const used = wallet && wallet.checked ? Math.min(balance, total) : 0;
         const rest = Math.round((total - used) * 100) / 100;
         const picked = methods.find((m) => m.checked);
-        return { used, rest, method: rest <= 0 ? 'WALLET' : picked ? picked.value : null };
+        const method = rest <= 0 ? 'WALLET' : picked ? picked.value : null;
+        const fee = rest > 0 && picked ? Number(picked.dataset.fee || 0) : 0;
+        return { used, rest, fee, toPay: Math.round((rest + fee) * 100) / 100, method };
     };
     const paysOnline = (method) => method !== null && method !== 'WALLET' && method !== 'COD';
 
@@ -32,11 +39,15 @@
         const c = choice();
         page.querySelectorAll('[data-mz-wallet-line]').forEach((el) => { el.hidden = c.used === 0; });
         page.querySelectorAll('[data-mz-wallet-amount]').forEach((el) => { el.textContent = '− ' + money(c.used); });
-        page.querySelectorAll('[data-mz-to-pay]').forEach((el) => { el.textContent = money(c.rest); });
+        page.querySelectorAll('[data-mz-to-pay]').forEach((el) => { el.textContent = money(c.toPay); });
+        page.querySelectorAll('[data-mz-fee-line]').forEach((el) => { el.hidden = c.fee <= 0; });
+        page.querySelectorAll('[data-mz-fee-name]').forEach((el) => { el.textContent = feeNames[c.method] || 'Payment'; });
+        page.querySelectorAll('[data-mz-fee-amount]').forEach((el) => { el.textContent = money(c.fee); });
+        page.querySelectorAll('[data-mz-order-total]').forEach((el) => { el.textContent = money(total + c.fee); });
         covered.hidden = c.rest > 0;
         list.hidden = c.rest <= 0;
         restTitle.textContent = c.used > 0 && c.rest > 0 ? 'Pay the remaining ' + money(c.rest) + ' with' : 'Pay with';
-        const label = !c.method ? 'Choose how to pay' : paysOnline(c.method) ? 'Pay ' + money(c.rest) : 'Place order';
+        const label = !c.method ? 'Choose how to pay' : paysOnline(c.method) ? 'Pay ' + money(c.toPay) : 'Place order';
         buttons.forEach((b) => {
             b.querySelector('[data-mz-pay-label]').textContent = label;
             b.disabled = busy || !c.method;

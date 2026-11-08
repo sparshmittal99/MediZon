@@ -1,5 +1,6 @@
 package com.medizon.service;
 
+import com.medizon.domain.PaymentMethod;
 import com.medizon.domain.Coupon;
 import com.medizon.domain.OrderSettings;
 import com.medizon.domain.ReturnSettings;
@@ -98,5 +99,40 @@ class AdminSettingsTest {
         assertThat(c.getTitle()).isEqualTo("10% off up to ₹100");
         assertThat(c.getDescription()).isEqualTo("On medicines worth ₹299 or more.");
         assertThat(c.getUsesPerDay()).isEqualTo(2);
+    }
+
+    @Test
+    void eachWayToPayHasItsOwnChargeWithGstOnTop() {
+        OrderSettingsRepository repo = mock(OrderSettingsRepository.class);
+        java.util.concurrent.atomic.AtomicReference<OrderSettings> stored = new java.util.concurrent.atomic.AtomicReference<>();
+        when(repo.findById(OrderSettings.ID)).thenAnswer(i -> Optional.ofNullable(stored.get()));
+        when(repo.save(any())).thenAnswer(i -> { stored.set(i.getArgument(0)); return i.getArgument(0); });
+        OrderSettingsService service = new OrderSettingsService(repo);
+
+        // Defaults: UPI and pay on delivery free; card and net banking ₹10 + 18% GST
+        assertThat(service.paymentCharge(PaymentMethod.UPI).isFree()).isTrue();
+        assertThat(service.paymentFeeLabel(PaymentMethod.UPI)).isEqualTo("Free");
+        assertThat(service.paymentCharge(PaymentMethod.CARD).amount()).isEqualByComparingTo("11.80");
+        assertThat(service.paymentCharge(PaymentMethod.CARD).gstRate()).isEqualByComparingTo("18");
+        assertThat(service.paymentFeeLabel(PaymentMethod.CARD)).isEqualTo("₹10 + GST");
+        assertThat(service.paymentCharge(PaymentMethod.NETBANKING).amount()).isEqualByComparingTo("11.80");
+        assertThat(service.paymentCharge(PaymentMethod.COD).isFree()).isTrue();
+        assertThat(service.paymentCharge(PaymentMethod.WALLET).isFree()).isTrue();
+
+        assertThatThrownBy(() -> service.savePaymentFees(BigDecimal.ZERO, new BigDecimal("-1"), BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("18"), "admin@medizon.in")).hasMessageContaining("card must be ₹0 to ₹500");
+        assertThatThrownBy(() -> service.savePaymentFees(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("40"), "admin@medizon.in")).hasMessageContaining("0% to 28%");
+        assertThatThrownBy(() -> service.savePaymentFees(null, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("18"), "admin@medizon.in")).hasMessageContaining("UPI, or 0 for free");
+
+        OrderSettings saved = service.savePaymentFees(new BigDecimal("2"), new BigDecimal("15"), new BigDecimal("12.5"),
+                new BigDecimal("20"), BigDecimal.ZERO, "admin@medizon.in");
+        assertThat(saved.getNetbankingFee()).isEqualByComparingTo("12.50");
+        assertThat(saved.getUpdatedBy()).isEqualTo("admin@medizon.in");
+        // No GST: the charge is just the amount, and the label says so
+        assertThat(service.paymentCharge(PaymentMethod.CARD).amount()).isEqualByComparingTo("15");
+        assertThat(service.paymentFeeLabel(PaymentMethod.CARD)).isEqualTo("₹15");
+        assertThat(service.paymentCharge(PaymentMethod.COD).amount()).isEqualByComparingTo("20");
     }
 }

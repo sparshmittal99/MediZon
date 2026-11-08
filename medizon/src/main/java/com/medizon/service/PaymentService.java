@@ -58,6 +58,7 @@ public class PaymentService {
     private final OrderRepository orders;
     private final OrderService orderService;
     private final NotificationService notifications;
+    private final OrderSettingsService orderSettings;
 
     /** Minutes a payment is checked for before, still unpaid, it's closed. A later payment still arrives by webhook. */
     @Value("${medizon.payment.settle-minutes:20}")
@@ -98,7 +99,10 @@ public class PaymentService {
         OrderService.Due due = orderService.due(user, ready.cart().getTotal(), useWallet);
         if (due.rest().signum() <= 0) throw new BusinessException("MediZon Money covers the whole order: place it without paying online.");
 
-        long paise = paise(due.rest());
+        // The charge for paying this way (card, net banking ...) is set here, by the server, and kept with the payment
+        OrderSettingsService.PaymentCharge charge = orderSettings.paymentCharge(method);
+        BigDecimal amount = due.rest().add(charge.amount());
+        long paise = paise(amount);
         String gatewayOrderId = gateway.createOrder(paise, "MZ-" + user.getId() + "-" + System.currentTimeMillis());
         CheckoutPayment p = new CheckoutPayment();
         p.setUser(user);
@@ -108,7 +112,9 @@ public class PaymentService {
         p.setAddressId(addressId);
         p.setCouponCode(couponCode);
         p.setUseWallet(useWallet);
-        p.setAmount(due.rest());
+        p.setAmount(amount);
+        p.setPaymentFee(charge.amount());
+        p.setPaymentFeeGstRate(charge.gstRate());
         payments.save(p);
         return new Opened(gateway.id(), gatewayOrderId, paise, method.getLabel(), RazorpayGateway.checkoutMethod(method),
                 gateway.id() == Gateway.RAZORPAY ? razorpay.getKeyId() : null, MediZonUpiGateway.REQUEST_TIME.toSeconds());
@@ -239,7 +245,13 @@ public class PaymentService {
                     ? "Pay by " + method.getLabel() + " first; the order is placed once it's paid." : "Choose how you'd like to pay.");
         }
         boolean allWallet = method == PaymentMethod.WALLET;
-        return placed(orderService.checkout(user, allWallet ? null : method, addressId, couponCode, allWallet || useWallet));
+        OrderSettingsService.PaymentCharge charge = OrderSettingsService.PaymentCharge.NONE;
+        if (!allWallet) {
+            // Pay on delivery's charge, when something is left to pay at the door
+            BigDecimal total = orderService.ready(user, addressId, couponCode).cart().getTotal();
+            if (orderService.due(user, total, useWallet).rest().signum() > 0) charge = orderSettings.paymentCharge(method);
+        }
+        return placed(orderService.checkout(user, allWallet ? null : method, addressId, couponCode, allWallet || useWallet, charge));
     }
 
     /**
@@ -328,11 +340,15 @@ public class PaymentService {
         try {
             if (pay.amountPaise() != paise(p.getAmount())) throw new BusinessException("That payment doesn't match this order.");
             OrderService.Ready ready = orderService.ready(user, p.getAddressId(), p.getCouponCode());
-            BigDecimal rest = orderService.due(user, ready.cart().getTotal(), p.isUseWallet()).rest();
+            BigDecimal fee = p.getPaymentFee() == null ? BigDecimal.ZERO : p.getPaymentFee();
+            BigDecimal rest = orderService.due(user, ready.cart().getTotal(), p.isUseWallet()).rest().add(fee);
             if (rest.compareTo(p.getAmount()) != 0) {
                 throw new BusinessException("Your cart changed while you were paying: it's now ₹" + rest + " to pay, not ₹" + p.getAmount() + ".");
             }
-            placed = orderService.checkout(user, paidBy, p.getAddressId(), p.getCouponCode(), p.isUseWallet(),
+            OrderSettingsService.PaymentCharge charge = fee.signum() > 0
+                    ? new OrderSettingsService.PaymentCharge(fee, p.getPaymentFeeGstRate() == null ? BigDecimal.ZERO : p.getPaymentFeeGstRate())
+                    : OrderSettingsService.PaymentCharge.NONE;
+            placed = orderService.checkout(user, paidBy, p.getAddressId(), p.getCouponCode(), p.isUseWallet(), charge,
                     gateway.id(), gatewayOrderId, pay.id());
         } catch (BusinessException e) {
             // A payment whose orders exist is never refunded: they were placed by another path meanwhile

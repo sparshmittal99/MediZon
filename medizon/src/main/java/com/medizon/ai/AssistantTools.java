@@ -652,6 +652,7 @@ public class AssistantTools {
         out.put("subtotal", money(o.getSubtotal()));
         out.put("discount", money(o.getDiscount()));
         out.put("delivery", money(o.getDeliveryFee()));
+        out.put("payment_charges", money(o.getPaymentFee() == null ? java.math.BigDecimal.ZERO : o.getPaymentFee()));
         out.put("total", money(o.getTotal()));
         out.put("url", "/admin/orders/" + o.getId());
         return out;

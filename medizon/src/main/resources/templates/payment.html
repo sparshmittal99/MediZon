@@ -56,7 +56,7 @@
             </div>
             <div class="mz-pay-methods" role="radiogroup" aria-label="Payment method" data-mz-pay-methods>
                 <label th:each="pm, s : ${onlineMethods}" class="mz-pay-option">
-                    <input type="radio" name="method" th:value="${pm}" th:checked="${s.first}">
+                    <input type="radio" name="method" th:value="${pm}" th:checked="${s.first}" th:attr="data-fee=${paymentFees.get(pm.name())}">
                     <span class="mz-pay-icon" th:switch="${pm.name()}">
                         <i th:case="'UPI'" class="bi bi-phone" aria-hidden="true"></i>
                         <i th:case="'CARD'" class="bi bi-credit-card" aria-hidden="true"></i>
@@ -65,6 +65,7 @@
                     <span class="flex-grow-1 min-w-0">
                         <span class="d-block fw-semibold">
                             <span th:text="${pm.label}">UPI</span>
+                            <span class="mz-pay-fee" th:text="${paymentFeeLabels.get(pm.name())}">Free</span>
                             <span th:if="${pm.name() == 'UPI'}" class="mz-pay-tag">Fastest</span>
                         </span>
                         <span class="d-block small text-muted" th:switch="${pm.name()}">
@@ -78,10 +79,11 @@
 
                 <div class="mz-pay-divider"><span>or pay later</span></div>
                 <label class="mz-pay-option">
-                    <input type="radio" name="method" value="COD" th:checked="${#lists.isEmpty(onlineMethods)}">
+                    <input type="radio" name="method" value="COD" th:checked="${#lists.isEmpty(onlineMethods)}" th:attr="data-fee=${paymentFees.get('COD')}">
                     <span class="mz-pay-icon"><i class="bi bi-truck" aria-hidden="true"></i></span>
                     <span class="flex-grow-1 min-w-0">
-                        <span class="d-block fw-semibold">Pay on delivery</span>
+                        <span class="d-block fw-semibold">Pay on delivery
+                            <span class="mz-pay-fee" th:text="${paymentFeeLabels.get('COD')}">Free</span></span>
                         <span class="d-block small text-muted">Cash, UPI and more when your order arrives</span>
                     </span>
                     <span class="mz-pay-radio" aria-hidden="true"></span>
@@ -105,8 +107,11 @@
                     <span th:text="${cart.deliveryFee.signum() == 0} ? 'Free' : ('₹' + ${#numbers.formatDecimal(cart.deliveryFee, 1, 'COMMA', 2, 'POINT')})"></span></div>
                 <div class="mz-pay-line text-muted" th:if="${cart.roundOff.signum() != 0}">
                     <span>Round off</span><span th:text="${cart.roundOffLabel}"></span></div>
+                <div class="mz-pay-line" data-mz-fee-line hidden>
+                    <span><span data-mz-fee-name>Payment</span> charges <small class="text-muted">(incl. GST)</small></span>
+                    <span data-mz-fee-amount></span></div>
                 <div class="mz-pay-line mz-pay-subtotal"><span>Order total</span>
-                    <span th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
+                    <span data-mz-order-total th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
                 <div class="mz-pay-line text-success" data-mz-wallet-line hidden>
                     <span>MediZon Money</span><span data-mz-wallet-amount></span></div>
                 <div class="mz-pay-total">

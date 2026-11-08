@@ -98,7 +98,9 @@
                         <details class="mz-faq-item">
                             <summary>Can I cancel an order?</summary>
                             <div>Yes, until it ships. Open the order from <strong>Orders</strong> and choose Cancel. Once it has shipped,
-                                you can request a return after delivery instead.</div>
+                                you can request a return after delivery instead. If you paid online, the amount goes back to the same
+                                account (banks take up to 5-7 working days) and MediZon Money comes back at once. Payment method charges
+                                aren't refunded.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>Can I send medicines to someone else's address?</summary>
@@ -281,7 +283,7 @@
                         <details class="mz-faq-item">
                             <summary>When will I get my refund?</summary>
                             <div>A pharmacist reviews each request. Once approved we pick the packs up and refund the medicines' price.
-                                Delivery charges aren't refunded. Follow progress in <strong>Orders → Returns</strong>.</div>
+                                Delivery charges and payment method charges aren't refunded. Follow progress in <strong>Orders → Returns</strong>.</div>
                         </details>
                     </div>
                 </section>
@@ -292,6 +294,15 @@
                         <details class="mz-faq-item">
                             <summary>How can I pay?</summary>
                             <div>UPI, a debit / credit card, net banking, MediZon Money, or pay on delivery (cash, UPI and more).</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Is there a charge for how I pay?</summary>
+                            <div>
+                                <th:block th:each="c, s : ${paymentCharges}"><strong th:text="${c.key}">UPI</strong>: <span th:text="${c.value}">Free</span><span
+                                        th:text="${s.last} ? '. ' : ' · '"></span></th:block>
+                                MediZon Money is always free. The payment page shows the charge beside each way to pay and adds it,
+                                GST included, to the total when you choose it. Payment method charges are on your tax invoice and
+                                aren't refunded if you cancel the order.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>Where do I find my tax invoice?</summary>

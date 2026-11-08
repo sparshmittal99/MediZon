@@ -60,9 +60,15 @@ public class CheckoutPayment {
 
     private boolean useWallet;
 
-    /** What the gateway takes: the cart's total less the MediZon Money it uses. */
+    /** What the gateway takes: the cart's total less the MediZon Money it uses, plus {@link #paymentFee}. */
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
+
+    /** The part of {@link #amount} that's the charge for paying this way, GST included; fixed when the payment opens. */
+    @Column(precision = 10, scale = 2, columnDefinition = "numeric(10,2) not null default 0")
+    private BigDecimal paymentFee = BigDecimal.ZERO;
+    @Column(precision = 5, scale = 2, columnDefinition = "numeric(5,2) not null default 0")
+    private BigDecimal paymentFeeGstRate = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

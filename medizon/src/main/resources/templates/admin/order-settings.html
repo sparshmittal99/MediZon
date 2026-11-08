@@ -27,6 +27,50 @@
         </section>
         <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save settings</button>
     </form>
+
+    <form th:action="@{/admin/order-settings/payment-fees}" method="post" class="mt-4"
+          th:with="P=${T(com.medizon.service.OrderSettingsService)}">
+        <section class="mz-panel mb-4">
+            <h2 class="h6 mb-1"><i class="bi bi-credit-card me-1 text-success"></i>Payment method charges</h2>
+            <p class="small text-muted mb-3">Added to what's paid that way, with GST on top. The payment page shows each one beside the
+                method ("Free" or "₹10 + GST") and adds it to the total when it's chosen. Set 0 for free.</p>
+            <div class="row g-3">
+                <div class="col-sm-6 col-lg-3">
+                    <label class="form-label small" for="upiFee">UPI</label>
+                    <div class="input-group"><span class="input-group-text">₹</span>
+                        <input class="form-control" id="upiFee" name="upiFee" type="number" step="0.01" min="0" th:max="${maxPaymentFee}"
+                               th:value="${P.plain(settings.upiFee)}" required></div>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <label class="form-label small" for="cardFee">Credit / debit card</label>
+                    <div class="input-group"><span class="input-group-text">₹</span>
+                        <input class="form-control" id="cardFee" name="cardFee" type="number" step="0.01" min="0" th:max="${maxPaymentFee}"
+                               th:value="${P.plain(settings.cardFee)}" required></div>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <label class="form-label small" for="netbankingFee">Net banking</label>
+                    <div class="input-group"><span class="input-group-text">₹</span>
+                        <input class="form-control" id="netbankingFee" name="netbankingFee" type="number" step="0.01" min="0" th:max="${maxPaymentFee}"
+                               th:value="${P.plain(settings.netbankingFee)}" required></div>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <label class="form-label small" for="codFee">Pay on delivery</label>
+                    <div class="input-group"><span class="input-group-text">₹</span>
+                        <input class="form-control" id="codFee" name="codFee" type="number" step="0.01" min="0" th:max="${maxPaymentFee}"
+                               th:value="${P.plain(settings.codFee)}" required></div>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <label class="form-label small" for="paymentFeeGstRate">GST on these charges</label>
+                    <div class="input-group"><input class="form-control" id="paymentFeeGstRate" name="paymentFeeGstRate" type="number"
+                               step="0.01" min="0" th:max="${maxGstRate}" th:value="${P.plain(settings.paymentFeeGstRate)}" required>
+                        <span class="input-group-text">%</span></div>
+                </div>
+            </div>
+            <div class="form-text mt-2">Before GST, at most ₹<span th:text="${maxPaymentFee}">500</span> each. MediZon Money is always free.
+                The charge is on the order and its tax invoice. It isn't refunded when a paid order is cancelled: the refund is what was paid less the charge.</div>
+        </section>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save payment charges</button>
+    </form>
 </main>
 
 <footer th:replace="~{fragments/layout :: footer}"></footer>

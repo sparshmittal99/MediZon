@@ -189,9 +189,9 @@ public class SalesExcelService {
     private void ordersSheet(SXSSFWorkbook wb, Styles st, List<Order> placed, Map<Long, Invoice> tax) {
         SXSSFSheet s = wb.createSheet(Section.ORDERS.title);
         header(s, st, new String[]{"Order date", "Order no.", "Invoice no.", "Invoice date", "Customer", "Place of supply",
-                        "Status", "Payment", "Payment status", "Packs", "Items value", "Delivery", "Round off", "Order total",
+                        "Status", "Payment", "Payment status", "Packs", "Items value", "Delivery", "Payment charges", "Round off", "Order total",
                         "Taxable value", "CGST", "SGST", "IGST", "Total GST", "Store", "Seller GSTIN"},
-                new int[]{14, 17, 19, 14, 22, 18, 12, 18, 14, 8, 13, 11, 11, 13, 14, 11, 11, 11, 12, 22, 18});
+                new int[]{14, 17, 19, 14, 22, 18, 12, 18, 14, 8, 13, 11, 13, 11, 13, 14, 11, 11, 11, 12, 22, 18});
         int r = 1;
         for (Order o : placed) {
             Row row = s.createRow(r++);
@@ -208,28 +208,29 @@ public class SalesExcelService {
             num(row, 9, o.getItemCount(), st.integer);
             money(row, 10, o.getSubtotal().subtract(o.getDiscount()), st.money);   // after any promo, so the columns add up
             money(row, 11, o.getDeliveryFee(), st.money);
-            money(row, 12, o.getRoundOff(), st.money);
-            money(row, 13, o.getTotal(), st.money);
+            money(row, 12, o.getPaymentFee() == null ? BigDecimal.ZERO : o.getPaymentFee(), st.money);
+            money(row, 13, o.getRoundOff(), st.money);
+            money(row, 14, o.getTotal(), st.money);
             if (inv != null) {
-                money(row, 14, inv.getTaxableTotal(), st.money);
-                money(row, 15, inv.getCgstTotal(), st.money);
-                money(row, 16, inv.getSgstTotal(), st.money);
-                money(row, 17, inv.getIgstTotal(), st.money);
-                money(row, 18, inv.getTaxTotal(), st.money);
-                text(row, 20, inv.getSeller().getGstin(), null);
+                money(row, 15, inv.getTaxableTotal(), st.money);
+                money(row, 16, inv.getCgstTotal(), st.money);
+                money(row, 17, inv.getSgstTotal(), st.money);
+                money(row, 18, inv.getIgstTotal(), st.money);
+                money(row, 19, inv.getTaxTotal(), st.money);
+                text(row, 21, inv.getSeller().getGstin(), null);
             }
-            text(row, 19, o.getStore() != null ? o.getStore().getName() : "", null);
+            text(row, 20, o.getStore() != null ? o.getStore().getName() : "", null);
         }
         // Totals leave cancelled orders out, like the rest of the report
         Row total = s.createRow(r);
         text(total, 0, "Total (excl. cancelled)", st.totalLabel);
         String status = "$G$2:$G$" + Math.max(2, r);
-        for (int c = 9; c <= 18; c++) {
+        for (int c = 9; c <= 19; c++) {
             String col = CellReference.convertNumToColString(c);
             formula(total, c, r == 1 ? "0" : "SUMIF(" + status + ",\"<>" + OrderStatus.CANCELLED.getLabel() + "\"," + col + "2:" + col + r + ")",
                     c == 9 ? st.totalInteger : st.totalMoney);
         }
-        s.setAutoFilter(new CellRangeAddress(0, Math.max(0, r - 1), 0, 20));
+        s.setAutoFilter(new CellRangeAddress(0, Math.max(0, r - 1), 0, 21));
         s.createFreezePane(2, 1);
     }
 
