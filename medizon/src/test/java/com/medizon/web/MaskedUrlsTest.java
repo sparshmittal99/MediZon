@@ -153,4 +153,42 @@ class MaskedUrlsTest {
         if (m.isAnnotationPresent(RequestMapping.class)) return paths(m.getAnnotation(RequestMapping.class).value());
         return new String[0];
     }
+
+    /** "Reminders paused." after a redirect back to the Referer (with tokens) reaches the page, which arrives with ids. */
+    @Test
+    void aRedirectsMessageReachesTheMaskedPage() throws Exception {
+        org.springframework.web.servlet.support.SessionFlashMapManager real = new org.springframework.web.servlet.support.SessionFlashMapManager();
+        org.springframework.web.servlet.FlashMapManager flash = (org.springframework.web.servlet.FlashMapManager)
+                new MaskedUrlConfig().postProcessAfterInitialization(real, MaskedUrlConfig.FLASH_BEAN);
+
+        String member = IdMask.encode(12, "member");
+        org.springframework.web.servlet.FlashMap out = new org.springframework.web.servlet.FlashMap();
+        out.put("success", "Reminders paused.");
+        out.setTargetRequestPath("/plans");
+        out.addTargetRequestParam("member", member);           // as RedirectView takes it from the Referer
+        MockHttpServletRequest post = new MockHttpServletRequest("POST", "/plans/42/toggle");
+        filterAndSave(post, flash, out);
+
+        // The browser follows the redirect to the masked page; the filter hands it on with the member's id
+        MockHttpServletRequest get = new MockHttpServletRequest("GET", "/plans");
+        get.setSession(post.getSession());
+        get.setQueryString("member=" + member);
+        get.addParameter("member", member);
+        MockFilterChain chain = new MockFilterChain();
+        new MaskedUrlFilter().doFilter(get, new MockHttpServletResponse(), chain);
+        org.springframework.web.servlet.FlashMap in = flash.retrieveAndUpdate((HttpServletRequest) chain.getRequest(), new MockHttpServletResponse());
+        assertThat((Object) in).isNotNull();
+        assertThat(in.get("success")).isEqualTo("Reminders paused.");
+
+        // A masked path is filed under its id too
+        org.springframework.web.servlet.FlashMap edit = new org.springframework.web.servlet.FlashMap();
+        edit.setTargetRequestPath("/plans/" + IdMask.encode(42, "plan") + "/edit");
+        MaskedUrlConfig.UnmaskingFlash.unmask(edit, "");
+        assertThat(edit.getTargetRequestPath()).isEqualTo("/plans/42/edit");
+    }
+
+    private static void filterAndSave(MockHttpServletRequest request, org.springframework.web.servlet.FlashMapManager flash,
+                                      org.springframework.web.servlet.FlashMap out) {
+        flash.saveOutputFlashMap(out, request, new MockHttpServletResponse());
+    }
 }
