@@ -21,6 +21,8 @@ object Notifications {
     const val CHANNEL_MISSED = "missed_alarms"
     const val CHANNEL_ANNOUNCEMENTS = "announcements"
     const val CHANNEL_UPDATES = "updates"
+    const val CHANNEL_MISSED_DOSES = "missed_doses"
+    const val CHANNEL_DOSE_UPDATES = "dose_updates"
     const val RINGING_ID = 1001
 
     private const val FLAGS = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -160,7 +162,7 @@ object Notifications {
      * After the ring stops (time out, or Back/Home on the popup): same alarms, silent, with the answer
      * buttons. Tapping it reopens the popup (silently). Swiping it away forgets them.
      */
-    fun pending(c: Context, items: List<AlarmItem>): Notification {
+    fun pending(c: Context, items: List<AlarmItem>, timeoutMs: Long? = null): Notification {
         val first = items.first()
         val b = NotificationCompat.Builder(c, CHANNEL_CALLS)
             .setSmallIcon(R.drawable.ic_stat_capsule)
@@ -180,6 +182,8 @@ object Notifications {
             .setDeleteIntent(PendingIntent.getBroadcast(
                 c, 7003, Intent(c, AlarmActionReceiver::class.java).setAction(AlarmActions.CLEAR_DUE), FLAGS
             ))
+        // Ring stopped with a phone button: the notification only stays a short while.
+        if (timeoutMs != null) b.setTimeoutAfter(timeoutMs)
         addAnswerActions(c, b, first)
         return b.build()
     }
@@ -276,6 +280,83 @@ object Notifications {
             }
         }
         if (kept != shown) Store.setShownNotices(c, kept)
+    }
+
+    private fun timeText(c: Context, millis: Long): String =
+        android.text.format.DateFormat.getTimeFormat(c).format(java.util.Date(millis))
+
+    /**
+     * 30 min after the alarm, the dose is still not marked. Taken / Skip buttons; tapping opens the
+     * popup silently. Carries the dose extras so answering the dose anywhere removes it.
+     */
+    @SuppressLint("MissingPermission")
+    fun missedDose(c: Context, check: AlarmItem) {
+        val planId = check.planId ?: return
+        val t = check.doseInstant ?: return
+        val dose = check.copy(atMillis = t) // the popup shows the dose time, not the check time
+        val name = dose.medicineName
+        val member = dose.memberName
+        val due = timeText(c, t)
+        val title = if (member == null) "Missed dose: $name" else "Missed dose: $name for $member"
+        val text = if (member == null) {
+            "Your $due dose isn't marked yet. Take it now and tap Taken. Already taken it? Tap Taken, or just ignore this."
+        } else {
+            "$member's $due dose isn't marked yet. Give it now and tap Taken. Already taken? Tap Taken, or just ignore this."
+        }
+        val b = NotificationCompat.Builder(c, CHANNEL_MISSED_DOSES)
+            .setSmallIcon(R.drawable.ic_stat_capsule)
+            .setLargeIcon(logo(c))
+            .setColor(ContextCompat.getColor(c, R.color.mz_green))
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setAutoCancel(true)
+            .setWhen(t)
+            .setShowWhen(true)
+            .setContentIntent(silentPopupIntent(c, dose))
+            .addAction(0, c.getString(R.string.taken), action(c, AlarmActions.TAKEN, dose))
+            .addAction(0, c.getString(R.string.skip), action(c, AlarmActions.SKIP, dose))
+            .addExtras(android.os.Bundle().apply {
+                putLong(EXTRA_PLAN_ID, planId)
+                putLong(EXTRA_DOSE_AT, t)
+            })
+        try {
+            NotificationManagerCompat.from(c).notify(("missed-dose-$planId@$t").hashCode(), b.build())
+        } catch (e: SecurityException) { /* notifications not permitted */ }
+    }
+
+    /** Right after Taken / Skip on an alarm: "Metformin — taken · Taken by Asha at 9:05 AM (9:00 AM dose)". */
+    @SuppressLint("MissingPermission")
+    fun doseMarked(c: Context, item: AlarmItem, taken: Boolean) {
+        val planId = item.planId ?: return
+        val t = item.doseInstant ?: return
+        val now = System.currentTimeMillis()
+        val by = item.memberName ?: "you"
+        val title = "${item.medicineName} — ${if (taken) "taken" else "skipped"}"
+        val text = "${if (taken) "Taken" else "Skipped"} by $by at ${timeText(c, now)} (${timeText(c, t)} dose)."
+        val open = PendingIntent.getActivity(
+            c, ("done-open-$planId@$t").hashCode(), MainActivity.openIntent(c, item.path), FLAGS
+        )
+        val n = NotificationCompat.Builder(c, CHANNEL_DOSE_UPDATES)
+            .setSmallIcon(R.drawable.ic_stat_capsule)
+            .setColor(ContextCompat.getColor(c, R.color.mz_green))
+            .setContentTitle(title)
+            .setContentText(text)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setWhen(now)
+            .setShowWhen(true)
+            .setContentIntent(open)
+            .build()
+        try {
+            NotificationManagerCompat.from(c).notify(("done-$planId@$t").hashCode(), n)
+        } catch (e: SecurityException) { /* notifications not permitted */ }
     }
 
     @SuppressLint("MissingPermission")

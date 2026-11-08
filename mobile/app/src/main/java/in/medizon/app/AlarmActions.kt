@@ -13,6 +13,9 @@ object AlarmActions {
     const val DISMISS = "in.medizon.app.action.DISMISS"
     const val SNOOZE_ALL = "in.medizon.app.action.SNOOZE_ALL"
     const val CLEAR_DUE = "in.medizon.app.action.CLEAR_DUE"
+    /** 2 min after a phone button stopped the ring: forget the alarms that were ringing then. */
+    const val EXPIRE_DUE = "in.medizon.app.action.EXPIRE_DUE"
+    const val EXTRA_IDS = "in.medizon.app.ids"
 
 
     /** Main thread. Returns the toast text, or null. */
@@ -30,6 +33,10 @@ object AlarmActions {
         }
         Notifications.cancelReminder(c, item)
         AlarmService.resolve(c, item.id)
+        // Phone notification only (no in-app / email): "Metformin — taken · Taken by you at 9:05 AM".
+        if ((action == TAKEN || action == SKIP) && item.isDose && item.at.isNotBlank()) {
+            Notifications.doseMarked(c, item, taken = action == TAKEN)
+        }
         return msg
     }
 
@@ -68,6 +75,11 @@ class AlarmActionReceiver : BroadcastReceiver() {
             AlarmService.clearDue(context)
             return
         }
+        if (action == AlarmActions.EXPIRE_DUE) {
+            val ids = intent.getStringArrayExtra(AlarmActions.EXTRA_IDS)?.toSet() ?: return
+            AlarmService.expire(context, ids)
+            return
+        }
         if (action == AlarmActions.SNOOZE_ALL) {
             AlarmActions.snoozeAll(context)
             Toast.makeText(context, "Snoozed for ${AppSettings.snoozeMinutes(context)} minutes", Toast.LENGTH_SHORT).show()
@@ -83,6 +95,10 @@ class AlarmActionReceiver : BroadcastReceiver() {
 /** Fired by AlarmManager at the alarm time. */
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == AlarmScheduler.ACTION_FOLLOW_UP) {
+            AlarmItem.fromIntent(intent)?.let { followUp(context, it) }
+            return
+        }
         if (intent.action != AlarmScheduler.ACTION_FIRE) return
         val item = AlarmItem.fromIntent(intent) ?: return
         Store.removeOneOff(context, item.id)
@@ -91,6 +107,8 @@ class AlarmReceiver : BroadcastReceiver() {
             Notifications.missed(context, item)
             return
         }
+        // Not answered 30 min from now -> "Missed dose" notification (phone only).
+        if (item.isDose) AlarmScheduler.scheduleFollowUp(context, item)
         if (!AppSettings.ringPhone(context)) {
             // Notification only: heads-up with the default sound once, no ringing service.
             Notifications.reminder(context, item)
@@ -102,6 +120,30 @@ class AlarmReceiver : BroadcastReceiver() {
             // e.g. ForegroundServiceStartNotAllowedException if the OS refuses; at least leave a notification.
             Notifications.missed(context, item)
         }
+    }
+
+    /**
+     * 30 min after a dose alarm rang. Answers cancel this check, so getting here means the dose is
+     * still unmarked as far as this phone knows. Unmarked doses are closed at the end of the day anyway,
+     * so this is only a nudge.
+     */
+    private fun followUp(c: Context, check: AlarmItem) {
+        AlarmScheduler.removeFollowUp(c, check.id)
+        val planId = check.planId ?: return
+        val t = check.doseInstant ?: return
+        val now = System.currentTimeMillis()
+        if (AlarmService.isDismissed(check)) return
+        // Answered on this phone but not sent yet (offline).
+        if (Store.doseQueue(c).any { it.optLong("planId") == planId && instantOf(it.optString("at")) == t }) return
+        // Snoozed and will ring again: that ring sets its own check.
+        if (Store.oneOffs(c).any { it.isSameDose(planId, t) && it.atMillis > now }) return
+        Notifications.missedDose(c, check)
+    }
+
+    private fun instantOf(at: String): Long? = try {
+        java.time.OffsetDateTime.parse(at).toInstant().toEpochMilli()
+    } catch (e: Exception) {
+        null
     }
 }
 

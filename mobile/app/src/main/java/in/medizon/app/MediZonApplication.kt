@@ -50,6 +50,21 @@ class MediZonApplication : Application() {
         val updates = NotificationChannel(
             Notifications.CHANNEL_UPDATES, getString(R.string.channel_updates), NotificationManager.IMPORTANCE_HIGH
         ).apply { description = getString(R.string.channel_updates_desc) }
-        nm.createNotificationChannels(listOf(calls, reminders, missed, announcements, updates))
+        // 30 min after an unanswered dose alarm: heads-up with sound.
+        val missedDoses = NotificationChannel(
+            Notifications.CHANNEL_MISSED_DOSES, getString(R.string.channel_missed_doses), NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = getString(R.string.channel_missed_doses_desc)
+            enableVibration(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+        // "Taken by you at 9:05 AM" right after answering an alarm.
+        val doseUpdates = NotificationChannel(
+            Notifications.CHANNEL_DOSE_UPDATES, getString(R.string.channel_dose_updates), NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = getString(R.string.channel_dose_updates_desc)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+        nm.createNotificationChannels(listOf(calls, reminders, missed, missedDoses, doseUpdates, announcements, updates))
     }
 }

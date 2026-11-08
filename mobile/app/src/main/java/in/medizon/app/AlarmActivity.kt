@@ -67,6 +67,11 @@ class AlarmActivity : AppCompatActivity() {
 
         addSilentItem(intent)
 
+        // Kept while stopped too: the power button stops this activity before the service hears screen-off.
+        val close: () -> Unit = { if (!isFinishing) finish() }
+        AlarmService.closePopup = close
+        closeHook = close
+
         // Back: stop ringing and close; the alarm stays in a silent notification with its actions.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = leave()
@@ -89,6 +94,15 @@ class AlarmActivity : AppCompatActivity() {
         AlarmService.listener = { render() }
         render()
         startAnimations()
+    }
+
+    /** Volume keys while ringing: stop the ring, keep the alarm in a notification for 2 min (AlarmService). */
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (AlarmService.isRinging() && keyCode in SILENCE_KEYS) {
+            AlarmService.silenceByButton(this)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     /** Home / Recents. */
@@ -114,6 +128,13 @@ class AlarmActivity : AppCompatActivity() {
         super.onStop()
     }
 
+    private var closeHook: (() -> Unit)? = null
+
+    override fun onDestroy() {
+        if (AlarmService.closePopup === closeHook) AlarmService.closePopup = null
+        super.onDestroy()
+    }
+
     private fun items(): List<AlarmItem> {
         val ringing = AlarmService.activeAlarms(this)
         silentItems.removeAll { AlarmService.isDismissed(it) } // answered elsewhere
@@ -134,13 +155,12 @@ class AlarmActivity : AppCompatActivity() {
         pagerView.text = "1 of ${all.size}"
 
         // "Metformin (Asha)" -> title "Metformin", member line "for Asha"
-        val m = Regex("""^(.*\S)\s*\(([^()]+)\)\s*$""").find(item.title)
-        if (m != null) {
-            titleView.text = m.groupValues[1]
-            memberView.text = "for ${m.groupValues[2]}"
+        titleView.text = item.medicineName
+        val member = item.memberName
+        if (member != null) {
+            memberView.text = "for $member"
             memberView.visibility = View.VISIBLE
         } else {
-            titleView.text = item.title
             memberView.visibility = View.GONE
         }
         bodyView.text = item.body.replace(" · ", "\n")
@@ -170,6 +190,14 @@ class AlarmActivity : AppCompatActivity() {
         val msg = AlarmActions.perform(this, action, item)
         if (msg != null) Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         render() // next alarm, or finish after the last
+    }
+
+    private companion object {
+        val SILENCE_KEYS = setOf(
+            android.view.KeyEvent.KEYCODE_VOLUME_UP,
+            android.view.KeyEvent.KEYCODE_VOLUME_DOWN,
+            android.view.KeyEvent.KEYCODE_VOLUME_MUTE,
+        )
     }
 
     private fun startAnimations() {

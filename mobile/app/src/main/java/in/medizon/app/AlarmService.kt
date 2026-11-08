@@ -44,6 +44,52 @@ class AlarmService : Service() {
         /** Called by AlarmActivity to re-render when the list changes. Main thread only. */
         var listener: (() -> Unit)? = null
 
+        /** Set by AlarmActivity: a phone button stopped the ring, so the popup closes. Main thread only. */
+        var closePopup: (() -> Unit)? = null
+
+        /** How long the silent notification stays after a phone button stopped the ring. */
+        private const val BUTTON_KEEP_MS = 2 * 60 * 1000L
+        /** Screen-off right after the ring starts can be the device settling, not the power button. */
+        private const val SCREEN_OFF_GRACE_MS = 3_000L
+
+        /**
+         * Volume / power pressed while ringing: stop the ring and close the popup, keep the alarms in a
+         * silent notification for 2 minutes (tap = popup again, no ringing), then forget them.
+         */
+        fun silenceByButton(c: Context) {
+            instance?.buttonSilence()
+        }
+
+        /** The 2 minutes are over: drop the alarms that were ringing when the button was pressed. */
+        fun expire(c: Context, ids: Set<String>) {
+            val list = due(c)
+            if (!list.removeAll { it.id in ids }) return
+            saveDue(c)
+            val svc = instance
+            if (svc != null) {
+                svc.afterRemove()
+            } else {
+                showPendingOrCancel(c)
+                listener?.invoke()
+            }
+        }
+
+        private fun scheduleExpiry(c: Context, ids: List<String>, at: Long) {
+            val op = android.app.PendingIntent.getBroadcast(
+                c, 7004,
+                Intent(c, AlarmActionReceiver::class.java)
+                    .setAction(AlarmActions.EXPIRE_DUE)
+                    .putExtra(AlarmActions.EXTRA_IDS, ids.toTypedArray()),
+                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val am = c.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            try {
+                am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, op)
+            } catch (e: SecurityException) {
+                am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, op)
+            }
+        }
+
         private fun due(c: Context): MutableList<AlarmItem> {
             dueCache?.let { return it }
             val cutoff = System.currentTimeMillis() - DUE_MAX_AGE_MS
@@ -92,6 +138,7 @@ class AlarmService : Service() {
                 }
             }
 
+            AlarmScheduler.cancelFollowUps(c, planId, t)
             removed.forEach { Notifications.cancelReminder(c, it) }
             Notifications.cancelDoseNotifications(c, planId, t)
 
@@ -149,8 +196,9 @@ class AlarmService : Service() {
             if (list.isEmpty()) {
                 nm.cancel(Notifications.RINGING_ID)
             } else {
+                val left = Store.pendingUntil(c) - System.currentTimeMillis()
                 try {
-                    nm.notify(Notifications.RINGING_ID, Notifications.pending(c, list))
+                    nm.notify(Notifications.RINGING_ID, Notifications.pending(c, list, left.takeIf { it > 0 }))
                 } catch (e: SecurityException) { /* notifications off */ }
             }
         }
@@ -180,6 +228,7 @@ class AlarmService : Service() {
         val item = AlarmItem.fromIntent(intent)
         val list = due(this)
         if (item != null) {
+            Store.setPendingUntil(this, 0L) // a new ring: its notification has no 2-minute limit
             list.removeAll { it.id == item.id }
             list.add(item)
             list.sortByDescending { it.sortKey } // newest scheduled dose first
@@ -224,6 +273,47 @@ class AlarmService : Service() {
         listener?.invoke()
     }
 
+    private fun buttonSilence() {
+        if (instance !== this) return
+        val until = System.currentTimeMillis() + BUTTON_KEEP_MS
+        Store.setPendingUntil(this, until)
+        scheduleExpiry(this, due(this).map { it.id }, until)
+        silenceNow() // posts the silent notification with the 2-minute timeout
+        closePopup?.invoke()
+    }
+
+    private var buttonReceiver: android.content.BroadcastReceiver? = null
+    private var ringStartedAt = 0L
+
+    /** Power (screen off) and volume presses while ringing, also when the popup isn't on screen. */
+    private fun watchButtons() {
+        if (buttonReceiver != null) return
+        ringStartedAt = android.os.SystemClock.elapsedRealtime()
+        val r = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == Intent.ACTION_SCREEN_OFF &&
+                    android.os.SystemClock.elapsedRealtime() - ringStartedAt < SCREEN_OFF_GRACE_MS
+                ) return
+                buttonSilence()
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction("android.media.VOLUME_CHANGED_ACTION")
+        }
+        try {
+            ContextCompat.registerReceiver(this, r, filter, ContextCompat.RECEIVER_EXPORTED)
+            buttonReceiver = r
+        } catch (e: Exception) {
+            Log.w(TAG, "cannot watch phone buttons", e)
+        }
+    }
+
+    private fun unwatchButtons() {
+        buttonReceiver?.let { try { unregisterReceiver(it) } catch (e: Exception) { } }
+        buttonReceiver = null
+    }
+
     /** Ring time over, or the user left the popup: quiet now, keep a silent notification. */
     private fun silenceNow() {
         if (instance === this) instance = null
@@ -236,6 +326,7 @@ class AlarmService : Service() {
     }
 
     private fun startRinging() {
+        watchButtons()
         val ringMs = AppSettings.ringSeconds(this) * 1000L
         if (wakeLock == null) {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -304,6 +395,7 @@ class AlarmService : Service() {
     }
 
     private fun stopRinging() {
+        unwatchButtons()
         player?.let { try { it.stop() } catch (e: Exception) { }; it.release() }
         player = null
         vibrator?.cancel()

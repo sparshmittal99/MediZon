@@ -115,6 +115,14 @@ object Store {
     fun dueAlarms(c: Context): List<AlarmItem> = readItems(c, "dueAlarms")
     fun saveDueAlarms(c: Context, items: List<AlarmItem>) = writeItems(c, "dueAlarms", items)
 
+    // ---- after a phone button stopped the ring: the silent notification is kept until this time (0 = no limit) ----
+    fun pendingUntil(c: Context): Long = prefs(c).getLong("pendingUntil", 0L)
+    fun setPendingUntil(c: Context, millis: Long) = prefs(c).edit().putLong("pendingUntil", millis).apply()
+
+    // ---- missed-dose checks, 30 min after a dose alarm rang (AlarmItem with atMillis = check time) ----
+    fun followUps(c: Context): List<AlarmItem> = readItems(c, "followUps")
+    fun saveFollowUps(c: Context, items: List<AlarmItem>) = writeItems(c, "followUps", items)
+
     // ---- FCM token last sent to the server ----
     fun lastPushToken(c: Context): String? = prefs(c).getString("lastPushToken", null)
     fun setLastPushToken(c: Context, token: String?) = prefs(c).edit().putString("lastPushToken", token).apply()

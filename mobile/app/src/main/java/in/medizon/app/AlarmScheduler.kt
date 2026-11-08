@@ -91,6 +91,7 @@ object AlarmScheduler {
         val now = System.currentTimeMillis()
         Store.schedule(c).filter { it.atMillis > now }.forEach { schedule(c, it) }
         Store.oneOffs(c).forEach { if (it.atMillis > now) schedule(c, it) else Store.removeOneOff(c, it.id) }
+        rescheduleFollowUps(c)
     }
 
     fun scheduleOneOff(c: Context, item: AlarmItem) {
@@ -102,6 +103,89 @@ object AlarmScheduler {
         Store.schedule(c).forEach { cancel(c, it.id) }
         Store.oneOffs(c).forEach { cancel(c, it.id) }
         Store.clearOneOffs(c)
+        synchronized(Store.lock) {
+            Store.followUps(c).forEach { cancelFollowUpAlarm(c, it.id) }
+            Store.saveFollowUps(c, emptyList())
+        }
+    }
+
+    // ---- missed-dose check, 30 min after a dose alarm rang ----
+
+    const val ACTION_FOLLOW_UP = "in.medizon.app.action.DOSE_FOLLOW_UP"
+    const val FOLLOW_UP_DELAY_MS = 30 * 60 * 1000L
+    /** After a reboot, checks older than this are dropped instead of shown late. */
+    private const val FOLLOW_UP_MAX_LATE_MS = 2 * 60 * 60 * 1000L
+
+    private fun followUpOp(c: Context, id: String, item: AlarmItem?): PendingIntent {
+        val intent = Intent(c, AlarmReceiver::class.java)
+            .setAction(ACTION_FOLLOW_UP)
+            .setData(Uri.parse("medizon-followup://dose/" + Uri.encode(id)))
+        if (item != null) item.putInto(intent)
+        return PendingIntent.getBroadcast(
+            c, ("followup-" + id).hashCode(), intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
+    /**
+     * A dose alarm just went off: check again in 30 min whether it was answered. One check per dose;
+     * a later ring of the same dose (snooze) moves it. Answering the dose cancels it ([cancelFollowUps]).
+     */
+    fun scheduleFollowUp(c: Context, dose: AlarmItem) {
+        val planId = dose.planId ?: return
+        val t = dose.doseInstant ?: return
+        val check = dose.copy(id = "followup-$planId@$t", atMillis = System.currentTimeMillis() + FOLLOW_UP_DELAY_MS)
+        synchronized(Store.lock) {
+            Store.saveFollowUps(c, Store.followUps(c).filter { it.id != check.id } + check)
+        }
+        armFollowUp(c, check)
+    }
+
+    private fun armFollowUp(c: Context, check: AlarmItem) {
+        // Not setAlarmClock: a background check shouldn't show the alarm-clock icon.
+        val am = alarmManager(c)
+        val op = followUpOp(c, check.id, check)
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, check.atMillis, op)
+            return
+        } catch (e: SecurityException) {
+            Log.w(TAG, "exact follow-up not allowed, falling back", e)
+        }
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, check.atMillis, op)
+    }
+
+    private fun cancelFollowUpAlarm(c: Context, id: String) {
+        val op = followUpOp(c, id, null)
+        alarmManager(c).cancel(op)
+        op.cancel()
+    }
+
+    /** The dose was answered (here, on another phone or the website): no missed-dose notification. */
+    fun cancelFollowUps(c: Context, planId: Long, instant: Long) {
+        synchronized(Store.lock) {
+            val all = Store.followUps(c)
+            val hit = all.filter { it.isSameDose(planId, instant) }
+            if (hit.isEmpty()) return
+            hit.forEach { cancelFollowUpAlarm(c, it.id) }
+            Store.saveFollowUps(c, all.filter { !it.isSameDose(planId, instant) })
+        }
+    }
+
+    /** The check went off: forget it. */
+    fun removeFollowUp(c: Context, id: String) {
+        synchronized(Store.lock) {
+            val all = Store.followUps(c)
+            if (all.any { it.id == id }) Store.saveFollowUps(c, all.filter { it.id != id })
+        }
+    }
+
+    private fun rescheduleFollowUps(c: Context) {
+        val now = System.currentTimeMillis()
+        synchronized(Store.lock) {
+            val (keep, drop) = Store.followUps(c).partition { now - it.atMillis < FOLLOW_UP_MAX_LATE_MS }
+            keep.forEach { armFollowUp(c, it) } // a past time fires right away
+            if (drop.isNotEmpty()) Store.saveFollowUps(c, keep)
+        }
     }
 
     fun countScheduled(c: Context): Int {

@@ -26,6 +26,12 @@ data class AlarmItem(
             null
         }
 
+    /** "Metformin (Asha)" -> "Metformin"; titles without a member suffix are returned as is. */
+    val medicineName: String get() = TITLE_MEMBER.find(title)?.groupValues?.get(1) ?: title
+
+    /** "Metformin (Asha)" -> "Asha"; null when the dose is the account holder's own. */
+    val memberName: String? get() = TITLE_MEMBER.find(title)?.groupValues?.get(2)
+
     /** Sort key: newest scheduled time first everywhere (snoozed copies keep their dose time). */
     val sortKey: Long get() = doseInstant ?: atMillis
 
@@ -51,6 +57,9 @@ data class AlarmItem(
 
     companion object {
         const val EXTRA_JSON = "in.medizon.app.ALARM_JSON"
+
+        /** The server titles a family member's dose "Medicine (Member)". */
+        private val TITLE_MEMBER = Regex("""^(.*\S)\s*\(([^()]+)\)\s*$""")
 
         /** Parses an item from the server schedule. Returns null for anything malformed. */
         fun fromServer(o: JSONObject): AlarmItem? = try {
