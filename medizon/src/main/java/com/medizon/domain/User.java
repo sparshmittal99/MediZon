@@ -69,6 +69,39 @@ public class User {
     @Column(columnDefinition = "integer not null default 0")
     private int loginCount;
 
+    /** The Google account ("sub") this account signs in with, once it has used Sign in with Google. */
+    @Column(length = 64, unique = true)
+    private String googleSubject;
+
+    /**
+     * False for an account made with Google: it has a random password nobody knows, so Account settings doesn't ask
+     * for one (deleting it takes typing DELETE). A password reset sets one.
+     */
+    @Column(columnDefinition = "boolean not null default true")
+    private boolean passwordSet = true;
+
+    /** The authenticator app's secret, encrypted (TwoFactorService); null while 2FA is off. */
+    @Column(length = 200)
+    private String twoFactorSecret;
+
+    /** When 2FA was turned on; null while it's off. */
+    private LocalDateTime twoFactorEnabledAt;
+
+    /** SHA-256 hashes of the unused backup codes, comma separated. */
+    @Column(length = 1000)
+    private String twoFactorBackupCodes;
+
+    /** The last 30-second step a code was accepted for, so the same code can't be used twice. */
+    @Column(columnDefinition = "bigint not null default 0")
+    private long twoFactorLastStep;
+
+    public boolean isTwoFactorEnabled() { return twoFactorEnabledAt != null && twoFactorSecret != null; }
+
+    /** Unused backup codes left. */
+    public int getBackupCodesLeft() {
+        return twoFactorBackupCodes == null || twoFactorBackupCodes.isBlank() ? 0 : twoFactorBackupCodes.split(",").length;
+    }
+
     public boolean isAdmin() { return role == Role.ADMIN; }
 
     /** Any back-office account: admin, pharmacist, support, finance or store. Staff can't shop. */

@@ -29,14 +29,17 @@ class AdminSingleSignInTest {
     private final PasswordEncoder encoder = config.passwordEncoder();
     private final UserRepository users = mock(UserRepository.class);
     private final SignInService signIns = mock(SignInService.class);
+    private final SignInFlow flow = mock(SignInFlow.class);
+    private MockHttpServletRequest request;
     private DaoAuthenticationProvider provider;
 
     @BeforeEach
     void setUp() {
         account("admin@medizon.in", Role.ADMIN);
         account("asha@example.com", Role.CUSTOMER);
-        provider = config.authenticationProvider(new AppUserDetailsService(users), encoder, signIns);
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest("POST", "/login")));
+        provider = config.authenticationProvider(new AppUserDetailsService(users), encoder, signIns, flow);
+        request = new MockHttpServletRequest("POST", "/login");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 
     @AfterEach
@@ -73,11 +76,27 @@ class AdminSingleSignInTest {
     void aWrongPasswordIsJustAWrongPassword() {
         assertThrows(BadCredentialsException.class, () -> provider.authenticate(signIn("admin@medizon.in", "nope")));
         verifyNoInteractions(signIns);    // whether the admin is signed in somewhere isn't given away
+        verifyNoInteractions(flow);       // nor whether the account has 2FA on
     }
 
     @Test
     void customersCanSignInOnAnyNumberOfDevices() {
         assertThat(provider.authenticate(signIn("asha@example.com", "secret")).isAuthenticated()).isTrue();
         verifyNoInteractions(signIns);
+    }
+
+    @Test
+    void theRightPasswordOnAnAccountWithTwoFactorWaitsForTheCode() {
+        when(flow.needsCode(eq("asha@example.com"), any())).thenReturn(true);
+        assertThat(provider.authenticate(signIn("asha@example.com", "secret")).isAuthenticated()).isTrue();
+        // Marked, so no remember-me cookie is set and the success handler asks for the code instead of signing in
+        assertThat(request.getAttribute(SignInFlow.NEEDS_CODE)).isEqualTo(Boolean.TRUE);
+    }
+
+    @Test
+    void aTrustedDeviceOrNoTwoFactorSignsStraightIn() {
+        when(flow.needsCode(eq("asha@example.com"), any())).thenReturn(false);
+        provider.authenticate(signIn("asha@example.com", "secret"));
+        assertThat(request.getAttribute(SignInFlow.NEEDS_CODE)).isNull();
     }
 }

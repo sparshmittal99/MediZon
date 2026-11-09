@@ -2,6 +2,7 @@ package com.medizon.config;
 
 import com.medizon.repository.UserRepository;
 import com.medizon.service.CartService;
+import com.medizon.service.GoogleAccountService;
 import com.medizon.service.SignInService;
 import com.medizon.service.UserService;
 import jakarta.servlet.FilterChain;
@@ -9,7 +10,13 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -114,7 +121,9 @@ public class SecurityConfig {
                                            @Lazy CartService cartService, LoginThrottle loginThrottle,
                                            @Value("${medizon.monitoring.token:}") String monitoringToken,
                                            MediZonRememberMeServices rememberMeServices,
-                                           UserRepository users, @Lazy SignInService signIns) throws Exception {
+                                           UserRepository users, @Lazy SignInService signIns, @Lazy SignInFlow signInFlow,
+                                           @Lazy GoogleAccountService googleAccounts,
+                                           ObjectProvider<ClientRegistrationRepository> google) throws Exception {
         http
             // Refuses sign-in while an email or address is locked out for too many wrong passwords
             .addFilterBefore(loginThrottleFilter(loginThrottle), UsernamePasswordAuthenticationFilter.class)
@@ -132,7 +141,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/app/link", "/api/app/unlink").hasRole("CUSTOMER")
                 // Razorpay's webhook: signed with the webhook secret, checked in RazorpayWebhookApi
                 .requestMatchers(HttpMethod.POST, com.medizon.api.RazorpayWebhookApi.PATH).permitAll()
-                .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/settings", "/register", "/login", "/forgot-password", "/verify-code", "/reset-password", "/resend-code", "/api/auth/**",
+                .requestMatchers("/", "/medicines", "/medicines/**", "/help", "/settings", "/register", "/login", "/login/**", "/account/secure", "/forgot-password", "/verify-code", "/reset-password", "/resend-code", "/api/auth/**",
                         "/css/**", "/js/**", "/images/**", "/medicine-images/**", "/error").permitAll()
                 // Site icons, also under their content-hashed names (favicon-3f9a….svg) from the resource chain
                 .requestMatchers("/favicon*", "/apple-touch-icon*").permitAll()
@@ -182,7 +191,8 @@ public class SecurityConfig {
             .formLogin(form -> form
                 .loginPage("/login")
                 .usernameParameter("email")
-                .successHandler(successHandler(userService, cartService, loginThrottle, signIns))
+                // A 2FA code next when the account has it on and this device isn't trusted (SignInFlow)
+                .successHandler((request, response, authentication) -> signInFlow.afterPassword(request, response, authentication))
                 .failureHandler(failureHandler(loginThrottle))
                 .permitAll())
             .logout(logout -> logout
@@ -203,28 +213,40 @@ public class SecurityConfig {
                 .maximumSessions(-1)            // no limit on concurrent sessions per account
                 .sessionRegistry(sessionRegistry)
                 .expiredUrl("/login?expired"));
+        // Sign in with Google on the website, when GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set (GoogleSignInConfig)
+        if (google.getIfAvailable() != null) {
+            http.oauth2Login(oauth -> oauth
+                .loginPage("/login")
+                .successHandler(googleSuccessHandler(googleAccounts, signInFlow))
+                .failureHandler((request, response, e) -> {
+                    log.info("Sign in with Google failed: {}", e.getMessage());
+                    response.sendRedirect(request.getContextPath() + "/login?google=failed");
+                }));
+        }
         return http.build();
     }
 
     /**
-     * Admins land on the dashboard; customers go back to what they were doing (checkout, when they signed in from
-     * the cart). Anything put in the cart before signing in moves into the account's cart.
+     * Back from Google: the MediZon account for that Google account (linked or made), then a 2FA code if needed. The
+     * Google sign-in itself is replaced by the MediZon account's (SignInFlow), so the rest of the app sees an email.
      */
-    private AuthenticationSuccessHandler successHandler(UserService userService, CartService cartService,
-                                                        LoginThrottle loginThrottle, SignInService signIns) {
-        SavedRequestAwareAuthenticationSuccessHandler customer = new SavedRequestAwareAuthenticationSuccessHandler();
-        customer.setDefaultTargetUrl("/");
+    private AuthenticationSuccessHandler googleSuccessHandler(GoogleAccountService googleAccounts, SignInFlow signInFlow) {
         return (request, response, authentication) -> {
-            loginThrottle.succeeded(authentication.getName());
-            userService.recordLogin(authentication.getName()).ifPresent(u -> {
-                SignInService.started(request.getSession(), u.getRememberEpoch());
-                signIns.signedInAgain(u, request);    // in case this device was signed out from another one
-                cartService.mergeGuestCart(u, request.getSession(false));
-            });
-            boolean staff = authentication.getAuthorities().stream()
-                    .anyMatch(a -> a.getAuthority().equals("ROLE_STAFF"));
-            if (staff) response.sendRedirect(request.getContextPath() + "/admin");
-            else customer.onAuthenticationSuccess(request, response, authentication);
+            HttpSession session = request.getSession();
+            boolean remember = Boolean.TRUE.equals(session.getAttribute(SignInFlow.GOOGLE_REMEMBER));
+            session.removeAttribute(SignInFlow.GOOGLE_REMEMBER);
+            try {
+                if (!(authentication.getPrincipal() instanceof OidcUser google)) {
+                    throw new GoogleAccountService.Refused(GoogleAccountService.Refusal.FAILED);
+                }
+                GoogleAccountService.Result r = googleAccounts.resolve(google.getSubject(), google.getEmail(),
+                        Boolean.TRUE.equals(google.getEmailVerified()), google.getFullName());
+                signInFlow.afterGoogle(request, response, r.user(), remember, r.created());
+            } catch (GoogleAccountService.Refused e) {
+                SecurityContextHolder.clearContext();
+                session.removeAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+                response.sendRedirect(request.getContextPath() + "/login?google=" + e.reason().name().toLowerCase());
+            }
         };
     }
 
@@ -274,7 +296,8 @@ public class SecurityConfig {
      */
     @Bean
     public DaoAuthenticationProvider authenticationProvider(AppUserDetailsService userDetailsService,
-                                                            PasswordEncoder passwordEncoder, @Lazy SignInService signIns) {
+                                                            PasswordEncoder passwordEncoder, @Lazy SignInService signIns,
+                                                            @Lazy SignInFlow signInFlow) {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder);
@@ -283,6 +306,12 @@ public class SecurityConfig {
             if (admin && RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs
                     && !signIns.claimOnlySignIn(user.getUsername(), attrs.getRequest())) {
                 throw new AdminInUseException();
+            }
+            // Right password, but the account has 2FA on and this device isn't trusted: a code comes next, and no
+            // "Keep me signed in" cookie until then (SignInFlow, MediZonRememberMeServices)
+            if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs
+                    && signInFlow.needsCode(user.getUsername(), attrs.getRequest())) {
+                attrs.getRequest().setAttribute(SignInFlow.NEEDS_CODE, Boolean.TRUE);
             }
         });
         return provider;

@@ -1,9 +1,13 @@
 package com.medizon.web;
 
+import com.medizon.config.GoogleIdTokens;
 import com.medizon.dto.RegisterForm;
 import com.medizon.service.BusinessException;
 import com.medizon.service.UserService;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -20,6 +24,14 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class AuthController {
 
     private final UserService userService;
+    private final ObjectProvider<ClientRegistrationRepository> google;
+    private final GoogleIdTokens googleIdTokens;
+
+    /** The Google button on the sign-in and create-account pages (shown once Google sign-in is set up). */
+    @ModelAttribute
+    public void googleButton(Model model, HttpSession session) {
+        GoogleSignInController.addTo(model, session, google.getIfAvailable() != null, googleIdTokens);
+    }
 
     /**
      * Someone already signed in (back button after signing in, an old tab, a bookmark) goes to their home page

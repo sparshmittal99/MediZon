@@ -62,6 +62,7 @@ public class AdminController {
     private final StoreService storeService;
     private final StoreCatalogService storeCatalog;
     private final AccountDeletionService accountDeletion;
+    private final TwoFactorService twoFactorService;
     private final CurrentUser currentUser;
 
     /** The admin's overview; other staff go straight to their own work. */
@@ -319,6 +320,15 @@ public class AdminController {
                               RedirectAttributes ra) {
         User u = userService.setPasswordByAdmin(id, newPassword, confirmPassword, currentUser.get());
         ra.addFlashAttribute("success", u.getFullName() + "'s password is changed and they're signed out everywhere. Let them know the new one.");
+        return "redirect:/admin/users";
+    }
+
+    /** Turns two-step verification off for an account that lost its phone and its backup codes. */
+    @PostMapping("/users/{id}/two-factor/reset")
+    public String resetTwoFactor(@PathVariable Long id, RedirectAttributes ra) {
+        User u = twoFactorService.resetByAdmin(id, currentUser.get());
+        ra.addFlashAttribute("success", "Two-step verification is off for " + u.getFullName()
+                + ". They sign in with their password or Google account only, and can turn it on again in Account settings.");
         return "redirect:/admin/users";
     }
 

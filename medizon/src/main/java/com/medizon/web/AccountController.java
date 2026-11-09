@@ -5,6 +5,7 @@ import com.medizon.domain.User;
 import com.medizon.service.AccountDeletionService;
 import com.medizon.service.CurrentUser;
 import com.medizon.service.SignInService;
+import com.medizon.service.TrustedDeviceService;
 import com.medizon.service.UserService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,12 +32,14 @@ public class AccountController {
     private final CurrentUser currentUser;
     private final MediZonRememberMeServices rememberMe;
     private final SignInService signIns;
+    private final TrustedDeviceService trustedDevices;
 
     @GetMapping
     public String view(Model model) {
         User u = currentUser.get();
         model.addAttribute("sessions", userService.sessionCount(u));
         model.addAttribute("minPassword", UserService.MIN_PASSWORD);
+        model.addAttribute("trustedDevices", u.isTwoFactorEnabled() ? trustedDevices.count(u) : 0L);
         return "account";
     }
 

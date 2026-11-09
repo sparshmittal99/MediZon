@@ -22,8 +22,9 @@
         <div class="col-lg-4">
             <nav class="mz-account-nav" aria-label="Account">
                 <a href="#signin"><i class="bi bi-person-badge" aria-hidden="true"></i>Sign-in details</a>
-                <a href="#password" th:unless="${me.admin}"><i class="bi bi-key" aria-hidden="true"></i>Change password</a>
+                <a href="#password" th:unless="${me.admin or !me.passwordSet}"><i class="bi bi-key" aria-hidden="true"></i>Change password</a>
                 <a href="#devices"><i class="bi bi-laptop" aria-hidden="true"></i>Signed-in devices</a>
+                <a href="#two-factor"><i class="bi bi-shield-lock" aria-hidden="true"></i>Two-step verification</a>
                 <a th:href="@{/profile}"><i class="bi bi-person" aria-hidden="true"></i>Profile</a>
                 <a th:href="@{/settings}" data-mz-settings-link><i class="bi bi-sliders2" aria-hidden="true"></i>Settings</a>
                 <a sec:authorize="hasRole('CUSTOMER')" th:href="@{/addresses}"><i class="bi bi-geo-alt" aria-hidden="true"></i>Saved addresses</a>
@@ -40,6 +41,8 @@
                 <h2 class="h5 mb-3">Sign-in details</h2>
                 <dl class="mz-account-dl mb-0">
                     <dt>Email</dt><dd th:text="${me.email}"></dd>
+                    <dt>Sign in with</dt>
+                    <dd th:text="${!me.passwordSet} ? 'Google' : (${me.googleSubject != null} ? 'Password or Google' : 'Password')"></dd>
                     <dt>Mobile</dt><dd th:text="${me.phone} ?: 'Not added'"></dd>
                     <dt>Account type</dt><dd th:text="${me.role.label} + (${me.store != null} ? ' · ' + ${me.store.name} : '')"></dd>
                     <dt>Member since</dt><dd th:text="${#temporals.format(me.createdAt, 'd MMM yyyy')}"></dd>
@@ -55,7 +58,12 @@
                     MEDIZON_ADMIN_PASSWORD. Change them there and restart to update them.</p>
             </section>
 
-            <section class="mz-panel mb-4" th:unless="${me.admin}" id="password">
+            <section class="mz-panel mb-4" th:if="${!me.admin and !me.passwordSet}" id="password">
+                <h2 class="h5 mb-2">Password</h2>
+                <p class="small text-muted mb-0">You sign in with Google, so there's no MediZon password to change.</p>
+            </section>
+
+            <section class="mz-panel mb-4" th:if="${!me.admin and me.passwordSet}" id="password">
                 <h2 class="h5 mb-3">Change password</h2>
                 <!-- Two steps: confirm the current password, then choose the new one. Without JavaScript all fields show. -->
                 <form th:action="@{/account/password}" method="post" autocomplete="off" data-mz-password-form>
@@ -122,6 +130,57 @@
                 </div>
             </section>
 
+            <!-- Two-step verification: a code from an authenticator app at sign-in (TwoFactorController) -->
+            <section class="mz-panel mt-4" id="two-factor">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+                    <h2 class="h5 mb-0">Two-step verification</h2>
+                    <span th:if="${me.twoFactorEnabled}" class="mz-2fa-status"><i class="bi bi-shield-fill-check" aria-hidden="true"></i>2FA enabled</span>
+                    <span th:unless="${me.twoFactorEnabled}" class="mz-2fa-status is-off"><i class="bi bi-shield" aria-hidden="true"></i>Off</span>
+                </div>
+
+                <th:block th:unless="${me.twoFactorEnabled}">
+                    <p class="small text-muted mb-3">Keep your account safe even if someone learns your password. After your
+                        password or Google sign-in, MediZon asks for a 6-digit code from an authenticator app on your phone,
+                        such as Google Authenticator or Microsoft Authenticator.</p>
+                    <a th:href="@{/account/two-factor/setup}" class="btn btn-primary"><i class="bi bi-shield-lock me-1"></i>Enable 2FA</a>
+                </th:block>
+
+                <th:block th:if="${me.twoFactorEnabled}">
+                    <p class="small text-muted mb-1">Signing in asks for a code from your authenticator app, except on devices
+                        where you ticked "Don't ask again on this device".</p>
+                    <p class="small text-muted mb-3">
+                        On since <span th:text="${#temporals.format(me.twoFactorEnabledAt, 'd MMM yyyy')}"></span> ·
+                        <span th:text="${me.backupCodesLeft} + ' of 8 backup codes left'"
+                              th:classappend="${me.backupCodesLeft <= 2} ? 'text-danger fw-semibold'"></span>
+                        <th:block th:if="${trustedDevices > 0}"> ·
+                            <span th:text="${trustedDevices} + (${trustedDevices == 1} ? ' trusted device' : ' trusted devices')"></span>
+                        </th:block>
+                    </p>
+                    <div class="row g-3">
+                        <form th:action="@{/account/two-factor/backup-codes}" method="post" class="col-md-6" autocomplete="off">
+                            <label class="form-label small" for="backupCode">New backup codes</label>
+                            <div class="input-group">
+                                <input class="form-control" id="backupCode" name="code" type="text" inputmode="numeric" maxlength="9"
+                                       placeholder="Code from your app" required autocomplete="one-time-code">
+                                <button class="btn btn-outline-primary" type="submit">Make new</button>
+                            </div>
+                            <div class="form-text">Your old backup codes stop working.</div>
+                        </form>
+                        <form th:action="@{/account/two-factor/disable}" method="post" class="col-md-6" autocomplete="off"
+                              data-mz-confirm="Signing in will only ask for your password or Google account. Devices you trusted are forgotten."
+                              data-mz-confirm-title="Turn off two-step verification?" data-mz-confirm-ok="Disable 2FA">
+                            <label class="form-label small" for="disableCode">Disable 2FA</label>
+                            <div class="input-group">
+                                <input class="form-control" id="disableCode" name="code" type="text" inputmode="numeric" maxlength="9"
+                                       placeholder="Code from your app" required autocomplete="one-time-code">
+                                <button class="btn btn-outline-danger" type="submit">Disable</button>
+                            </div>
+                            <div class="form-text">A backup code works too.</div>
+                        </form>
+                    </div>
+                </th:block>
+            </section>
+
             <section class="mz-panel mt-4 mz-danger-zone" id="delete" sec:authorize="hasRole('CUSTOMER')">
                 <h2 class="h5 mb-1">Delete account</h2>
                 <p class="small text-muted mb-2">This can't be undone. We delete your profile, addresses, family members, medicines
@@ -132,9 +191,14 @@
                 <form th:action="@{/account/delete}" method="post" class="row g-2 align-items-end" autocomplete="off"
                       data-mz-confirm="Your account and personal data will be deleted for good."
                       data-mz-confirm-title="Delete your account?" data-mz-confirm-ok="Delete account">
-                    <div class="col-sm-7">
+                    <div class="col-sm-7" th:if="${me.passwordSet}">
                         <label class="form-label small" for="deletePassword">Your password, to confirm</label>
                         <input class="form-control" id="deletePassword" name="password" type="password" required autocomplete="current-password">
+                    </div>
+                    <div class="col-sm-7" th:unless="${me.passwordSet}">
+                        <label class="form-label small" for="deleteWord">Type <strong>DELETE</strong> to confirm</label>
+                        <input class="form-control" id="deleteWord" name="password" type="text" required autocomplete="off"
+                               pattern="DELETE" spellcheck="false" autocapitalize="characters" title="Type DELETE in capital letters">
                     </div>
                     <div class="col-sm-5">
                         <button class="btn btn-danger w-100" type="submit"><i class="bi bi-trash me-1"></i>Delete my account</button>

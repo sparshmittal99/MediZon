@@ -1886,4 +1886,55 @@
             try { localStorage.setItem(key, banner.dataset.mzMaint); } catch (e) { /* this page only */ }
         });
     })();
+
+    // ---- Sign in with Google (website): carries the "Keep me signed in" box along. The app opens the phone's own
+    //      Google account picker instead (app.js). ----
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('a[data-mz-google]');
+        if (!btn || window.MediZonApp) return;
+        const remember = document.getElementById('remember');
+        const url = new URL(btn.href, location.href);
+        if (remember && remember.checked) url.searchParams.set('remember', 'true');
+        else url.searchParams.delete('remember');
+        btn.href = url.toString();
+    });
+
+    // ---- Copy buttons (2FA key, backup codes): <button data-mz-copy="selector"> ----
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-mz-copy]');
+        if (!btn) return;
+        const src = document.querySelector(btn.dataset.mzCopy);
+        if (!src) return;
+        const items = src.querySelectorAll('li');
+        const text = items.length ? Array.from(items, (li) => li.textContent.trim()).join('\n') : src.textContent.replace(/\s+/g, '');
+        const done = () => {
+            const was = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+            setTimeout(() => { btn.innerHTML = was; }, 1600);
+        };
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(done, () => {});
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); done(); } catch (err) { /* nothing to copy with */ }
+            ta.remove();
+        }
+    });
+
+    // ---- Print only the backup codes ----
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('[data-mz-print-codes]')) return;
+        if (window.MediZonApp && typeof window.MediZonApp.print === 'function') {
+            window.MediZonApp.print('MediZon backup codes');
+            return;
+        }
+        document.body.classList.add('mz-print-codes');
+        window.print();
+        setTimeout(() => document.body.classList.remove('mz-print-codes'), 500);
+    });
 })();

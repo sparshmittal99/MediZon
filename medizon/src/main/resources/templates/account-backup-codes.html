@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Your backup codes')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<th:block th:if="${me.admin}"><div th:replace="~{fragments/layout :: adminNav}"></div></th:block>
+
+<main class="container mz-page mz-w-form">
+    <div class="mz-panel" style="max-width: 36rem">
+        <div th:if="${justEnabled}" class="d-flex align-items-center gap-2 mb-3">
+            <span class="mz-2fa-status"><i class="bi bi-shield-fill-check" aria-hidden="true"></i>2FA enabled</span>
+        </div>
+        <h1 class="h4 mb-1">Save your backup codes</h1>
+        <p class="small text-muted mb-3">If you lose your phone, sign in with one of these instead of a code from the app.
+            Each works once. Keep them somewhere safe, like a password manager or a printed copy.
+            <strong>This is the only time they're shown.</strong></p>
+
+        <ul class="mz-backup-codes mb-3" data-mz-backup-codes>
+            <li th:each="c : ${backupCodes}" th:text="${c}">abcd-efgh</li>
+        </ul>
+
+        <div class="d-flex flex-wrap gap-2 mb-4">
+            <button type="button" class="btn btn-outline-primary btn-sm" data-mz-copy="[data-mz-backup-codes]">
+                <i class="bi bi-clipboard me-1"></i>Copy</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-mz-print-codes>
+                <i class="bi bi-printer me-1"></i>Print</button>
+        </div>
+        <a th:href="@{/account#two-factor}" class="btn btn-primary w-100">I've saved them</a>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

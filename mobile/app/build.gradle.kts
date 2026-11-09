@@ -80,4 +80,9 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("com.google.firebase:firebase-messaging:23.4.1")
+    // Sign in with Google: the phone's own account picker (Google blocks its sign-in page inside WebViews)
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
 }

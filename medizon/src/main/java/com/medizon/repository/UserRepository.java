@@ -16,6 +16,8 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmailIgnoreCase(String email);
 
+    Optional<User> findByGoogleSubject(String googleSubject);
+
     /** Just what the sign-in check needs on every request (SignInGuard), without loading the whole account. */
     interface AccountState {
         Long getId();

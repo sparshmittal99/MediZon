@@ -57,6 +57,31 @@ public class UserService {
         return saved;
     }
 
+    /**
+     * A customer account made by Sign in with Google: name and email from Google, no password of its own (a random one
+     * nobody knows), and the mobile number asked for next (PhoneRequiredInterceptor).
+     */
+    @Transactional
+    public User registerWithGoogle(String fullName, String email, String googleSubject) {
+        User u = new User();
+        u.setFullName(fullName);
+        u.setEmail(email.trim().toLowerCase());
+        u.setPassword(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
+        u.setPasswordSet(false);
+        u.setGoogleSubject(googleSubject);
+        u.setRole(Role.CUSTOMER);
+        User saved = users.save(u);
+        sendWelcomeEmail(saved);
+        return saved;
+    }
+
+    /** The mobile number asked for after Sign in with Google (or from an older account without one). */
+    @Transactional
+    public User savePhone(User user, String phone) {
+        user.setPhone(phone.trim());
+        return users.save(user);
+    }
+
     @Transactional
     public User updateProfile(User user, ProfileForm form) {
         user.setFullName(form.getFullName().trim());

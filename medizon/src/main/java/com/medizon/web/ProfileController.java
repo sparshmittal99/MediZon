@@ -33,6 +33,11 @@ public class ProfileController {
     @PostMapping
     public String save(@Valid @ModelAttribute("form") ProfileForm form, BindingResult result,
                        @RequestParam(required = false) String returnTo, Model model, RedirectAttributes ra) {
+        // Customers must keep a mobile number (checkout and delivery need it); staff may leave it out
+        if (!result.hasFieldErrors("phone") && currentUser.get().isCustomer()
+                && (form.getPhone() == null || form.getPhone().isBlank())) {
+            result.rejectValue("phone", "required", "Enter your mobile number");
+        }
         if (result.hasErrors()) {
             User u = currentUser.get();
             if (!u.isStaff()) model.addAttribute("addresses", addressService.list(u));

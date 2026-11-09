@@ -47,14 +47,17 @@ public class SignInService {
     private final UserRepository users;
     private final NotificationDeviceRepository devices;
     private final PushService push;
+    private final TrustedDeviceService trustedDevices;
     private final Duration sessionTimeout;
 
     public SignInService(SignInRepository signIns, UserRepository users, NotificationDeviceRepository devices,
-                         PushService push, @Value("${server.servlet.session.timeout:30m}") Duration sessionTimeout) {
+                         PushService push, TrustedDeviceService trustedDevices,
+                         @Value("${server.servlet.session.timeout:30m}") Duration sessionTimeout) {
         this.signIns = signIns;
         this.users = users;
         this.devices = devices;
         this.push = push;
+        this.trustedDevices = trustedDevices;
         this.sessionTimeout = sessionTimeout;
     }
 
@@ -79,6 +82,8 @@ public class SignInService {
             n.setLabel(DeviceService.describe(request.getHeader(HttpHeaders.USER_AGENT)));
             return n;
         });
+        String better = DeviceService.renamed(s.getLabel(), request.getHeader(HttpHeaders.USER_AGENT));
+        if (better != null) s.setLabel(better);     // the app now says which phone it is
         s.setLastSeenAt(now);
         s.setRememberedUntil(rememberedUntil);
         signIns.save(s);
@@ -148,6 +153,7 @@ public class SignInService {
             s.setSignedOutAt(LocalDateTime.now());
             signIns.save(s);
             dropPhones(user, d -> d.getDeviceKey().equals(s.getDeviceKey()));
+            trustedDevices.forget(user, s.getDeviceKey());    // signing in there again asks for the 2FA code
         });
         return found.map(SignIn::getLabel);
     }
@@ -221,6 +227,7 @@ public class SignInService {
         signIns.deleteAll(others);
 
         dropPhones(user, d -> !d.getDeviceKey().equals(keepKey));
+        trustedDevices.forgetAllExcept(user, keepKey);    // their next sign-in asks for the 2FA code again
         return n;
     }
 

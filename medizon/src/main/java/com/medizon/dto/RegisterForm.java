@@ -15,7 +15,9 @@ public class RegisterForm {
     @Email(message = "Enter a valid email")
     private String email;
 
-    @Pattern(regexp = "^$|^[0-9+ ]{10,15}$", message = "Enter a 10 digit mobile number")
+    /** Required: Razorpay checkout and delivery partners need a number to reach the customer. */
+    @NotBlank(message = "Enter your mobile number")
+    @Pattern(regexp = PhoneForm.PATTERN, message = PhoneForm.MESSAGE)
     private String phone;
 
     @Size(min = 6, message = "Use at least 6 characters")

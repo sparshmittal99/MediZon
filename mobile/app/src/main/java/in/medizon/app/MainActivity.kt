@@ -48,6 +48,17 @@ import androidx.core.view.WindowCompat
 import android.animation.ValueAnimator
 import android.animation.ArgbEvaluator
 import android.net.Network
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
+import androidx.lifecycle.lifecycleScope
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -357,7 +368,7 @@ class MainActivity : AppCompatActivity() {
                 @Suppress("DEPRECATION")
                 forceDark = WebSettings.FORCE_DARK_OFF
             }
-            userAgentString = "$userAgentString ${Api.UA_TOKEN}"
+            userAgentString = "$userAgentString ${Api.uaSuffix(this@MainActivity)}"
             Store.saveUserAgent(this@MainActivity, userAgentString)
         }
         CookieManager.getInstance().apply {
@@ -878,6 +889,40 @@ class MainActivity : AppCompatActivity() {
         } catch (e: ActivityNotFoundException) {
             voiceListening = false
             toast("Voice search isn't available on this phone")
+        }
+    }
+
+    // ---------------------------------------------------------------- Sign in with Google
+
+    /**
+     * The phone's Google account picker (Credential Manager). [clientId] is the website's OAuth client ID and
+     * [nonce] comes from the sign-in page; the server checks both in the ID token. The token goes back to the page,
+     * which posts it so the sign-in lands in the WebView's cookies. Needs an "Android" OAuth client for this app's
+     * package and signing key in the same Google Cloud project.
+     */
+    fun startGoogleSignIn(clientId: String, nonce: String) {
+        val option = GetSignInWithGoogleOption.Builder(clientId).setNonce(nonce).build()
+        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+        lifecycleScope.launch {
+            try {
+                val result = CredentialManager.create(this@MainActivity).getCredential(this@MainActivity, request)
+                val credential = result.credential
+                if (credential is CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                    val token = GoogleIdTokenCredential.createFrom(credential.data).idToken
+                    callPage("window.mzGoogleToken && window.mzGoogleToken(${JSONObject.quote(token)})")
+                } else {
+                    toast("Couldn't sign in with Google. Try again, or use your email and password.")
+                }
+            } catch (e: GetCredentialCancellationException) {
+                // closed the picker: nothing to do
+            } catch (e: NoCredentialException) {
+                toast("Add a Google account to this phone first, or sign in with your email and password.")
+            } catch (e: GetCredentialException) {
+                toast("Couldn't sign in with Google. Try again, or use your email and password.")
+            } catch (e: Exception) {
+                toast("Couldn't sign in with Google. Try again, or use your email and password.")
+            }
         }
     }
 

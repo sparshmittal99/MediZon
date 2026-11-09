@@ -47,7 +47,22 @@ public class DeviceService {
         if (d.getLastSeenAt() == null || d.getLastSeenAt().isBefore(LocalDateTime.now().minusMinutes(10))) {
             d.setLastSeenAt(LocalDateTime.now());
         }
+        String better = renamed(d.getLabel(), request.getHeader(HttpHeaders.USER_AGENT));
+        if (better != null) d.setLabel(better);
         return d;
+    }
+
+    /** What the Android app was called before it sent its phone's name. */
+    static final String OLD_APP_LABEL = "MediZon app on Android";
+
+    /**
+     * The phone's name for a device still called {@link #OLD_APP_LABEL}, once its app sends one; null to keep the
+     * label (anything the user renamed it to is never touched).
+     */
+    static String renamed(String label, String ua) {
+        if (!OLD_APP_LABEL.equals(label)) return null;
+        String now = describe(ua);
+        return now.equals(label) ? null : now;
     }
 
     /** Lookup for API calls, which never create anything; null means no settings yet, so everything shows. */
@@ -117,10 +132,25 @@ public class DeviceService {
         return p == null || p.isEmpty() ? "/" : p;
     }
 
-    /** "Chrome on Windows" from a User-Agent header; good enough to tell a family's devices apart. */
+    /**
+     * "Chrome on Windows" from a User-Agent header; good enough to tell a family's devices apart. The Android app
+     * sends its phone's name ("MediZonDevice/Sparsh%27s%20Galaxy%20S23"), which is used as is.
+     */
     static String describe(String ua) {
         if (ua == null) return "This device";
-        if (ua.contains("MediZonApp")) return "MediZon app on Android";
+        if (ua.contains("MediZonApp")) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("MediZonDevice/(\\S+)").matcher(ua);
+            if (m.find()) {
+                try {
+                    String name = java.net.URLDecoder.decode(m.group(1), java.nio.charset.StandardCharsets.UTF_8)
+                            .replaceAll("\\p{Cntrl}", "").trim();
+                    if (!name.isEmpty()) return name.length() > 60 ? name.substring(0, 60) : name;
+                } catch (IllegalArgumentException badEncoding) {
+                    // fall through to the generic name
+                }
+            }
+            return OLD_APP_LABEL;
+        }
         String browser = ua.contains("Edg/") ? "Edge" : ua.contains("OPR/") ? "Opera" : ua.contains("Firefox/") ? "Firefox"
                 : ua.contains("Chrome/") ? "Chrome" : ua.contains("Safari/") ? "Safari" : "Browser";
         String os = ua.contains("Android") ? "Android" : ua.contains("iPhone") ? "iPhone" : ua.contains("iPad") ? "iPad"

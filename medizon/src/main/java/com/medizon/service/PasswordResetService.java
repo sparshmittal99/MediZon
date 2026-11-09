@@ -148,6 +148,19 @@ public class PasswordResetService {
     }
 
     /**
+     * A verified reset token for the account straight away, without an emailed code: the "This wasn't me" link in a
+     * new sign-in email already proved the inbox (SecureAccountService).
+     */
+    @Transactional
+    public String verifiedTokenFor(User user) {
+        tokenRepository.deleteByUser(user);
+        String verifiedToken = UUID.randomUUID().toString().replace("-", "")
+                + UUID.randomUUID().toString().replace("-", "");
+        tokenRepository.save(new PasswordResetToken(verifiedToken, user));
+        return verifiedToken;
+    }
+
+    /**
      * Checks if a verified reset token exists and is still valid.
      */
     @Transactional(readOnly = true)
@@ -185,6 +198,7 @@ public class PasswordResetService {
 
         User user = token.getUser();
         user.setPassword(passwordEncoder.encode(newPassword));
+        user.setPasswordSet(true);    // an account made with Google has a password of its own now
         userRepository.save(user);
 
         // Delete all reset tokens for this user

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>New sign-in to your MediZon account</title>
+    <style>
+        @media only screen and (max-width: 520px) {
+            .mz-wrap { padding: 12px 6px !important; }
+            .mz-card { width: 100% !important; max-width: 100% !important; border-radius: 8px !important; }
+            .mz-header { padding: 22px 20px !important; }
+            .mz-body { padding: 22px 18px !important; }
+            .mz-footer { padding: 18px 20px !important; }
+            .mz-btn { display: block !important; width: 100% !important; box-sizing: border-box !important; text-align: center !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F6F9F7; font-family: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #17302A; line-height: 1.5; -webkit-font-smoothing: antialiased;">
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #F6F9F7; padding: 32px 16px;" class="mz-wrap">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" class="mz-card" style="max-width: 560px; background-color: #ffffff; border-radius: 12px; border: 1px solid #D3E3DB; overflow: hidden; box-shadow: 0 4px 12px rgba(23, 48, 42, 0.05);" cellspacing="0" cellpadding="0">
+
+                    <!-- Header -->
+                    <tr>
+                        <td class="mz-header" style="background-color: #0E6B57; padding: 28px 30px; text-align: center;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" style="display: inline-table; vertical-align: middle; margin: 0 auto;">
+                                <tr>
+                                    <td style="vertical-align: middle; padding-right: 11px; line-height: 0;">
+                                        <img src="cid:medizonLogo" width="36" height="36" alt="MediZon"
+                                             style="display: block; width: 36px; height: 36px; border: 0; outline: none; background: transparent;" />
+                                    </td>
+                                    <td style="vertical-align: middle; line-height: 1;">
+                                        <span style="font-size: 26px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; font-family: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: inline-block; vertical-align: middle; line-height: 1;">
+                                            MediZon
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                            <div style="font-size: 14px; color: #E6F2EC; margin-top: 8px;">Security alert</div>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td class="mz-body" style="padding: 30px;">
+                            <div style="text-align: center; margin-bottom: 18px;">
+                                <span style="display: inline-block; width: 56px; height: 56px; line-height: 56px; border-radius: 50%; background-color: #E6F2EC; font-size: 26px;">&#x1F512;</span>
+                            </div>
+                            <h1 style="margin: 0 0 8px 0; font-size: 21px; font-weight: 700; color: #17302A; text-align: center;">
+                                New sign-in on <span th:text="${device}">Chrome on Windows</span>
+                            </h1>
+                            <p style="margin: 0 0 22px 0; font-size: 14px; color: #5B716A; text-align: center;" th:text="${email}">you@example.com</p>
+
+                            <p style="margin: 0 0 18px 0; font-size: 15px; color: #17302A; line-height: 1.6;">
+                                Hi <span th:text="${firstName}">there</span>, your MediZon account was just signed in on a device it
+                                hasn't been used on before.
+                            </p>
+
+                            <!-- Details -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px; background-color: #F6F9F7; border: 1px solid #D3E3DB; border-radius: 10px;">
+                                <tr>
+                                    <td style="padding: 14px 18px 6px 18px; width: 90px; font-size: 13px; color: #5B716A; vertical-align: top;">Device</td>
+                                    <td style="padding: 14px 18px 6px 0; font-size: 14px; font-weight: 600; color: #17302A;" th:text="${device}">Chrome on Windows</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 6px 18px; font-size: 13px; color: #5B716A; vertical-align: top;">When</td>
+                                    <td style="padding: 6px 18px 6px 0; font-size: 14px; font-weight: 600; color: #17302A;" th:text="${when}">Monday, 10 November 2026 at 9:42 PM IST</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 6px 18px; font-size: 13px; color: #5B716A; vertical-align: top;">Near</td>
+                                    <td th:if="${place != null}" style="padding: 6px 18px 6px 0; font-size: 14px; font-weight: 600; color: #17302A;">
+                                        <span th:text="${place}">Mumbai, Maharashtra, India</span>
+                                        <div style="font-size: 12px; font-weight: 400; color: #7B908A;">Approximate, from the internet address</div>
+                                    </td>
+                                    <!-- The lookup service was down, slow or busy: the email still goes out -->
+                                    <td th:if="${place == null}" style="padding: 6px 18px 6px 0; font-size: 14px; font-weight: 400; color: #7B908A;">
+                                        Location unavailable
+                                    </td>
+                                </tr>
+                                <tr><td colspan="2" style="height: 8px; line-height: 8px; font-size: 0;">&nbsp;</td></tr>
+                            </table>
+
+                            <p style="margin: 0 0 6px 0; font-size: 15px; color: #17302A; font-weight: 700;">Was this you?</p>
+                            <p style="margin: 0 0 22px 0; font-size: 14px; color: #5B716A; line-height: 1.6;">
+                                Then you don't need to do anything. If it wasn't you, someone else may know your password.
+                                Secure your account now: we'll sign you out everywhere and ask you for a new password.
+                            </p>
+
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td align="center">
+                                        <a th:href="${secureUrl}" target="_blank" class="mz-btn" style="display: inline-block; background-color: #B83A3A; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 13px 28px; border-radius: 8px; box-shadow: 0 2px 6px rgba(184, 58, 58, 0.25);">
+                                            This wasn't me &rarr; Secure my account
+                                        </a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center" style="padding-top: 14px; font-size: 13px;">
+                                        <a th:href="${devicesUrl}" target="_blank" style="color: #0E6B57; text-decoration: none; font-weight: 600;">See where you're signed in</a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 26px 0 0 0; padding-top: 16px; border-top: 1px solid #E6EEEA; font-size: 12px; color: #7B908A; line-height: 1.6;">
+                                MediZon will never ask for your password, OTP or two-step verification code by phone, chat or email.
+                                The "secure my account" link works once and expires in 7 days.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td class="mz-footer" style="background-color: #F6F9F7; border-top: 1px solid #D3E3DB; padding: 22px 30px; text-align: center; font-size: 12px; color: #5B716A;">
+                            <p style="margin: 0 0 10px 0;">You're getting this because it's important for your account's security.<br><a th:href="${baseUrl} + '/help'" target="_blank" style="display: inline-block; background-color: #ffffff; color: #0E6B57; text-decoration: none; font-size: 12px; font-weight: 700; line-height: 1.2; padding: 6px 14px; border-radius: 6px; border: 1px solid #0E6B57; margin: 6px 3px 0 3px;">Support Center</a></p>
+                            <p style="margin: 0; color: #7B908A;">MediZon Pharmacy &bull; Healthcare with Care</p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

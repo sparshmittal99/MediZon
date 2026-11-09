@@ -14,6 +14,25 @@ object Api {
 
     const val UA_TOKEN = "MediZonApp/1.0"
 
+    /**
+     * Added to the user agent: the app token and this phone's name, so the account's device list says
+     * "Sparsh's Galaxy S23" instead of "MediZon app on Android" (WebViews no longer send the model).
+     */
+    fun uaSuffix(c: Context): String =
+        "$UA_TOKEN MediZonDevice/" + java.net.URLEncoder.encode(deviceName(c), "UTF-8").replace("+", "%20")
+
+    /** The name the owner gave the phone (Settings > About phone), else maker and model: "Samsung SM-S911B". */
+    fun deviceName(c: Context): String {
+        val given = try {
+            android.provider.Settings.Global.getString(c.contentResolver, android.provider.Settings.Global.DEVICE_NAME)
+        } catch (e: Exception) { null }
+        if (!given.isNullOrBlank()) return given.trim().take(40)
+        val maker = Build.MANUFACTURER.orEmpty().replaceFirstChar { it.titlecase() }
+        val model = Build.MODEL.orEmpty()
+        val name = if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model"
+        return name.trim().ifBlank { "Android phone" }.take(40)
+    }
+
     fun userAgent(c: Context): String {
         Store.userAgent(c)?.let { return it }
         val base = try {
@@ -21,7 +40,7 @@ object Api {
         } catch (e: Exception) {
             "Mozilla/5.0 (Linux; Android ${Build.VERSION.RELEASE}; ${Build.MODEL})"
         }
-        return "$base $UA_TOKEN"
+        return "$base ${uaSuffix(c)}"
     }
 
     @Throws(IOException::class)

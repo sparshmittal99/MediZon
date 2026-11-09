@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Turn on two-step verification')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<th:block th:if="${me.admin}"><div th:replace="~{fragments/layout :: adminNav}"></div></th:block>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-w-form">
+    <a th:href="@{/account#two-factor}" class="small text-decoration-none"><i class="bi bi-arrow-left me-1"></i>Account settings</a>
+    <h1 class="mz-page-title mt-2 mb-1">Turn on two-step verification</h1>
+    <p class="text-muted mb-4">Three quick steps. Keep this page open until you've entered the code.</p>
+
+    <div class="mz-panel">
+        <ol class="list-unstyled mb-0">
+            <li class="d-flex gap-3 mb-4">
+                <span class="mz-2fa-icon flex-shrink-0" aria-hidden="true" style="width:2.2rem;height:2.2rem;font-size:1rem">1</span>
+                <div>
+                    <h2 class="h6 mb-1">Get an authenticator app</h2>
+                    <p class="small text-muted mb-0">Any free one works: Google Authenticator, Microsoft Authenticator, Authy or
+                        your phone's password manager.</p>
+                </div>
+            </li>
+
+            <li class="d-flex gap-3 mb-4">
+                <span class="mz-2fa-icon flex-shrink-0" aria-hidden="true" style="width:2.2rem;height:2.2rem;font-size:1rem">2</span>
+                <div class="min-w-0">
+                    <h2 class="h6 mb-1">Scan this QR code with the app</h2>
+                    <p class="small text-muted mb-3">In the app, tap <strong>+</strong> or <strong>Add account</strong>, then
+                        <strong>Scan a QR code</strong>.</p>
+                    <div class="mz-qr mb-3" th:utext="${setup.qrSvg}"></div>
+                    <p class="small text-muted mb-1">Can't scan it, or setting up on this same phone? Enter this key in the app instead
+                        (account: <span th:text="${me.email}"></span>, time based):</p>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <code class="mz-secret-key" th:text="${setup.groupedKey}" data-mz-copy-source>ABCD EFGH</code>
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-mz-copy="[data-mz-copy-source]">
+                            <i class="bi bi-clipboard me-1"></i>Copy key</button>
+                    </div>
+                </div>
+            </li>
+
+            <li class="d-flex gap-3">
+                <span class="mz-2fa-icon flex-shrink-0" aria-hidden="true" style="width:2.2rem;height:2.2rem;font-size:1rem">3</span>
+                <div class="flex-grow-1">
+                    <h2 class="h6 mb-1">Enter the 6-digit code the app shows</h2>
+                    <form th:action="@{/account/two-factor/enable}" method="post" autocomplete="off" style="max-width: 20rem">
+                        <label class="visually-hidden" for="code">6-digit code</label>
+                        <input class="form-control mz-otp-input mb-3" id="code" name="code" type="text" required
+                               inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" autocomplete="one-time-code"
+                               placeholder="6-digit code">
+                        <button class="btn btn-primary w-100" type="submit"><i class="bi bi-shield-check me-1"></i>Enable 2FA</button>
+                    </form>
+                </div>
+            </li>
+        </ol>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

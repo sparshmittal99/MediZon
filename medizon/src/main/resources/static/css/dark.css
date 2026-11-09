@@ -257,3 +257,9 @@ html[data-theme="dark"] .mz-cart-save { border-color: rgba(111, 209, 174, .3); }
 html[data-theme="dark"] .mz-cart-item { box-shadow: none; }
 html[data-theme="dark"] .mz-check-box { border-color: #4E6A61; }
 html[data-theme="dark"] .mz-cart-page .mz-cart-pay, html[data-theme="dark"] .mz-checkout-go { box-shadow: 0 -1px 0 var(--mz-line), 0 -10px 28px rgba(0, 0, 0, .35); }
+
+/* Sign in with Google: Google's dark button */
+html[data-theme="dark"] .mz-google-btn { background: #131314; border-color: #8E918F; color: #E3E3E3; }
+html[data-theme="dark"] .mz-google-btn:hover { background: #1F1F21; color: #E3E3E3; }
+html[data-theme="dark"] .mz-2fa-icon, html[data-theme="dark"] .mz-2fa-status:not(.is-off) { background: rgba(52, 211, 153, .12); color: var(--mz-green); }
+html[data-theme="dark"] .mz-backup-codes li { background: var(--mz-surface); }

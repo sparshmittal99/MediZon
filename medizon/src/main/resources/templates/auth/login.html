@@ -15,6 +15,11 @@
         <div th:if="${param.disabled}" class="alert alert-danger" data-mz-popup>This account has been disabled. Contact MediZon support for help.</div>
         <div th:if="${param.inUse}" class="alert alert-danger" data-mz-popup>The admin account is already signed in on another device. Sign out there first, then try again.</div>
         <div th:if="${param.expired}" class="alert alert-warning" data-mz-popup>You were signed out. Please sign in again.</div>
+        <div th:if="${param.codeLocked}" class="alert alert-danger" data-mz-popup>Too many wrong codes. Sign in again to get another try.</div>
+        <div th:if="${param.google != null and param.google[0] == 'staff'}" class="alert alert-danger" data-mz-popup>Staff accounts sign in with their email and password.</div>
+        <div th:if="${param.google != null and param.google[0] == 'disabled'}" class="alert alert-danger" data-mz-popup>This account has been disabled. Contact MediZon support for help.</div>
+        <div th:if="${param.google != null and param.google[0] == 'unverified'}" class="alert alert-danger" data-mz-popup>Google hasn't verified this email address yet. Verify it with Google, or sign in with a password.</div>
+        <div th:if="${param.google != null and param.google[0] == 'failed'}" class="alert alert-danger" data-mz-popup>Couldn't sign in with Google. Try again, or use your email and password.</div>
         <div th:if="${cartCount != null and cartCount > 0}" class="alert alert-success small">
             <i class="bi bi-bag-check me-1" aria-hidden="true"></i>
             Sign in to check out. The <span th:text="${cartCount}"></span> item(s) in your cart stay there.
@@ -42,6 +47,7 @@
             </div>
             <button class="btn btn-primary w-100" type="submit">Sign in</button>
         </form>
+        <th:block th:replace="~{fragments/google :: button('Sign in with Google')}"></th:block>
         <p class="small text-center mt-4 mb-0">New to MediZon? <a th:href="@{/register}">Create an account</a></p>
     </div>
 </main>

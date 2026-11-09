@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Secure your account')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <div class="mz-auth mz-panel">
+
+        <!-- Done, staff account: the admin sets staff passwords -->
+        <th:block th:if="${secured}">
+            <span class="mz-2fa-icon mb-3" aria-hidden="true"><i class="bi bi-shield-check"></i></span>
+            <h1 class="h3 mb-1">Your account is secured</h1>
+            <p class="text-muted mb-0">It's signed out on every device and the old password no longer works. Ask the MediZon
+                admin to set a new password for you.</p>
+        </th:block>
+
+        <!-- The link from the email: what signed in, and one button -->
+        <th:block th:if="${secured == null and valid}">
+            <span class="mz-2fa-icon mb-3" aria-hidden="true"><i class="bi bi-shield-exclamation"></i></span>
+            <h1 class="h3 mb-1">Wasn't you?</h1>
+            <p class="text-muted mb-3">
+                Your account <span class="fw-semibold text-body" th:text="${email}">you@example.com</span> was signed in on
+                <span class="fw-semibold text-body" th:text="${device}">a new device</span>
+                on <span th:text="${#temporals.format(signedInAt, 'd MMM yyyy, h:mm a')}"></span>.
+            </p>
+            <ul class="small text-muted mb-4 ps-3">
+                <li>You'll be signed out on every phone and browser, including that one.</li>
+                <li>Your old password stops working, and you choose a new one next.</li>
+            </ul>
+            <form th:action="@{/account/secure}" method="post">
+                <input type="hidden" name="token" th:value="${token}">
+                <button class="btn btn-danger w-100" type="submit"><i class="bi bi-shield-lock me-1"></i>Secure my account</button>
+            </form>
+            <p class="small text-center mt-3 mb-0">It was me: <a th:href="@{/}">nothing to do</a></p>
+        </th:block>
+
+        <!-- Used, expired or made-up link -->
+        <th:block th:if="${secured == null and !valid}">
+            <span class="mz-2fa-icon mb-3" aria-hidden="true"><i class="bi bi-link-45deg"></i></span>
+            <h1 class="h3 mb-1">This link has expired</h1>
+            <p class="text-muted mb-4" th:text="${error} ?: 'It was already used, or is more than 7 days old. To be safe, reset your password.'">
+                It was already used, or is more than 7 days old.</p>
+            <a class="btn btn-primary w-100" th:href="@{/forgot-password}">Reset my password</a>
+        </th:block>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

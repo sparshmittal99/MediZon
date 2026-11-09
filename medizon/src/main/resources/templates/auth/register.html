@@ -20,8 +20,9 @@
                 <div class="invalid-feedback" th:errors="*{email}"></div>
             </div>
             <div class="mb-3">
-                <label class="form-label" for="phone">Mobile number <span class="text-muted fw-normal">(optional)</span></label>
-                <input class="form-control" type="tel" th:field="*{phone}" th:errorclass="is-invalid" autocomplete="tel">
+                <label class="form-label" for="phone">Mobile number</label>
+                <input class="form-control" type="tel" th:field="*{phone}" th:errorclass="is-invalid" autocomplete="tel"
+                       inputmode="tel" maxlength="15" placeholder="10 digit mobile number" required>
                 <div class="invalid-feedback" th:errors="*{phone}"></div>
             </div>
             <div class="mb-4">
@@ -31,6 +32,7 @@
             </div>
             <button class="btn btn-primary w-100" type="submit">Create account</button>
         </form>
+        <th:block th:replace="~{fragments/google :: button('Sign up with Google')}"></th:block>
         <p class="small text-center mt-4 mb-0">Already have an account? <a th:href="@{/login}">Sign in</a></p>
     </div>
 </main>

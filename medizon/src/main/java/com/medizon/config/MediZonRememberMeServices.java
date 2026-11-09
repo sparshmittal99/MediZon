@@ -42,6 +42,13 @@ public class MediZonRememberMeServices extends TokenBasedRememberMeServices {
         return GlobalModelAdvice.isApp(request) || super.rememberMeRequested(request, parameter);
     }
 
+    /** No cookie while a 2FA code is still to come: the device isn't signed in yet (SignInFlow sets it after). */
+    @Override
+    public void onLoginSuccess(HttpServletRequest request, HttpServletResponse response, Authentication successfulAuthentication) {
+        if (request.getAttribute(SignInFlow.NEEDS_CODE) != null) return;
+        super.onLoginSuccess(request, response, successfulAuthentication);
+    }
+
     @Override
     protected int calculateLoginLifetime(HttpServletRequest request, Authentication authentication) {
         return GlobalModelAdvice.isApp(request) ? APP_SECONDS : getTokenValiditySeconds();

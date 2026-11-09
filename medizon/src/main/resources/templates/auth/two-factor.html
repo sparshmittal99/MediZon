@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Two-step verification')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <div class="mz-auth mz-panel">
+        <span class="mz-2fa-icon mb-3" aria-hidden="true"><i class="bi bi-shield-lock"></i></span>
+        <h1 class="h3 mb-1">Two-step verification</h1>
+        <p class="text-muted mb-4">
+            Enter the 6-digit code from your authenticator app for
+            <span class="fw-semibold text-body" th:text="${email}">you@example.com</span>.
+        </p>
+
+        <div th:if="${error}" class="alert alert-danger small" role="alert" data-mz-popup th:text="${error}">That code isn't right.</div>
+
+        <form th:action="@{/login/verify}" method="post" autocomplete="off">
+            <div class="mb-3">
+                <label class="form-label" for="code">Verification code</label>
+                <input class="form-control mz-otp-input" id="code" name="code" type="text" required autofocus
+                       inputmode="numeric" autocomplete="one-time-code" spellcheck="false" maxlength="9"
+                       placeholder="6-digit code" th:classappend="${error} ? 'is-invalid'" aria-describedby="codeHelp">
+                <div class="form-text" id="codeHelp">Lost your phone? Enter one of your backup codes instead.</div>
+            </div>
+
+            <div class="form-check mz-trust-check mb-4 d-flex align-items-start">
+                <input class="form-check-input mt-1" type="checkbox" id="trust" name="trust" value="true" th:checked="${trust}">
+                <label class="form-check-label" for="trust">
+                    <span class="fw-semibold d-block">Don't ask again on this device</span>
+                    <span class="small text-muted">Only tick this on your own phone or computer. You'll still need your password or Google account.</span>
+                </label>
+            </div>
+
+            <button class="btn btn-primary w-100" type="submit">Verify and sign in</button>
+        </form>
+
+        <p class="small text-center mt-4 mb-0">
+            Not you? <a th:href="@{/login/verify/cancel}">Use another account</a>
+        </p>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

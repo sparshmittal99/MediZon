@@ -1727,3 +1727,40 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
     .mz-cart-main { gap: .8rem; }
     .mz-cart-thumb { width: 5.25rem; height: 5.25rem; font-size: 1.9rem; }
 }
+
+/* ---------- Sign in with Google, two-step verification ---------- */
+/* Google's button rules: white, a grey outline, the four-colour G at 18px, dark text; a dark version on dark pages */
+.mz-or { display: flex; align-items: center; gap: .75rem; margin: 1.25rem 0; color: var(--mz-muted); font-size: .85rem; }
+.mz-or::before, .mz-or::after { content: ""; flex: 1; height: 1px; background: var(--mz-line); }
+.mz-google-btn { display: flex; align-items: center; justify-content: center; gap: .65rem; width: 100%; min-height: 2.75rem;
+    padding: .55rem 1rem; border: 1px solid #747775; border-radius: var(--bs-border-radius); background: #fff; color: #1F1F1F;
+    font-family: Roboto, "Figtree", system-ui, sans-serif; font-weight: 500; font-size: .95rem; text-decoration: none;
+    transition: background-color .15s ease, box-shadow .15s ease; }
+.mz-google-btn:hover { background: #F8FAFF; color: #1F1F1F; box-shadow: 0 1px 3px rgba(60, 64, 67, .2); }
+.mz-google-btn:active { background: #EEF2FA; }
+.mz-google-btn svg { width: 18px; height: 18px; flex: none; }
+.mz-google-btn[hidden] { display: none; }
+
+.mz-2fa-icon { display: inline-flex; align-items: center; justify-content: center; width: 3rem; height: 3rem; border-radius: 50%;
+    background: var(--mz-mint); color: var(--mz-green); font-size: 1.4rem; }
+.mz-otp-input { font-size: 1.5rem; font-weight: 600; text-align: center; letter-spacing: .4em; font-variant-numeric: tabular-nums; }
+.mz-otp-input::placeholder { letter-spacing: normal; font-size: 1rem; font-weight: 400; }
+.mz-2fa-status { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .65rem; border-radius: 999px;
+    font-size: .8rem; font-weight: 600; background: var(--mz-mint); color: var(--mz-green); }
+.mz-2fa-status.is-off { background: var(--mz-paper); color: var(--mz-muted); border: 1px solid var(--mz-line); }
+.mz-qr { width: 12.5rem; max-width: 100%; padding: .6rem; border: 1px solid var(--mz-line); border-radius: .8rem; background: #fff; }
+.mz-qr svg { display: block; width: 100%; height: auto; }
+.mz-secret-key { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .95rem; letter-spacing: .05em;
+    word-break: break-all; padding: .5rem .75rem; border-radius: .5rem; background: var(--mz-paper); border: 1px dashed var(--mz-line); }
+.mz-backup-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; padding: 1rem; margin: 0;
+    list-style: none; border-radius: .8rem; background: var(--mz-paper); border: 1px solid var(--mz-line);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1.05rem; letter-spacing: .06em; }
+.mz-backup-codes li { padding: .35rem .5rem; text-align: center; border-radius: .4rem; background: #fff; }
+.mz-trust-check { padding: .75rem .9rem; border-radius: .7rem; border: 1px solid var(--mz-line); background: var(--mz-paper); }
+.mz-trust-check .form-check-input { margin-left: 0; margin-right: .6rem; float: none; }
+.mz-trust-check label { cursor: pointer; }
+@media print {
+    body.mz-print-codes * { visibility: hidden; }
+    body.mz-print-codes .mz-backup-codes, body.mz-print-codes .mz-backup-codes * { visibility: visible; }
+    body.mz-print-codes .mz-backup-codes { position: absolute; top: 0; left: 0; right: 0; }
+}

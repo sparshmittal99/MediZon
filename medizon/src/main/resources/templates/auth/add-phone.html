@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Add your mobile number')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container">
+    <div class="mz-auth mz-panel">
+        <span class="mz-2fa-icon mb-3" aria-hidden="true"><i class="bi bi-phone"></i></span>
+        <h1 class="h3 mb-1">Add your mobile number</h1>
+        <p class="text-muted mb-4">
+            One last step, <span th:text="${me.firstName}">there</span>. We need it for payments and so the delivery
+            partner can reach you.
+        </p>
+
+        <form th:action="@{/account/phone}" th:object="${form}" method="post" novalidate>
+            <input type="hidden" name="next" th:value="${next}">
+            <div class="mb-4">
+                <label class="form-label" for="phone">Mobile number</label>
+                <input class="form-control" type="tel" th:field="*{phone}" th:errorclass="is-invalid" autocomplete="tel"
+                       inputmode="tel" maxlength="15" placeholder="10 digit mobile number" required autofocus>
+                <div class="invalid-feedback" th:errors="*{phone}"></div>
+            </div>
+            <button class="btn btn-primary w-100" type="submit">Save and continue</button>
+        </form>
+
+        <form th:action="@{/logout}" method="post" class="text-center mt-4">
+            <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none">Sign out</button>
+        </form>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

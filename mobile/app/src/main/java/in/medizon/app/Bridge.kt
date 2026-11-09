@@ -140,6 +140,16 @@ class Bridge(private val activity: MainActivity) {
         main.post { activity.startVoiceSearch() }
     }
 
+    /**
+     * Sign in with Google: the phone's own Google account picker (Google doesn't allow its sign-in page in a WebView).
+     * The ID token comes back through window.mzGoogleToken, which posts it to the server.
+     */
+    @JavascriptInterface
+    fun googleSignIn(clientId: String?, nonce: String?) {
+        if (!trusted() || clientId.isNullOrBlank() || nonce.isNullOrBlank()) return
+        main.post { activity.startGoogleSignIn(clientId, nonce) }
+    }
+
     companion object {
         fun status(c: Context): JSONObject {
             val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

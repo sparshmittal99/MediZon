@@ -400,4 +400,41 @@
         const now = Date.now();
         if (now - loadedAt >= IDLE_AFTER_MS && now - touchedAt >= 60 * 1000) refresh();
     }, 30 * 1000);
+
+    // Sign in with Google: Google doesn't allow its sign-in page inside an app's WebView, so the phone's own Google
+    // account picker is used. The app sends back an ID token (window.mzGoogleToken), posted here like a form so the
+    // sign-in lands in this WebView. An app too old to have the picker hides the button.
+    const googleBtn = document.querySelector('a[data-mz-google]');
+    if (googleBtn) {
+        const client = googleBtn.dataset.mzGoogleClient;
+        const nonce = googleBtn.dataset.mzGoogleNonce;
+        if (typeof app.googleSignIn !== 'function' || !client || !nonce) {
+            googleBtn.hidden = true;
+            const or = googleBtn.previousElementSibling;
+            if (or && or.classList.contains('mz-or')) or.hidden = true;
+        } else {
+            googleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                call('googleSignIn', client, nonce);
+            });
+            window.mzGoogleToken = (token) => {
+                if (!token) return;    // closed the picker
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = googleBtn.dataset.mzGoogleTokenUrl;
+                form.hidden = true;
+                const field = (name, value) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = name;
+                    input.value = value;
+                    form.appendChild(input);
+                };
+                field('idToken', token);
+                field('_csrf', meta('_csrf'));
+                document.body.appendChild(form);
+                form.submit();
+            };
+        }
+    }
 })();

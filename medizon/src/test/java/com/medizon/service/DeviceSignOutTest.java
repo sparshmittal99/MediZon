@@ -30,6 +30,7 @@ class DeviceSignOutTest {
     private UserRepository users;
     private NotificationDeviceRepository devices;
     private PushService push;
+    private TrustedDeviceService trusted;
     private SignInService service;
     private User user;
     private SignIn here, phone;
@@ -40,7 +41,8 @@ class DeviceSignOutTest {
         devices = mock(NotificationDeviceRepository.class);
         push = mock(PushService.class);
         users = mock(UserRepository.class);
-        service = new SignInService(signIns, users, devices, push, Duration.ofMinutes(30));
+        trusted = mock(TrustedDeviceService.class);
+        service = new SignInService(signIns, users, devices, push, trusted, Duration.ofMinutes(30));
         user = new User();
         user.setId(7L);
         when(users.findByEmailIgnoreCase("admin@medizon.in")).thenReturn(Optional.of(user));

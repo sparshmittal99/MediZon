@@ -47,7 +47,12 @@ public class AccountDeletionService {
     @Transactional
     public void deleteOwn(User user, String password) {
         if (!user.isCustomer()) throw new BusinessException("Staff accounts are deleted by the admin.");
-        if (!userService.checkPassword(user, password)) throw new BusinessException("That password isn't right.");
+        if (!user.isPasswordSet()) {
+            // Made with Google, so there's no password to ask for: typing DELETE confirms instead
+            if (password == null || !password.trim().equals("DELETE")) throw new BusinessException("Type DELETE in capital letters to confirm.");
+        } else if (!userService.checkPassword(user, password)) {
+            throw new BusinessException("That password isn't right.");
+        }
         String to = user.getEmail();
         String firstName = user.getFirstName();
         delete(user);
@@ -153,6 +158,10 @@ public class AccountDeletionService {
         jdbc.update("delete from cart_item_packs where cart_item_id in (select id from cart_item where user_id = ?)", id);
         jdbc.update("delete from cart_item where user_id = ?", id);
         jdbc.update("delete from addresses where user_id = ?", id);
+        // Sign-in security: trusted and known devices, "This wasn't me" links
+        jdbc.update("delete from trusted_devices where user_id = ?", id);
+        jdbc.update("delete from known_devices where user_id = ?", id);
+        jdbc.update("delete from secure_account_tokens where user_id = ?", id);
         jdbc.update("delete from family_members where user_id = ?", id);
 
         String role = u.getRole().getLabel().toLowerCase();
@@ -160,7 +169,8 @@ public class AccountDeletionService {
                 update users set full_name = ?, email = ?, phone = null, password = ?, address_line = null, city = null,
                        state = null, pincode = null, billing_name = null, billing_address_line = null, billing_city = null,
                        billing_state = null, billing_pincode = null, billing_gstin = null, store_id = null,
-                       enabled = false, deleted = true, deleted_at = ?
+                       enabled = false, deleted = true, deleted_at = ?, google_subject = null, two_factor_secret = null,
+                       two_factor_enabled_at = null, two_factor_backup_codes = null
                 where id = ?""",
                 "Deleted " + role, "deleted-" + id + "@deleted.invalid", encoder.encode(UUID.randomUUID().toString()),
                 LocalDateTime.now(), id);
