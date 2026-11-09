@@ -39,4 +39,18 @@ class DeviceLabelTest {
         assertThat(DeviceService.renamed("Kitchen tablet", app)).isNull();
         assertThat(DeviceService.renamed("MediZon app on Android", WEBVIEW + " MediZonApp/1.0")).isNull();
     }
+
+    @Test
+    void theIconComesFromTheDeviceNotItsName() {
+        // The app is named after the phone ("M2101K6P"), which says nothing about it being a phone
+        assertThat(DeviceService.kind(WEBVIEW + " MediZonApp/1.0 MediZonDevice/M2101K6P")).isEqualTo(DeviceService.PHONE);
+        assertThat(DeviceService.kind("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 Safari/604.1")).isEqualTo(DeviceService.PHONE);
+        assertThat(DeviceService.kind("Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 Chrome/130.0 Safari/537.36")).isEqualTo(DeviceService.TABLET);
+        assertThat(DeviceService.kind("Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) Safari/604.1")).isEqualTo(DeviceService.TABLET);
+        assertThat(DeviceService.kind("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0 Safari/537.36")).isEqualTo(DeviceService.COMPUTER);
+
+        SignInService.Device app = new SignInService.Device(1L, "M2101K6P", null, false, DeviceService.PHONE);
+        assertThat(app.phone()).isTrue();
+        assertThat(new SignInService.Device(2L, "Chrome on Windows", null, true, DeviceService.COMPUTER).phone()).isFalse();
+    }
 }

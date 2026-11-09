@@ -52,6 +52,20 @@ public class DeviceService {
         return d;
     }
 
+    public static final String PHONE = "PHONE", TABLET = "TABLET", COMPUTER = "COMPUTER";
+
+    /**
+     * Phone, tablet or computer, from a User-Agent header. Phones' browsers (and the app's WebView) say "Mobile";
+     * Android tablets don't; iPads say iPad (or, in desktop mode, pass for a Mac).
+     */
+    public static String kind(String ua) {
+        if (ua == null) return COMPUTER;
+        if (ua.contains("iPad") || ua.contains("Tablet")) return TABLET;
+        if (ua.contains("iPhone") || ua.contains("Mobile")) return PHONE;
+        if (ua.contains("Android")) return TABLET;
+        return COMPUTER;
+    }
+
     /** What the Android app was called before it sent its phone's name. */
     static final String OLD_APP_LABEL = "MediZon app on Android";
 

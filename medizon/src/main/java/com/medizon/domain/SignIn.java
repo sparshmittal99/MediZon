@@ -31,6 +31,13 @@ public class SignIn {
     @Column(length = 60)
     private String label;
 
+    /**
+     * PHONE, TABLET or COMPUTER, from the browser's description (DeviceService.kind): the icon on the device list.
+     * Not from the label, which for the app is just the phone's own name ("M2101K6P").
+     */
+    @Column(length = 10)
+    private String kind;
+
     private LocalDateTime signedInAt = LocalDateTime.now();
 
     private LocalDateTime lastSeenAt = LocalDateTime.now();

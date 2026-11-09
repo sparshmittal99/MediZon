@@ -84,6 +84,7 @@ public class SignInService {
         });
         String better = DeviceService.renamed(s.getLabel(), request.getHeader(HttpHeaders.USER_AGENT));
         if (better != null) s.setLabel(better);     // the app now says which phone it is
+        s.setKind(DeviceService.kind(request.getHeader(HttpHeaders.USER_AGENT)));
         s.setLastSeenAt(now);
         s.setRememberedUntil(rememberedUntil);
         signIns.save(s);
@@ -106,11 +107,13 @@ public class SignInService {
     }
 
     /** One row on the "Signed-in devices" page. */
-    public record Device(Long id, String label, LocalDateTime signedInAt, boolean current) {
+    public record Device(Long id, String label, LocalDateTime signedInAt, boolean current, String kind) {
         public boolean phone() {
-            return label != null && (label.contains("Android") || label.contains("iPhone"));
+            if (kind != null) return DeviceService.PHONE.equals(kind);
+            return label != null && (label.contains("Android") || label.contains("iPhone"));   // rows from before kind
         }
         public boolean tablet() {
+            if (kind != null) return DeviceService.TABLET.equals(kind);
             return label != null && label.contains("iPad");
         }
     }
@@ -121,12 +124,13 @@ public class SignInService {
         String key = DeviceService.keyOf(here);
         List<Device> list = new ArrayList<>(signedIn(user).stream()
                 .sorted(Comparator.comparing(SignIn::getLastSeenAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(s -> new Device(s.getId(), s.getLabel(), s.getSignedInAt(), s.getDeviceKey().equals(key)))
+                .map(s -> new Device(s.getId(), s.getLabel(), s.getSignedInAt(), s.getDeviceKey().equals(key), s.getKind()))
                 .toList());
         list.sort(Comparator.comparing(d -> !d.current()));
         if (list.stream().noneMatch(Device::current)) {
             // This device's row is made on its first request after signing in, and may not exist yet
-            list.add(0, new Device(null, DeviceService.describe(here.getHeader(HttpHeaders.USER_AGENT)), LocalDateTime.now(), true));
+            String ua = here.getHeader(HttpHeaders.USER_AGENT);
+            list.add(0, new Device(null, DeviceService.describe(ua), LocalDateTime.now(), true, DeviceService.kind(ua)));
         }
         return list;
     }
