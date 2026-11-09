@@ -25,12 +25,17 @@
             <div class="mz-cart-list">
                 <!-- One card per line. data-mrp / data-unit feed the "% off" and "You save" figures (medizon.js). -->
                 <article th:each="i : ${cart.items}" class="mz-cart-item" data-mz-cart-row
-                         th:classappend="${!i.available} ? 'mz-cart-unavailable'"
+                         th:classappend="(${!i.available} ? 'mz-cart-unavailable ' : '') + (${!guest and !i.selected} ? 'is-unticked' : '')"
                          th:with="mrp=${i.medicine.mrp},
                                   off=${i.medicine.mrp != null and i.medicine.mrp.compareTo(i.unitPrice) > 0
                                         ? i.medicine.mrp.subtract(i.unitPrice).multiply(100).divide(i.medicine.mrp, 0, T(java.math.RoundingMode).HALF_UP) : 0}"
                          th:attr="data-mrp=${mrp},data-unit=${i.unitPrice}">
                     <div class="mz-cart-main">
+                        <label th:unless="${guest}" class="mz-check mz-cart-check">
+                            <input type="checkbox" th:checked="${i.selected}"
+                                   th:attr="data-mz-select=${i.medicine.id},aria-label='Select ' + ${i.medicine.name} + ' for checkout'">
+                            <span class="mz-check-box" aria-hidden="true"></span>
+                        </label>
                         <a class="mz-cart-thumb" th:href="@{/medicines/{id}(id=${i.medicine.id})}" th:aria-label="${i.medicine.name}">
                             <img th:if="${i.medicine.imageUrl}" th:src="@{${i.medicine.imageUrl}}" alt="" loading="lazy" data-mz-hide-broken>
                             <i class="bi" th:classappend="${i.medicine.icon}" aria-hidden="true"></i>
@@ -93,9 +98,6 @@
                     </div>
                 </article>
 
-                <a th:href="@{/medicines}" class="mz-cart-more">
-                    <i class="bi bi-plus-circle" aria-hidden="true"></i><span>Add more items</span>
-                    <i class="bi bi-chevron-right ms-auto" aria-hidden="true"></i></a>
             </div>
         </div>
 
@@ -107,24 +109,28 @@
                 </div>
 
                 <div class="mz-cart-bill">
-                    <h2 class="mz-cart-bill-title"><i class="bi bi-receipt" aria-hidden="true"></i>Bill details</h2>
                     <div class="mz-bill-row"><span><i class="bi bi-bag" aria-hidden="true"></i>Item total</span>
                         <span data-mz-subtotal th:text="'₹' + ${#numbers.formatDecimal(cart.subtotal, 1, 'COMMA', 2, 'POINT')}"></span></div>
                     <div class="mz-bill-row"><span><i class="bi bi-truck" aria-hidden="true"></i>Delivery fee</span>
                         <span data-mz-delivery th:text="${cart.deliveryFee.signum() == 0} ? 'Free' : ('₹' + ${cart.deliveryFee})"></span></div>
                     <div class="mz-bill-row mz-bill-minor" data-mz-round-off th:hidden="${cart.roundOff.signum() == 0}">
                         <span><i class="bi bi-arrow-down-up" aria-hidden="true"></i>Round off</span><span data-mz-round-off-value th:text="${cart.roundOffLabel}"></span></div>
+                    <div class="mz-bill-total"><span>Order total</span>
+                        <span data-mz-total th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
                     <div class="mz-bill-note" data-mz-free-note th:hidden="${cart.deliveryFee.signum() == 0}">
                         <i class="bi bi-lightning-charge-fill" aria-hidden="true"></i><span th:text="'Free delivery on orders of ₹' + ${freeAbove} + ' or more.'"></span></div>
                     <p class="mz-bill-note mz-bill-note-plain" data-mz-deliveries th:hidden="${cart.byStore.size() < 2}">
                         <i class="bi bi-boxes" aria-hidden="true"></i><span th:text="'Comes from ' + ${cart.byStore.size()} + ' stores, as separate orders paid for together.'"></span></p>
                 </div>
 
+                <!-- Nothing ticked: say so, and checkout waits (medizon.js keeps it current) -->
+                <div th:unless="${guest}" class="mz-cart-none" role="status" data-mz-none-selected th:hidden="${cart.selectedCount > 0}">
+                    <i class="bi bi-check2-square" aria-hidden="true"></i><span>Select the items you want to check out.</span></div>
                 <div class="mz-rx-note small" data-mz-rx-note th:hidden="${!cart.prescriptionRequired}">
                     <i class="bi bi-file-earmark-medical me-1" aria-hidden="true"></i>Some items need a prescription. You'll choose or upload one at checkout.
                 </div>
                 <!-- The admin's minimum order value: below it, how much more to add (kept current by the page script) -->
-                <div class="mz-min-order" role="status" data-mz-min-order th:hidden="${minShort.signum() == 0}"
+                <div class="mz-min-order" role="status" data-mz-min-order th:hidden="${minShort.signum() == 0 or cart.selectedCount == 0}"
                      th:attr="data-min=${minOrder}">
                     <div class="d-flex gap-2 align-items-start">
                         <i class="bi bi-basket2 text-warning" aria-hidden="true"></i>
@@ -141,15 +147,14 @@
                 <p th:if="${guest}" class="small text-muted text-center mb-0 mz-cart-guest">New to MediZon? <a th:href="@{/register}">Create an account</a>.
                     Your cart is kept.</p>
 
-                <!-- To pay + checkout. In the Android app this is a bar fixed above the tab bar (app.css). -->
+                <!-- Checkout for the ticked items (the order total is in the bill above). In the Android app this is a bar
+                     fixed above the tab bar (app.css). -->
                 <div class="mz-cart-pay">
-                    <div class="mz-cart-total">
-                        <span class="mz-cart-total-label">To pay</span>
-                        <span class="mz-cart-total-value" data-mz-total th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span>
-                    </div>
                     <a th:unless="${guest}" th:href="@{/checkout}" class="btn btn-primary mz-cart-go" data-mz-checkout-link
-                       th:classappend="${minShort.signum() > 0} ? 'disabled'" th:attr="aria-disabled=${minShort.signum() > 0}">
-                        Checkout<i class="bi bi-arrow-right ms-2" aria-hidden="true"></i></a>
+                       th:classappend="${minShort.signum() > 0 or cart.selectedCount == 0} ? 'disabled'"
+                       th:attr="aria-disabled=${minShort.signum() > 0 or cart.selectedCount == 0}">
+                        Checkout<span class="mz-cart-go-n" data-mz-checkout-count
+                              th:text="${cart.selectedCount} + (${cart.selectedCount == 1} ? ' item' : ' items')">3 items</span><i class="bi bi-arrow-right ms-2" aria-hidden="true"></i></a>
                     <!-- /checkout needs a signed-in customer: Spring Security sends visitors to sign in, then back to checkout. -->
                     <a th:if="${guest}" th:href="@{/checkout}" class="btn btn-primary mz-cart-go">
                         <i class="bi bi-box-arrow-in-right me-2" aria-hidden="true"></i>Sign in to checkout</a>

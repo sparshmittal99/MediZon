@@ -83,6 +83,7 @@ public class CartService {
         // "Others" can share a line with family members (two prescriptions, one medicine): each keeps their own packs
         for (int k = 0; k < to.size(); k++) alloc.merge(to.get(k), share[k], Integer::sum);
         item.allocate(alloc);
+        item.setSelected(true);      // added again: wanted, so ticked for checkout even if it was unticked
         cart.save(item);
     }
 
@@ -176,18 +177,41 @@ public class CartService {
     }
 
     /**
-     * Checkout: closes the cart and empties it; the next medicine added opens a new cart with a new id. Returns the
-     * closed cart, for the orders to point back to.
+     * Checkout: closes the cart and takes the {@code ordered} lines out of it. Lines that weren't ticked for checkout
+     * stay for later, moved to a new open cart (a new cart id); with none left the next medicine added opens one.
+     * Returns the closed cart, for the orders to point back to.
      */
     @Transactional
-    public Cart checkOut(User user) {
+    public Cart checkOut(User user, Collection<CartItem> ordered) {
         Cart closed = openCart(user);
         carts.findByUserAndStatus(user, CartStatus.ACTIVE).forEach(c -> {   // normally just the one
             c.setStatus(CartStatus.CHECKED_OUT);
             c.setCheckedOutAt(LocalDateTime.now());
         });
-        cart.deleteByUser(user);
+        Set<Long> orderedIds = ordered.stream().map(CartItem::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        List<CartItem> lines = cart.findByUserOrderByIdAsc(user);
+        List<CartItem> gone = lines.stream().filter(l -> orderedIds.contains(l.getId())).toList();
+        List<CartItem> kept = lines.stream().filter(l -> !orderedIds.contains(l.getId())).toList();
+        cart.deleteAll(gone);
+        if (!kept.isEmpty()) {
+            Cart next = carts.save(new Cart(user));
+            kept.forEach(l -> l.setCart(next));
+            cart.saveAll(kept);
+        }
         return closed;
+    }
+
+    // ------------------------------------------------------------------ ticked for checkout
+
+    /** Ticks or unticks one line for checkout. */
+    @Transactional
+    public void setSelected(User user, Long medicineId, boolean selected) {
+        Medicine m = medicines.findById(medicineId)
+                .orElseThrow(() -> new BusinessException("That medicine doesn't exist."));
+        CartItem item = cart.findByUserAndMedicine(user, m)
+                .orElseThrow(() -> new BusinessException(m.getName() + " isn't in your cart."));
+        item.setSelected(selected);
+        cart.save(item);
     }
 
     /** Cart lines from before carts had ids go into their account's open cart. */
@@ -211,28 +235,35 @@ public class CartService {
         return out;
     }
 
-    /** The cart priced for delivery to {@code pincode}: each line by the store that would deliver it. */
+    /**
+     * The whole cart priced for delivery to {@code pincode}: each line by the store that would deliver it. Every line is
+     * listed; the totals count the ticked ones.
+     */
     @Transactional(readOnly = true)
     public CartSummary summary(User user, String pincode) {
         return price(cart.findByUserOrderByIdAsc(user), pincode, null, null);
     }
 
-    /** As {@link #summary(User, String)}, with the promo {@code couponCode} checked and taken off when it applies. */
+    /**
+     * What checkout orders: only the lines ticked for checkout, priced for {@code pincode}, with the promo
+     * {@code couponCode} checked and taken off when it applies. Empty when nothing is ticked.
+     */
     @Transactional(readOnly = true)
     public CartSummary summary(User user, String pincode, String couponCode) {
-        return price(cart.findByUserOrderByIdAsc(user), pincode, user, couponCode);
+        List<CartItem> ticked = cart.findByUserOrderByIdAsc(user).stream().filter(CartItem::isSelected).toList();
+        return price(ticked, pincode, user, couponCode);
     }
 
-    /** Works out each line's store and price; lines nobody here can supply don't count towards the totals. */
+    /** Works out each line's store and price; unticked lines, and lines nobody here can supply, don't count towards the totals. */
     private CartSummary price(List<CartItem> items, String pincode, User user, String couponCode) {
         Map<Medicine, Integer> wanted = new LinkedHashMap<>();
         items.forEach(i -> wanted.put(i.getMedicine(), i.getQuantity()));
         Map<Long, Offer> offers = catalog.offers(wanted, pincode);
         items.forEach(i -> i.setOffer(offers.get(i.getMedicine().getId())));
-        BigDecimal subtotal = items.stream().filter(CartItem::isAvailable).map(CartItem::getLineTotal)
+        BigDecimal subtotal = items.stream().filter(CartItem::isCounted).map(CartItem::getLineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal fee = deliveryFeeFor(subtotal);
-        boolean rx = items.stream().anyMatch(i -> i.getMedicine().isPrescriptionRequired());
+        boolean rx = items.stream().anyMatch(i -> i.isSelected() && i.getMedicine().isPrescriptionRequired());
         return new CartSummary(items, subtotal, fee, rx, couponCode == null ? null : coupons.evaluate(user, couponCode, subtotal));
     }
 
@@ -323,6 +354,7 @@ public class CartService {
             if (alloc.isEmpty()) alloc.put(defaultFor(user, m), 0);
             alloc.merge(alloc.keySet().iterator().next(), add, Integer::sum);
             item.allocate(alloc);
+            item.setSelected(true);
             cart.save(item);
         }));
     }

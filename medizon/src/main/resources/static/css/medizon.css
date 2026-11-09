@@ -1332,6 +1332,11 @@ html.translated-ltr h1, html.translated-ltr h2, html.translated-ltr h3, html.tra
 @media (max-width: 991.98px) {
     body:has(.mz-checkout-pay) .mz-tabbar, body:has(.mz-checkout-pay) .mz-bot { display: none !important; }
     body:has(.mz-checkout-pay) { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+    /* Checkout: "Pay now" pinned to the bottom the same way, in place of the tab bar and the assistant */
+    .mz-checkout-go { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1065; padding: .75rem 1rem calc(.75rem + env(safe-area-inset-bottom));
+        background: var(--mz-surface, #fff); border-top: 1px solid var(--mz-line); box-shadow: 0 -8px 24px rgba(23, 48, 42, .08); }
+    body:has(.mz-checkout-go) .mz-tabbar, body:has(.mz-checkout-go) .mz-bot { display: none !important; }
+    body:has(.mz-checkout-go) { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
 }
 
 /* Confirming, then "Order placed" */
@@ -1631,11 +1636,12 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
 .mz-cart-amount { font-size: .95rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* The stepper in a cart card: a solid green pill (three classes deep so dark.css's stepper background doesn't win) */
-.mz-cart-item .mz-qty .mz-qty-stepper { background: var(--mz-green); border-color: var(--mz-green); box-shadow: 0 3px 10px rgba(14, 107, 87, .22); }
-.mz-cart-item .mz-qty .mz-qty-btn { width: 2.2rem; height: 2.1rem; color: #fff; }
+.mz-cart-item .mz-qty .mz-qty-stepper { background: var(--mz-green); border-color: var(--mz-green); box-shadow: 0 2px 6px rgba(14, 107, 87, .18); }
+/* Compact, close to the "For" chips' size */
+.mz-cart-item .mz-qty .mz-qty-btn { width: 1.75rem; height: 1.6rem; color: #fff; font-size: .8rem; }
 .mz-cart-item .mz-qty .mz-qty-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .16); }
 .mz-cart-item .mz-qty .mz-qty-btn:disabled { color: rgba(255, 255, 255, .45); }
-.mz-cart-item .mz-qty .mz-qty-count { min-width: 1.5rem; color: #fff; }
+.mz-cart-item .mz-qty .mz-qty-count { min-width: 1.2rem; color: #fff; font-size: .88rem; }
 
 /* A line that can't be delivered */
 .mz-cart-item.mz-cart-unavailable { border-color: #EFCFCF; }
@@ -1648,10 +1654,32 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
 /* "For": right under the card's details, no divider, so a card stays compact */
 .mz-cart-for { margin-top: .55rem; }
 
-.mz-cart-more { display: flex; align-items: center; gap: .6rem; padding: .85rem 1rem; border: 1.5px dashed var(--mz-line); border-radius: 1.1rem;
-    color: var(--mz-green); font-weight: 700; text-decoration: none; transition: background-color .15s ease, border-color .15s ease; }
-.mz-cart-more:hover, .mz-cart-more:active { color: var(--mz-green); border-color: var(--mz-green); background: var(--mz-mint); }
-.mz-cart-more .bi-plus-circle { font-size: 1.1rem; }
+/* ---------- Partial checkout: a tick on each card (new items come in ticked) ----------
+   A rounded green checkbox drawn in CSS (the real input stays on top, invisible, so it's tappable and accessible). */
+.mz-check { position: relative; display: inline-flex; align-items: center; gap: .55rem; margin: 0; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; }
+.mz-check input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.mz-check-box { flex: none; position: relative; width: 1.3rem; height: 1.3rem; border: 2px solid #9DB8AD; border-radius: .42rem;
+    background: var(--mz-surface, #fff); transition: background-color .15s ease, border-color .15s ease, transform .12s ease; }
+.mz-check-box::after { content: ""; position: absolute; left: .36rem; top: .14rem; width: .34rem; height: .66rem;
+    border: solid #fff; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) scale(0); transition: transform .15s ease; }
+.mz-check input:checked + .mz-check-box { background: var(--mz-green); border-color: var(--mz-green); }
+.mz-check input:checked + .mz-check-box::after { transform: rotate(45deg) scale(1); }
+.mz-check input:focus-visible + .mz-check-box { outline: 3px solid rgba(14, 107, 87, .45); outline-offset: 2px; }
+.mz-check:active .mz-check-box { transform: scale(.9); }
+
+/* On a card: its own column left of the picture, lined up with it; a bigger tap area than the box */
+.mz-cart-check { align-self: flex-start; margin: 0 -.35rem 0 -.3rem; padding: .3rem; }
+.mz-cart-check::before { content: ""; position: absolute; inset: -.35rem; }
+/* Unticked: dimmed, still editable, and left out of the bill */
+.mz-cart-item.is-unticked .mz-cart-thumb, .mz-cart-item.is-unticked .mz-cart-info { opacity: .55; transition: opacity .15s ease; }
+.mz-cart-item.is-unticked { box-shadow: none; }
+.mz-cart-none { display: flex; align-items: center; gap: .55rem; padding: .7rem .95rem; border: 1px dashed var(--mz-line); border-radius: 1rem;
+    background: var(--mz-surface, #fff); color: var(--mz-muted); font-size: .88rem; font-weight: 600; }
+.mz-cart-none[hidden] { display: none; }
+.mz-cart-none i { color: var(--mz-green); font-size: 1.1rem; }
+.mz-cart-go-n { margin-left: .3rem; }   /* a flex item: a leading space would be dropped */
+.mz-cart-go-n[hidden] { display: none; }
 
 /* Right column (below the items on phones) */
 .mz-cart-side { display: flex; flex-direction: column; gap: .75rem; }
@@ -1660,14 +1688,16 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
 .mz-cart-save i { color: var(--mz-green); font-size: 1.1rem; }
 .mz-cart-save[hidden] { display: none; }
 .mz-cart-bill { padding: 1rem 1.1rem; background: var(--mz-surface, #fff); border: 1px solid var(--mz-line); border-radius: 1.1rem; }
-.mz-cart-bill-title { display: flex; align-items: center; gap: .5rem; margin: 0 0 .7rem; font-size: 1rem; font-weight: 800; }
-.mz-cart-bill-title i { color: var(--mz-green); }
 .mz-bill-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .32rem 0; font-size: .92rem; }
 .mz-bill-row[hidden] { display: none; }
 .mz-bill-row > span:first-child { display: inline-flex; align-items: center; gap: .55rem; }
 .mz-bill-row > span:first-child i { width: 1rem; color: var(--mz-muted); }
 .mz-bill-row > span:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
 .mz-bill-minor { color: var(--mz-muted); font-size: .85rem; }
+/* Order total: the bill's last line, set off by a rule (the amount checkout will charge before any promo) */
+.mz-bill-total { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: .45rem; padding-top: .6rem;
+    border-top: 1px dashed var(--mz-line); font-size: 1rem; font-weight: 700; }
+.mz-bill-total > span:last-child { font-variant-numeric: tabular-nums; }
 .mz-bill-note { display: flex; align-items: flex-start; gap: .45rem; margin: .55rem 0 0; padding: .5rem .7rem; border-radius: .7rem;
     background: var(--mz-paper); color: var(--mz-muted); font-size: .8rem; line-height: 1.4; }
 .mz-bill-note[hidden] { display: none; }
@@ -1675,12 +1705,23 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
 .mz-cart-side .mz-rx-note, .mz-cart-side .mz-min-order { margin: 0; border-radius: 1rem; }
 .mz-cart-pay { display: flex; align-items: center; gap: .9rem; padding: .85rem 1rem; background: var(--mz-surface, #fff);
     border: 1px solid var(--mz-line); border-radius: 1.1rem; }
-.mz-cart-total { flex: none; display: flex; flex-direction: column; line-height: 1.15; }
-.mz-cart-total-label { color: var(--mz-muted); font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.mz-cart-total-value { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-.mz-cart-go { flex: 1; display: inline-flex; align-items: center; justify-content: center; padding: .72rem 1rem; border-radius: .85rem; font-weight: 700; }
+/* A plain .btn-primary like every other button; it only stretches to fill the row */
+.mz-cart-go { flex: 1; display: inline-flex; align-items: center; justify-content: center; }
 
 @media (min-width: 992px) { .mz-cart-side { position: sticky; top: 1.5rem; } }
+/* Phones and tablets: Checkout is a bar fixed just above the tab bar, so it never scrolls away (app.css: the app's taller tab bar) */
+@media (max-width: 991.98px) {
+    .mz-cart-page .mz-cart-pay { position: fixed; left: 0; right: 0; bottom: calc(3.7rem + env(safe-area-inset-bottom)); z-index: 1050;
+        padding: .7rem 1rem; border: 0; border-radius: 1.15rem 1.15rem 0 0;
+        box-shadow: 0 -1px 0 var(--mz-line), 0 -10px 28px rgba(23, 48, 42, .10); }
+    body:not(:has(.mz-tabbar)) .mz-cart-page .mz-cart-pay { bottom: 0; padding-bottom: calc(.7rem + env(safe-area-inset-bottom)); }
+    /* Room at the end of the page so the last card isn't under the bar, and the assistant sits above it */
+    .mz-cart-page:has(.mz-cart-pay) { padding-bottom: 6.5rem; }
+    /* Stacked under the products: a clear 2.5rem between the last card and the savings banner / bill (the row gutter gives 1.5rem) */
+    .mz-cart-side { margin-top: 1rem; }
+    body:has(.mz-cart-pay) .mz-bot { bottom: calc(9rem + env(safe-area-inset-bottom)); }
+    body:has(.mz-cart-pay) .mz-bot.is-tucked { bottom: 10rem; }
+}
 @media (max-width: 575.98px) {
     .mz-cart-item { padding: .8rem; }
     .mz-cart-main { gap: .8rem; }

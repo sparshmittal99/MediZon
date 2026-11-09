@@ -68,8 +68,11 @@ public class OrderController {
         // Priced and split by store for the address it's going to
         String pin = addresses.stream().filter(a -> a.getId().equals(selected)).map(Address::getPincode).findFirst()
                 .orElse(deliveryLocations.pincode(request));
-        CartSummary cart = cartService.summary(user, pin, (String) session.getAttribute(COUPON));
-        if (cart.isEmpty()) return "redirect:/cart";
+        CartSummary cart = cartService.summary(user, pin, (String) session.getAttribute(COUPON));   // ticked lines only
+        if (cart.isEmpty()) {
+            if (cartService.count(user) > 0) ra.addFlashAttribute("error", "Tick at least one item in your cart to check out.");
+            return "redirect:/cart";
+        }
         model.addAttribute("cart", cart);
         model.addAttribute("minOrder", orderSettings.minOrderValue());
         model.addAttribute("minShort", OrderSettingsService.shortBy(cart.getSubtotal(), orderSettings.minOrderValue()));

@@ -194,27 +194,18 @@ html[data-motion="reduce"] .mz-search button, html[data-motion="reduce"] .mz-nav
     font-style: normal; line-height: 1; box-shadow: 0 0 0 2px var(--mz-surface, #fff); }
 html[data-theme="dark"] .mz-tabbar a i .mz-count { box-shadow: 0 0 0 2px var(--mz-surface); }
 
-/* ---------- Cart: "To pay" + Checkout as a bar fixed just above the tab bar, like shopping apps ----------
-   It's the same block as on the website (cart.html .mz-cart-pay), so medizon.js keeps the total and the button current. */
+/* ---------- Cart and checkout: the bottom buttons stay put (medizon.css pins them); the app's tab bar is taller ---------- */
 @media (max-width: 991.98px) {
-    .mz-cart-page .mz-cart-pay { position: fixed; left: 0; right: 0; bottom: calc(4.3rem + env(safe-area-inset-bottom)); z-index: 1050;
-        padding: .7rem 1rem; border: 0; border-radius: 1.15rem 1.15rem 0 0;
-        box-shadow: 0 -1px 0 var(--mz-line), 0 -10px 28px rgba(23, 48, 42, .10); animation: mz-cart-bar-in .25s ease-out both; }
-    .mz-cart-page .mz-cart-go { padding: .8rem 1rem; font-size: 1.02rem; box-shadow: 0 4px 12px rgba(14, 107, 87, .28); }
-    .mz-cart-page .mz-cart-go.disabled { box-shadow: none; }
-    /* Room at the end of the page so the last card isn't under the bar, and the assistant tab sits above it */
-    .mz-cart-page:has(.mz-cart-pay) { padding-bottom: 6.5rem; }
-    body:has(.mz-cart-pay) .mz-bot.is-tucked { bottom: 10rem; }
-    html.mz-kb .mz-cart-pay { display: none !important; }
+    .mz-cart-page .mz-cart-pay { bottom: calc(4.3rem + env(safe-area-inset-bottom)); animation: mz-cart-bar-in .25s ease-out both; }
+    /* Keyboard open: out of the way, like the tab bar */
+    html.mz-kb .mz-cart-pay, html.mz-kb .mz-checkout-go { display: none !important; }
 }
 @keyframes mz-cart-bar-in { from { transform: translateY(100%); } to { transform: none; } }
 html[data-motion="reduce"] .mz-cart-pay { animation: none; }
-html[data-theme="dark"] .mz-cart-page .mz-cart-pay { box-shadow: 0 -1px 0 var(--mz-line), 0 -10px 28px rgba(0, 0, 0, .35); }
 /* Pressing a card's parts gives a little, like the rest of the app */
-.mz-cart-del:active, .mz-cart-more:active, .mz-cart-thumb:active { transform: scale(.95); }
-.mz-cart-del, .mz-cart-more, .mz-cart-thumb { transition: transform .12s ease, background-color .15s ease, color .15s ease; }
-.mz-cart-more:active { transform: scale(.98); }
-.mz-cart-name, .mz-cart-more, .mz-cart-del { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.mz-cart-del:active, .mz-cart-thumb:active { transform: scale(.95); }
+.mz-cart-del, .mz-cart-thumb { transition: transform .12s ease, background-color .15s ease, color .15s ease; }
+.mz-cart-name, .mz-cart-del { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 
 /* ---------- Checkout: one "Apply coupon" row that opens the coupons screen ---------- */
 .mz-coupon-row { display: flex; align-items: center; border: 1px solid var(--mz-line); border-radius: 1rem;

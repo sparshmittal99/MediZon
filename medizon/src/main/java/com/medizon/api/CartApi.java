@@ -109,6 +109,7 @@ public class CartApi {
         out.put("prescriptionRequired", c.isPrescriptionRequired());
         out.put("empty", c.isEmpty());
         out.put("shipmentCount", c.getByStore().size());
+        selection(out, c);
         minimum(out, c);
         c.getItems().stream().filter(i -> i.getMedicine().getId().equals(medicineId)).findFirst().ifPresent(i -> {
             out.put("cartItemId", i.getId());   // null for a signed-out visitor's session cart
@@ -118,6 +119,45 @@ public class CartApi {
             if (i.isAvailable()) out.put("store", i.getOffer().store().getName());
         });
         return out;
+    }
+
+    public record SelectRequest(boolean selected) {}
+
+    /** Ticks or unticks one line for checkout; returns the new totals (which count ticked lines only). */
+    @PostMapping("/{medicineId}/selected")
+    public Map<String, Object> setSelected(@PathVariable Long medicineId, @RequestBody SelectRequest req, HttpServletRequest request) {
+        User user = signedIn();
+        cartService.setSelected(user, medicineId, req.selected());
+        return totals(user, deliveryLocations.pincode(request));
+    }
+
+    /** Ticking is for account carts; a visitor's whole cart goes to checkout once they sign in. */
+    private User signedIn() {
+        return currentUser.find().orElseThrow(() -> new com.medizon.service.BusinessException("Sign in to choose items for checkout."));
+    }
+
+    /** The cart's totals after a tick changes, in the same shape as {@link #setQuantity} (without a line). */
+    private Map<String, Object> totals(User user, String pin) {
+        CartSummary c = cartService.summary(user, pin);
+        Map<String, Object> out = new HashMap<>();
+        out.put("cartCount", cartService.count(user));
+        out.put("subtotal", c.getSubtotal());
+        out.put("deliveryFee", c.getDeliveryFee());
+        out.put("roundOff", c.getRoundOff());
+        out.put("total", c.getTotal());
+        out.put("prescriptionRequired", c.isPrescriptionRequired());
+        out.put("empty", c.isEmpty());
+        out.put("shipmentCount", c.getByStore().size());
+        selection(out, c);
+        minimum(out, c);
+        return out;
+    }
+
+    /** How many lines are ticked for checkout, and whether all of them are. */
+    private static void selection(Map<String, Object> out, CartSummary c) {
+        out.put("selectedCount", c.getSelectedCount());
+        out.put("itemCount", c.getItems().size());
+        out.put("allSelected", c.isAllSelected());
     }
 
     /** The minimum order value, and how much more the medicines need to reach it (zero once they do). */

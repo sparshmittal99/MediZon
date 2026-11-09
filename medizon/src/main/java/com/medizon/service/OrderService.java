@@ -74,7 +74,9 @@ public class OrderService {
         if (addressId == null) throw new BusinessException("Choose a delivery address.");
         Address ship = addressService.get(addressId, user);
         CartSummary cart = cartService.summary(user, ship.getPincode(), couponCode);
-        if (cart.isEmpty()) throw new BusinessException("Your cart is empty.");
+        if (cart.isEmpty()) {
+            throw new BusinessException(cartService.count(user) > 0 ? "Tick at least one item in your cart to check out." : "Your cart is empty.");
+        }
         if (!cart.getUnavailable().isEmpty()) {
             throw new BusinessException(cart.getUnavailable().stream().map(i -> i.getMedicine().getName()).collect(Collectors.joining(", "))
                     + " can't be delivered to " + ship.getPincode() + " right now. Remove " + (cart.getUnavailable().size() == 1 ? "it" : "them")
@@ -183,7 +185,7 @@ public class OrderService {
             }
         }
         prescriptionService.finishUse(coverage.prescriptions());
-        Cart from = cartService.checkOut(user);
+        Cart from = cartService.checkOut(user, cart.getItems());   // only what was ordered; unticked lines stay in the cart
         placed.forEach(o -> o.setCart(from));
         if (placed.size() == 1) {
             Order o = placed.get(0);

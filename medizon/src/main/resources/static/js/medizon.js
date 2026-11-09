@@ -539,12 +539,28 @@
         refreshCartExtras();
     }
 
-    /** Cart page: the item count, each line's "% off" and the "You save ... on MRP" strip, from data-mrp / data-unit. */
+    /**
+     * Cart page: the item count, each line's "% off", the "You save ... on MRP" strip (ticked lines only) and the
+     * ticks: unticked cards dimmed, and "Checkout 2 items" for however many are ticked.
+     */
     function refreshCartExtras() {
         const rows = document.querySelectorAll('[data-mz-cart-row]');
         if (!rows.length) return;
+        const ticks = document.querySelectorAll('[data-mz-select]');
+        const ticked = [...ticks].filter(t => t.checked).length;
+        rows.forEach(row => {
+            const tick = row.querySelector('[data-mz-select]');
+            row.classList.toggle('is-unticked', !!tick && !tick.checked);
+        });
+        if (ticks.length) {
+            const none = document.querySelector('[data-mz-none-selected]');
+            if (none) none.hidden = ticked > 0;
+            const n = document.querySelector('[data-mz-checkout-count]');
+            if (n) n.textContent = `${ticked} ${ticked === 1 ? 'item' : 'items'}`;   // "Checkout 2 items"
+        }
         let saved = 0;
         rows.forEach(row => {
+            if (row.classList.contains('is-unticked')) return;
             const mrp = Number(row.dataset.mrp || 0), unit = Number(row.dataset.unit || 0);
             const off = mrp > unit ? Math.round((mrp - unit) * 100 / mrp) : 0;
             const badge = row.querySelector('[data-mz-off]');
@@ -564,19 +580,44 @@
     }
     refreshCartExtras();
 
+    // ---- Cart: tick lines for checkout (partial checkout); the totals count ticked lines only ----
+    document.addEventListener('change', async (e) => {
+        const one = e.target.closest('[data-mz-select]');
+        const summary = document.querySelector('[data-mz-cart-summary]');
+        if (!one || !summary) return;
+        const want = one.checked;
+        refreshCartExtras();
+        summary.classList.add('is-busy');
+        try {
+            const res = await mzFetch('/api/cart/' + one.dataset.mzSelect + '/selected', { method: 'POST', body: JSON.stringify({ selected: want }) });
+            if (res.redirected) { location.href = res.url; return; }
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            updateCartPage(summary, data);      // no row: just the bill, minimum order and checkout button
+        } catch (ex) {
+            one.checked = !want;                // put it back
+            refreshCartExtras();
+            alert('Could not update your selection. Check your connection and try again.');   // the app shows it as a pop-up
+        } finally {
+            summary.classList.remove('is-busy');
+        }
+    });
+
     /** Below the admin's minimum order value: how much more to add, and checkout waits until it's reached. */
     function updateMinOrder(summary, data) {
         const box = summary.querySelector('[data-mz-min-order]');
         if (!box || data.minOrderShort == null) return;
         const short = Number(data.minOrderShort), min = Number(data.minOrderValue);
-        box.hidden = short <= 0;
+        // Nothing ticked for checkout: no "add ₹X more", just "select items" (refreshCartExtras) and checkout waits
+        const none = data.selectedCount === 0;
+        box.hidden = short <= 0 || none;
         box.querySelector('[data-mz-min-order-text]').textContent = `Add ${rupees(short)} more to place your order`;
         const bar = box.querySelector('[data-mz-min-order-bar]');
         if (bar) bar.style.width = (min > 0 ? Math.min(100, Math.floor(Number(data.subtotal) * 100 / min)) : 100) + '%';
         const link = summary.querySelector('[data-mz-checkout-link]');
         if (link) {
-            link.classList.toggle('disabled', short > 0);
-            link.setAttribute('aria-disabled', String(short > 0));
+            link.classList.toggle('disabled', short > 0 || none);
+            link.setAttribute('aria-disabled', String(short > 0 || none));
         }
     }
 

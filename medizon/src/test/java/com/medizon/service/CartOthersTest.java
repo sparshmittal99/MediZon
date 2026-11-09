@@ -101,4 +101,19 @@ class CartOthersTest {
         service.add(user, 3L, 1, null);       // Acitrom needs a prescription
         assertEquals(1, saved.packsFor(me.getId()));
     }
+
+    @Test
+    void addingAnUntickedMedicineAgainTicksItForCheckout() {
+        CartItem line = new CartItem();
+        line.setUser(user);
+        line.setMedicine(acitrom);
+        line.allocate(Map.of(me, 1));
+        line.setSelected(false);                  // left out of the last checkout
+        saved = line;
+
+        service.add(user, 3L, 1, null);           // added again from the shop
+
+        assertTrue(saved.isSelected());
+        assertEquals(2, saved.getQuantity());
+    }
 }

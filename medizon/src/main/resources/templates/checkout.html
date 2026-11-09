@@ -11,7 +11,7 @@
         <div class="col-lg-7">
             <section class="mz-panel mb-4">
                 <div class="d-flex justify-content-between align-items-baseline mb-3">
-                    <h2 class="h5 mb-0">Shipping address</h2>
+                    <h2 class="h5 mb-0">Delivery address</h2>
                     <a th:href="@{/addresses}" class="small">Manage addresses</a>
                 </div>
                 <div th:if="${#lists.isEmpty(addresses)}" class="alert alert-warning small">Add a delivery address to place the order.</div>
@@ -38,22 +38,6 @@
                         <i class="bi bi-plus-lg" aria-hidden="true"></i><strong>Add a new address</strong>
                     </a>
                 </div>
-            </section>
-
-            <section class="mz-panel mb-4">
-                <div class="d-flex justify-content-between align-items-baseline mb-2">
-                    <h2 class="h5 mb-0">Billing address</h2>
-                    <a th:href="@{/billing-address(returnTo='checkout')}" class="small"
-                       th:text="${me.hasBillingAddress()} ? 'Change' : 'Add billing address'">Change</a>
-                </div>
-                <div th:if="${me.hasBillingAddress()}" class="small">
-                    <div class="fw-semibold" th:text="${me.billing.name}"></div>
-                    <div class="text-muted" th:text="${me.billing.formatted}"></div>
-                    <div th:if="${me.billing.gstin != null}"><strong>GSTIN:</strong> <span th:text="${me.billing.gstin}"></span></div>
-                </div>
-                <p th:unless="${me.hasBillingAddress()}" class="small text-muted mb-0">
-                    <i class="bi bi-check2 me-1" aria-hidden="true"></i>Same as shipping address. The invoice is billed to
-                    <strong th:text="${me.fullName}"></strong> at the address above.</p>
             </section>
 
             <!-- Prescription upload lives outside the order form (forms can't nest) -->
@@ -174,9 +158,12 @@
                         </div>
                     </div>
                 </div>
-                <button form="placeOrder" class="btn btn-primary w-100" type="submit"
-                        th:disabled="${selectedAddress == null or (cart.prescriptionRequired and !rxCoverage.complete) or minShort.signum() > 0}">
-                    Pay now</button>
+                <!-- Phones and tablets: pinned to the bottom of the screen, so it never scrolls away (medizon.css) -->
+                <div class="mz-checkout-go">
+                    <button form="placeOrder" class="btn btn-primary w-100" type="submit"
+                            th:disabled="${selectedAddress == null or (cart.prescriptionRequired and !rxCoverage.complete) or minShort.signum() > 0}">
+                        Pay now</button>
+                </div>
                 <p class="small text-muted text-center mt-2 mb-0">Choose UPI, card, net banking, MediZon Money or pay on delivery next</p>
             </div>
         </div>

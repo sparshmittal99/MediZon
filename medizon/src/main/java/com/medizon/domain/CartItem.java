@@ -31,6 +31,13 @@ public class CartItem {
 
     private int quantity;
 
+    /**
+     * Ticked for checkout. Checkout orders only ticked lines and the rest stay in the cart for later; the cart's
+     * totals count only ticked lines. New lines (and lines from before this existed) start ticked.
+     */
+    @Column(columnDefinition = "boolean not null default true")
+    private boolean selected = true;
+
     /** Who it's for: one or more family members, or the common shelf. The customer picks in the cart. */
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "cart_item_members",
@@ -60,6 +67,9 @@ public class CartItem {
 
     /** Enough packs at a store that delivers here (or, without a location, at some store). */
     public boolean isAvailable() { return offer != null && offer.canSell(quantity); }
+
+    /** Counts towards the totals: ticked for checkout and deliverable. */
+    public boolean isCounted() { return selected && isAvailable(); }
 
     public BigDecimal getUnitPrice() { return offer != null ? offer.price() : medicine.getPrice(); }
 
