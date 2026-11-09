@@ -247,3 +247,11 @@ html[data-theme="dark"] .mz-pw-match.bad { color: color-mix(in srgb, #991B1B 40%
 }
 html[data-theme="dark"] .mz-addr-spot { background-color: color-mix(in srgb, #0E6B57 22%, #0F1715); }
 html[data-theme="dark"] .mz-addr-hits [role="option"]:hover, html[data-theme="dark"] .mz-addr-hits [aria-selected="true"] { background-color: color-mix(in srgb, #0E6B57 22%, #0F1715); }
+
+/* Cart cards */
+html[data-theme="dark"] .mz-cart-del:hover, html[data-theme="dark"] .mz-cart-del:active { background-color: #3A1A1A; }
+html[data-theme="dark"] .mz-cart-rx { background-color: #3A1A1A; border-color: #5A2A2A; color: #F08A8A; }
+html[data-theme="dark"] .mz-cart-item.mz-cart-unavailable { border-color: #5A2A2A; }
+html[data-theme="dark"] .mz-cart-alert { background-color: #2E1818; color: #F0B0B0; }
+html[data-theme="dark"] .mz-cart-save { border-color: rgba(111, 209, 174, .3); }
+html[data-theme="dark"] .mz-cart-item { box-shadow: none; }

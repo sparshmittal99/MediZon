@@ -535,7 +535,34 @@
         summary.querySelector('[data-mz-free-note]').hidden = freeDelivery;
         summary.querySelector('[data-mz-rx-note]').hidden = !data.prescriptionRequired;
         updateMinOrder(summary, data);
+        if (row && data.unitPrice != null) row.dataset.unit = data.unitPrice;
+        refreshCartExtras();
     }
+
+    /** Cart page: the item count, each line's "% off" and the "You save ... on MRP" strip, from data-mrp / data-unit. */
+    function refreshCartExtras() {
+        const rows = document.querySelectorAll('[data-mz-cart-row]');
+        if (!rows.length) return;
+        let saved = 0;
+        rows.forEach(row => {
+            const mrp = Number(row.dataset.mrp || 0), unit = Number(row.dataset.unit || 0);
+            const off = mrp > unit ? Math.round((mrp - unit) * 100 / mrp) : 0;
+            const badge = row.querySelector('[data-mz-off]');
+            if (badge) { badge.hidden = off <= 0; badge.textContent = off + '% off'; }
+            const struck = row.querySelector('[data-mz-mrp]');
+            if (struck) struck.hidden = off <= 0;
+            const qty = Number(row.querySelector('[data-mz-cart]')?.dataset.qty || 0);
+            if (off > 0 && !row.classList.contains('mz-cart-unavailable')) saved += (mrp - unit) * qty;
+        });
+        const count = document.querySelector('[data-mz-cart-count]');
+        if (count) count.textContent = rows.length + (rows.length === 1 ? ' item' : ' items');
+        const save = document.querySelector('[data-mz-savings]');
+        if (save) {
+            save.hidden = saved < 0.005;
+            save.querySelector('[data-mz-savings-text]').textContent = `You save ${rupees(saved)} on MRP with this order`;
+        }
+    }
+    refreshCartExtras();
 
     /** Below the admin's minimum order value: how much more to add, and checkout waits until it's reached. */
     function updateMinOrder(summary, data) {

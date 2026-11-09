@@ -5,94 +5,126 @@
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
-<main class="container mz-page">
-    <h1 class="mz-page-title mb-4">Your cart</h1>
+<main class="container mz-page mz-cart-page">
+    <div class="mz-cart-head">
+        <h1 class="mz-page-title mb-0">Your cart</h1>
+        <!-- Kept current by medizon.js (refreshCartExtras) as rows go -->
+        <span th:unless="${cart.empty}" class="mz-cart-count" data-mz-cart-count
+              th:text="${#lists.size(cart.items)} + (${#lists.size(cart.items) == 1} ? ' item' : ' items')">2 items</span>
+    </div>
 
-    <div th:if="${cart.empty}" class="mz-panel mz-empty">
-        <i class="bi bi-bag"></i>
-        <p class="mb-3">Your cart is empty.</p>
-        <a th:href="@{/medicines}" class="btn btn-primary">Browse medicines</a>
+    <div th:if="${cart.empty}" class="mz-cart-empty">
+        <span class="mz-cart-empty-ico"><i class="bi bi-bag" aria-hidden="true"></i></span>
+        <h2 class="h5 mb-1">Your cart is empty</h2>
+        <p class="text-muted mb-4">Add medicines and health essentials and they'll show up here.</p>
+        <a th:href="@{/medicines}" class="btn btn-primary px-4">Browse medicines</a>
     </div>
 
     <div class="row g-4" th:unless="${cart.empty}">
         <div class="col-lg-8">
-            <div class="mz-panel-flush">
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0 mz-table-stack mz-cart-table">
-                        <thead><tr><th>Medicine</th><th style="width: 9rem">Packs</th><th class="text-end">Amount</th><th></th></tr></thead>
-                        <tbody>
-                        <tr th:each="i : ${cart.items}" data-mz-cart-row th:classappend="${!i.available} ? 'mz-cart-unavailable'">
-                            <td>
-                                <a class="fw-semibold text-decoration-none" th:href="@{/medicines/{id}(id=${i.medicine.id})}" th:text="${i.medicine.name}">Name</a>
-                                <span th:if="${i.medicine.prescriptionRequired}" class="mz-rx position-static ms-1">Rx</span>
-                                <div class="small text-muted"><span data-mz-unit-price th:text="'₹' + ${i.unitPrice}"></span>
-                                    <span th:text="' per pack of ' + ${i.medicine.packLabel}"></span></div>
-                                <!-- The store that sends this line: the nearest one with enough in stock -->
-                                <div class="small text-muted" th:if="${i.available}"><i class="bi bi-shop me-1" aria-hidden="true"></i>From
-                                    <span data-mz-line-store th:text="${i.offer.store().name}"></span></div>
-                                <div class="small text-danger" th:unless="${i.available}" role="status">
-                                    <i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i><span th:text="${i.product.stock > 0}
-                                        ? 'Only ' + ${i.product.stock} + ' pack(s) can be delivered here. Lower the quantity.'
-                                        : 'Not available for delivery to your location. Remove it or change the location.'"></span></div>
-                                <!-- Who the packs are for. One pack goes to one choice; with more packs each person gets
-                                     their own - n + and the line's quantity is the sum (medizon.js, /api/cart/{id}/allocation). -->
-                                <div th:unless="${guest}" class="mz-for mz-alloc" th:classappend="${i.quantity > 1} ? 'is-multi'"
-                                     th:attr="data-mz-alloc=${i.medicine.id},data-max=${i.product.stock}">
-                                    <span class="mz-for-label" th:id="'for' + ${i.id}">For</span>
-                                    <div class="mz-member-picks" role="group" th:attr="aria-labelledby='for' + ${i.id}">
-                                        <th:block th:each="m : ${people}">
-                                            <div th:replace="~{fragments/layout :: allocOption(${i}, ${m}, '', '', false)}"></div>
-                                        </th:block>
-                                        <th:block th:unless="${i.medicine.prescriptionRequired}">
-                                            <div th:replace="~{fragments/layout :: allocOption(${i}, ${common}, 'bi-house-heart', 'mz-pick-common', false)}"></div>
-                                        </th:block>
-                                        <div th:replace="~{fragments/layout :: allocOption(${i}, ${others}, 'bi-person-walking', 'mz-pick-others', true)}"></div>
-                                    </div>
-                                    <!-- The patient names of whoever's chosen; medizon.js keeps it in step with the picks -->
-                                    <div class="small text-muted mt-1" data-mz-patients th:hidden="${#strings.isEmpty(i.patientLabel)}">
-                                        Patient: <span th:text="${i.patientLabel}"></span></div>
-                                    <div class="mz-qty-error small" role="alert" hidden></div>
+            <div class="mz-cart-list">
+                <!-- One card per line. data-mrp / data-unit feed the "% off" and "You save" figures (medizon.js). -->
+                <article th:each="i : ${cart.items}" class="mz-cart-item" data-mz-cart-row
+                         th:classappend="${!i.available} ? 'mz-cart-unavailable'"
+                         th:with="mrp=${i.medicine.mrp},
+                                  off=${i.medicine.mrp != null and i.medicine.mrp.compareTo(i.unitPrice) > 0
+                                        ? i.medicine.mrp.subtract(i.unitPrice).multiply(100).divide(i.medicine.mrp, 0, T(java.math.RoundingMode).HALF_UP) : 0}"
+                         th:attr="data-mrp=${mrp},data-unit=${i.unitPrice}">
+                    <div class="mz-cart-main">
+                        <a class="mz-cart-thumb" th:href="@{/medicines/{id}(id=${i.medicine.id})}" th:aria-label="${i.medicine.name}">
+                            <img th:if="${i.medicine.imageUrl}" th:src="@{${i.medicine.imageUrl}}" alt="" loading="lazy" data-mz-hide-broken>
+                            <i class="bi" th:classappend="${i.medicine.icon}" aria-hidden="true"></i>
+                            <span class="mz-cart-off" data-mz-off th:hidden="${off <= 0}" th:text="${off} + '% off'">10% off</span>
+                        </a>
+                        <div class="mz-cart-info">
+                            <div class="mz-cart-title">
+                                <a class="mz-cart-name" th:href="@{/medicines/{id}(id=${i.medicine.id})}" th:text="${i.medicine.name}">Name</a>
+                                <div class="mz-cart-remove">
+                                    <form th:action="@{/cart/{id}/remove(id=${i.medicine.id})}" method="post">
+                                        <button class="mz-cart-del" type="submit" th:attr="aria-label='Remove ' + ${i.medicine.name}"
+                                                title="Remove"><i class="bi bi-trash3" aria-hidden="true"></i></button>
+                                    </form>
                                 </div>
-                            </td>
-                            <td class="mz-cart-qty">
-                                <div th:replace="~{fragments/layout :: cartStepper(${i.product}, false)}"></div>
-                            </td>
-                            <td class="text-end fw-semibold mz-cart-amount" data-mz-line-total
-                                th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></td>
-                            <td class="text-end mz-cart-remove">
-                                <form th:action="@{/cart/{id}/remove(id=${i.medicine.id})}" method="post">
-                                    <button class="btn btn-sm btn-link text-danger" type="submit" aria-label="Remove"><i class="bi bi-trash"></i></button>
-                                </form>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
+                            </div>
+                            <div class="mz-cart-meta">
+                                <span th:if="${i.medicine.prescriptionRequired}" class="mz-cart-rx" title="Prescription required">Rx</span>
+                                <span th:text="'Pack of ' + ${i.medicine.packLabel}">Pack of 10</span>
+                                <span th:unless="${#strings.isEmpty(i.medicine.manufacturer)}" class="mz-cart-maker" th:text="${i.medicine.manufacturer}"></span>
+                            </div>
+                            <div class="mz-cart-price">
+                                <span class="mz-cart-unit" data-mz-unit-price th:text="'₹' + ${#numbers.formatDecimal(i.unitPrice, 1, 'COMMA', 2, 'POINT')}">₹0</span>
+                                <s class="mz-cart-mrp" data-mz-mrp th:if="${mrp != null}" th:hidden="${off <= 0}"
+                                   th:text="'₹' + ${#numbers.formatDecimal(mrp, 1, 'COMMA', 2, 'POINT')}"></s>
+                                <span class="mz-cart-per">/ pack</span>
+                            </div>
+                            <div class="mz-cart-foot">
+                                <div class="mz-cart-qty">
+                                    <div th:replace="~{fragments/layout :: cartStepper(${i.product}, false)}"></div>
+                                </div>
+                                <div class="mz-cart-amount" data-mz-line-total
+                                     th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}">₹0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mz-cart-alert" th:unless="${i.available}" role="status">
+                        <i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i><span th:text="${i.product.stock > 0}
+                            ? 'Only ' + ${i.product.stock} + ' pack(s) can be delivered here. Lower the quantity.'
+                            : 'Not available for delivery to your location. Remove it or change the location.'"></span></div>
+
+                    <!-- Who the packs are for. One pack goes to one choice; with more packs each person gets
+                         their own - n + and the line's quantity is the sum (medizon.js, /api/cart/{id}/allocation). -->
+                    <div th:unless="${guest}" class="mz-for mz-alloc mz-cart-for" th:classappend="${i.quantity > 1} ? 'is-multi'"
+                         th:attr="data-mz-alloc=${i.medicine.id},data-max=${i.product.stock}">
+                        <span class="mz-for-label" th:id="'for' + ${i.id}">For</span>
+                        <div class="mz-member-picks" role="group" th:attr="aria-labelledby='for' + ${i.id}">
+                            <th:block th:each="m : ${people}">
+                                <div th:replace="~{fragments/layout :: allocOption(${i}, ${m}, '', '', false)}"></div>
+                            </th:block>
+                            <th:block th:unless="${i.medicine.prescriptionRequired}">
+                                <div th:replace="~{fragments/layout :: allocOption(${i}, ${common}, 'bi-house-heart', 'mz-pick-common', false)}"></div>
+                            </th:block>
+                            <div th:replace="~{fragments/layout :: allocOption(${i}, ${others}, 'bi-person-walking', 'mz-pick-others', true)}"></div>
+                        </div>
+                        <!-- The patient names of whoever's chosen; medizon.js keeps it in step with the picks -->
+                        <div class="small text-muted mt-1" data-mz-patients th:hidden="${#strings.isEmpty(i.patientLabel)}">
+                            Patient: <span th:text="${i.patientLabel}"></span></div>
+                        <div class="mz-qty-error small" role="alert" hidden></div>
+                    </div>
+                </article>
+
+                <a th:href="@{/medicines}" class="mz-cart-more">
+                    <i class="bi bi-plus-circle" aria-hidden="true"></i><span>Add more items</span>
+                    <i class="bi bi-chevron-right ms-auto" aria-hidden="true"></i></a>
             </div>
         </div>
+
         <div class="col-lg-4">
-            <div class="mz-panel" data-mz-cart-summary>
-                <h2 class="h5 mb-3">Summary</h2>
-                <div class="d-flex justify-content-between mb-2"><span>Subtotal</span>
-                    <span data-mz-subtotal th:text="'₹' + ${#numbers.formatDecimal(cart.subtotal, 1, 'COMMA', 2, 'POINT')}"></span></div>
-                <p class="small text-muted mb-2" data-mz-deliveries th:hidden="${cart.byStore.size() < 2}">
-                    <i class="bi bi-boxes me-1" aria-hidden="true"></i><span th:text="'Comes from ' + ${cart.byStore.size()} + ' stores, as separate orders paid for together.'"></span></p>
-                <div class="d-flex justify-content-between mb-2"><span>Delivery</span>
-                    <span data-mz-delivery th:text="${cart.deliveryFee.signum() == 0} ? 'Free' : ('₹' + ${cart.deliveryFee})"></span></div>
-                <p class="small text-muted" data-mz-free-note th:hidden="${cart.deliveryFee.signum() == 0}"
-                   th:text="'Free delivery on orders of ₹' + ${freeAbove} + ' or more.'"></p>
-                <div class="d-flex justify-content-between mb-2 text-muted small" data-mz-round-off th:hidden="${cart.roundOff.signum() == 0}">
-                    <span>Round off</span><span data-mz-round-off-value th:text="${cart.roundOffLabel}"></span></div>
-                <hr>
-                <div class="d-flex justify-content-between fw-bold fs-5 mb-3"><span>Total</span>
-                    <span data-mz-total th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span></div>
-                <th:block th:unless="${guest}">
-                </th:block>
-                <div class="mz-rx-note small mb-3" data-mz-rx-note th:hidden="${!cart.prescriptionRequired}">
-                    Some items need a prescription. You'll choose or upload one at checkout.
+            <div class="mz-cart-side" data-mz-cart-summary>
+                <!-- What the customer saves against MRP (medizon.js fills it in and keeps it current) -->
+                <div class="mz-cart-save" data-mz-savings hidden>
+                    <i class="bi bi-patch-check-fill" aria-hidden="true"></i><span data-mz-savings-text></span>
+                </div>
+
+                <div class="mz-cart-bill">
+                    <h2 class="mz-cart-bill-title"><i class="bi bi-receipt" aria-hidden="true"></i>Bill details</h2>
+                    <div class="mz-bill-row"><span><i class="bi bi-bag" aria-hidden="true"></i>Item total</span>
+                        <span data-mz-subtotal th:text="'₹' + ${#numbers.formatDecimal(cart.subtotal, 1, 'COMMA', 2, 'POINT')}"></span></div>
+                    <div class="mz-bill-row"><span><i class="bi bi-truck" aria-hidden="true"></i>Delivery fee</span>
+                        <span data-mz-delivery th:text="${cart.deliveryFee.signum() == 0} ? 'Free' : ('₹' + ${cart.deliveryFee})"></span></div>
+                    <div class="mz-bill-row mz-bill-minor" data-mz-round-off th:hidden="${cart.roundOff.signum() == 0}">
+                        <span><i class="bi bi-arrow-down-up" aria-hidden="true"></i>Round off</span><span data-mz-round-off-value th:text="${cart.roundOffLabel}"></span></div>
+                    <div class="mz-bill-note" data-mz-free-note th:hidden="${cart.deliveryFee.signum() == 0}">
+                        <i class="bi bi-lightning-charge-fill" aria-hidden="true"></i><span th:text="'Free delivery on orders of ₹' + ${freeAbove} + ' or more.'"></span></div>
+                    <p class="mz-bill-note mz-bill-note-plain" data-mz-deliveries th:hidden="${cart.byStore.size() < 2}">
+                        <i class="bi bi-boxes" aria-hidden="true"></i><span th:text="'Comes from ' + ${cart.byStore.size()} + ' stores, as separate orders paid for together.'"></span></p>
+                </div>
+
+                <div class="mz-rx-note small" data-mz-rx-note th:hidden="${!cart.prescriptionRequired}">
+                    <i class="bi bi-file-earmark-medical me-1" aria-hidden="true"></i>Some items need a prescription. You'll choose or upload one at checkout.
                 </div>
                 <!-- The admin's minimum order value: below it, how much more to add (kept current by the page script) -->
-                <div class="mz-min-order mb-3" role="status" data-mz-min-order th:hidden="${minShort.signum() == 0}"
+                <div class="mz-min-order" role="status" data-mz-min-order th:hidden="${minShort.signum() == 0}"
                      th:attr="data-min=${minOrder}">
                     <div class="d-flex gap-2 align-items-start">
                         <i class="bi bi-basket2 text-warning" aria-hidden="true"></i>
@@ -106,14 +138,22 @@
                              th:style="'width: ' + ${minOrder.signum() > 0 ? cart.subtotal.multiply(100).divide(minOrder, 0, T(java.math.RoundingMode).DOWN).min(100) : 100} + '%'"></div>
                     </div>
                 </div>
-                <a th:unless="${guest}" th:href="@{/checkout}" class="btn btn-primary w-100" data-mz-checkout-link
-                   th:classappend="${minShort.signum() > 0} ? 'disabled'" th:attr="aria-disabled=${minShort.signum() > 0}">Go to checkout</a>
-                <th:block th:if="${guest}">
+                <p th:if="${guest}" class="small text-muted text-center mb-0 mz-cart-guest">New to MediZon? <a th:href="@{/register}">Create an account</a>.
+                    Your cart is kept.</p>
+
+                <!-- To pay + checkout. In the Android app this is a bar fixed above the tab bar (app.css). -->
+                <div class="mz-cart-pay">
+                    <div class="mz-cart-total">
+                        <span class="mz-cart-total-label">To pay</span>
+                        <span class="mz-cart-total-value" data-mz-total th:text="'₹' + ${#numbers.formatDecimal(cart.total, 1, 'COMMA', 2, 'POINT')}"></span>
+                    </div>
+                    <a th:unless="${guest}" th:href="@{/checkout}" class="btn btn-primary mz-cart-go" data-mz-checkout-link
+                       th:classappend="${minShort.signum() > 0} ? 'disabled'" th:attr="aria-disabled=${minShort.signum() > 0}">
+                        Checkout<i class="bi bi-arrow-right ms-2" aria-hidden="true"></i></a>
                     <!-- /checkout needs a signed-in customer: Spring Security sends visitors to sign in, then back to checkout. -->
-                    <a th:href="@{/checkout}" class="btn btn-primary w-100"><i class="bi bi-box-arrow-in-right me-1"></i>Sign in to checkout</a>
-                    <p class="small text-muted text-center mt-2 mb-0">New to MediZon? <a th:href="@{/register}">Create an account</a>.
-                        Your cart is kept.</p>
-                </th:block>
+                    <a th:if="${guest}" th:href="@{/checkout}" class="btn btn-primary mz-cart-go">
+                        <i class="bi bi-box-arrow-in-right me-2" aria-hidden="true"></i>Sign in to checkout</a>
+                </div>
             </div>
         </div>
     </div>
