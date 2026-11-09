@@ -217,12 +217,12 @@
 </th:block>
 
 <div th:fragment="flash" class="container mz-flash">
-    <!-- A family account on a new device chooses whose reminders pop up here -->
+    <!-- A family account on a new device chooses whose dose alarms ring here (other notifications come everywhere) -->
     <div th:if="${deviceNeedsSetup}" class="mz-device-prompt mt-3" role="region" aria-label="Alerts on this device">
         <i class="bi bi-phone-vibrate" aria-hidden="true"></i>
         <div class="flex-grow-1">
-            <strong>Whose reminders should this device show?</strong>
-            <div class="small text-muted">Pick everyone, or only the family members who use this device.</div>
+            <strong>Whose dose alarms should this device ring?</strong>
+            <div class="small text-muted">Pick everyone, or only the family members who use this device. Other notifications come to all your devices.</div>
         </div>
         <form th:action="@{/notifications/settings}" method="post" class="d-flex gap-2 flex-wrap">
             <input type="hidden" name="deviceId" th:value="${device.id}">

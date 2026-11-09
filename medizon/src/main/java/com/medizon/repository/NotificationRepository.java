@@ -1,6 +1,7 @@
 package com.medizon.repository;
 
 import com.medizon.domain.Notification;
+import com.medizon.domain.NotificationType;
 import com.medizon.domain.User;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -26,13 +27,19 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findByUserAndReadFalseAndIdGreaterThanAndCreatedAtAfterOrderByIdAsc(User user, Long afterId,
                                                                                          LocalDateTime since);
 
-    /** Unread count as one device sees it: alerts not about a member, plus those about the given members. */
+    /**
+     * Unread count as one device sees it: everything except dose reminders ({@code reminder}) about members other
+     * than the given ones.
+     */
     @Query("select count(n) from Notification n left join n.member m where n.user = :user and n.read = false"
-            + " and (m is null or m.id in :memberIds)")
-    long countUnreadFor(@Param("user") User user, @Param("memberIds") Collection<Long> memberIds);
+            + " and (n.type <> :reminder or m is null or m.id in :memberIds)")
+    long countUnreadFor(@Param("user") User user, @Param("memberIds") Collection<Long> memberIds,
+                        @Param("reminder") NotificationType reminder);
 
-    @Query("select count(n) from Notification n where n.user = :user and n.read = false and n.member is null")
-    long countUnreadWithoutMember(@Param("user") User user);
+    /** Unread count for a device that follows no member: everything except dose reminders about a member. */
+    @Query("select count(n) from Notification n where n.user = :user and n.read = false"
+            + " and (n.type <> :reminder or n.member is null)")
+    long countUnreadWithoutMemberReminders(@Param("user") User user, @Param("reminder") NotificationType reminder);
 
     @Query("select coalesce(max(n.id), 0) from Notification n where n.user = :user")
     long latestId(@Param("user") User user);

@@ -122,13 +122,18 @@ class PushService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val d = message.data
         if (d.isEmpty()) return
-        // A dose was answered on another phone or the website: stop it here too. No notification.
+        // A dose was marked (here, on another phone, the website or by the assistant): stop it here too, and show
+        // "Dose taken · Metformin" on every phone (on the one that answered it replaces its own, quietly).
         if (d["type"] == "DOSE_DONE") {
             val planId = d["planId"]?.trim()?.toLongOrNull()
             val at = d["at"]?.trim()
             if (planId != null && !at.isNullOrEmpty()) {
                 val app = applicationContext
-                android.os.Handler(android.os.Looper.getMainLooper()).post { AlarmService.dismissDose(app, planId, at) }
+                val title = d["title"]
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    AlarmService.dismissDose(app, planId, at)        // also cancels its 30-minute check
+                    if (!title.isNullOrBlank()) Notifications.doseMarkedElsewhere(app, planId, at, title, d["body"] ?: "", d["link"] ?: "")
+                }
             }
             return
         }

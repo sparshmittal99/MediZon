@@ -20,7 +20,9 @@
         </div>
 
         <fieldset class="mb-3">
-            <legend class="form-label fs-6">Show dose reminders and refill alerts for</legend>
+            <legend class="form-label fs-6 mb-1">Ring dose alarms and show dose reminders for</legend>
+            <p class="small text-muted mb-2">Every other notification comes to all your devices, including a dose marked
+                taken or skipped and a dose that isn't marked 30 minutes after its time.</p>
             <div class="form-check">
                 <input class="form-check-input" type="radio" name="allMembers" id="allYes" value="true" th:checked="${here.allMembers}" data-mz-all>
                 <label class="form-check-label" for="allYes">Everyone</label>

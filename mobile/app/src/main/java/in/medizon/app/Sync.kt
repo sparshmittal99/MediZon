@@ -115,6 +115,7 @@ object Sync {
         if (res.code == 401 || res.code == 403) { unlink(c); return Result.UNLINKED }
         if (res.code !in 200..299) return Result.RETRY
         var notices = emptyList<Notifications.Notice>()
+        var checks = emptyList<AlarmItem>()
         val items = try {
             val json = JSONObject(res.body)
             json.optJSONArray("notices")?.let { n ->
@@ -124,6 +125,10 @@ object Sync {
                     if (id.isBlank()) null
                     else Notifications.Notice(id, o.optString("title", "MediZon"), o.optString("body", ""), o.optString("path", "/"))
                 }
+            }
+            // Other members' doses: they don't ring here, only "isn't marked yet" 30 min later if nobody marks them
+            json.optJSONArray("checks")?.let { a ->
+                checks = (0 until a.length()).mapNotNull { AlarmItem.fromServer(a.getJSONObject(it)) }.filter { it.isDose }
             }
             val arr = json.optJSONArray("alarms")
             if (arr == null) emptyList()
@@ -135,6 +140,7 @@ object Sync {
         // Token may have been unlinked while we were waiting on the network.
         if (Store.token(c) != token) return Result.OK
         AlarmScheduler.applySchedule(c, items.distinctBy { it.id })
+        AlarmScheduler.applyChecks(c, checks.distinctBy { it.id })
         Store.setLastSync(c, System.currentTimeMillis())
         Notifications.showNotices(c, notices)
         return if (doses == Result.RETRY) Result.RETRY else Result.OK

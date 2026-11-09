@@ -422,7 +422,7 @@ public class MedicationPlanService {
         log.setStatus(status);
         log.setRespondedAt(LocalDateTime.now());
         doseLogs.save(log);
-        appSync.doseAnswered(user, planId, at);    // other phones stop ringing for it
+        appSync.doseAnswered(user, p, at, status);   // every phone stops ringing and shows it was marked
         return p;
     }
 

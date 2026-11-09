@@ -123,6 +123,10 @@ object Store {
     fun followUps(c: Context): List<AlarmItem> = readItems(c, "followUps")
     fun saveFollowUps(c: Context, items: List<AlarmItem>) = writeItems(c, "followUps", items)
 
+    /** Ids of the follow-ups that came from the server's `checks` (doses this phone doesn't ring for). */
+    fun checkIds(c: Context): Set<String> = prefs(c).getStringSet("checkIds", emptySet())?.toSet() ?: emptySet()
+    fun setCheckIds(c: Context, ids: Set<String>) = prefs(c).edit().putStringSet("checkIds", HashSet(ids)).apply()
+
     // ---- FCM token last sent to the server ----
     fun lastPushToken(c: Context): String? = prefs(c).getString("lastPushToken", null)
     fun setLastPushToken(c: Context, token: String?) = prefs(c).edit().putString("lastPushToken", token).apply()

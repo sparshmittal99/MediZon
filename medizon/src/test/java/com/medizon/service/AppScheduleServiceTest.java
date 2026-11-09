@@ -107,6 +107,34 @@ class AppScheduleServiceTest {
     }
 
     @Test
+    void otherMembersDosesDontRingButGetTheThirtyMinuteCheck() {
+        Member mom = member(2, MemberKind.FAMILY);
+        Member dad = member(3, MemberKind.FAMILY);
+        MedicationPlan dads = plan(2, dad, LocalTime.of(21, 0));
+        when(plans.findByUserAndActiveTrue(user)).thenReturn(List.of(plan(1, mom, LocalTime.of(20, 0)), dads));
+        DoseLog taken = new DoseLog(dads, now.toLocalDate().atTime(21, 0));     // tonight's already marked
+        taken.setStatus(DoseStatus.TAKEN);
+        when(doseLogs.findByPlanUserAndScheduledAtBetween(any(), any(), any())).thenReturn(List.of(taken));
+        device.setAllMembers(false);
+        device.getMembers().add(mom);                    // this phone rings for Mom only
+
+        AppScheduleService.Schedule s = service.schedule(device, now);
+
+        assertTrue(s.alarms().stream().allMatch(a -> a.planId() == 1L));
+        // Dad's doses come as checks, minus the one already marked, and no reminders among them
+        assertEquals(6, s.checks().size());
+        assertTrue(s.checks().stream().allMatch(a -> a.planId() == 2L && "DOSE".equals(a.kind())));
+        assertTrue(s.checks().get(0).at().startsWith("2026-11-06T21:00"), s.checks().get(0).at());
+    }
+
+    @Test
+    void aPhoneForEveryoneHasNoChecks() {
+        when(plans.findByUserAndActiveTrue(user)).thenReturn(List.of(plan(1, member(2, MemberKind.FAMILY), LocalTime.of(20, 0))));
+
+        assertTrue(service.schedule(device, now).checks().isEmpty());
+    }
+
+    @Test
     void includesOneOffReminders() {
         when(plans.findByUserAndActiveTrue(user)).thenReturn(List.of());
         Reminder r = new Reminder();

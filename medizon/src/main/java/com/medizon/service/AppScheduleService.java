@@ -50,7 +50,11 @@ public class AppScheduleService {
     /** A one-time phone notification (scheduled downtime); the app shows each id once. */
     public record Notice(String id, String title, String body, String path) {}
 
-    public record Schedule(String generatedAt, List<Alarm> alarms, List<Notice> notices) {}
+    /**
+     * {@code alarms} ring on this phone: the members it follows. {@code checks} are the account's other doses, which
+     * don't ring here; the phone only shows "dose isn't marked yet" 30 minutes after one if nobody has marked it.
+     */
+    public record Schedule(String generatedAt, List<Alarm> alarms, List<Notice> notices, List<Alarm> checks) {}
 
     /** A new sync token for this device; the previous one stops working. Only its hash is stored. */
     @Transactional
@@ -103,9 +107,11 @@ public class AppScheduleService {
                 .forEach(l -> answered.add(l.getPlan().getId() + "@" + l.getScheduledAt()));
 
         List<Alarm> out = new ArrayList<>();
+        List<Alarm> checks = new ArrayList<>();
         for (MedicationPlan p : plans.findByUserAndActiveTrue(user)) {
             if (p.isSetupRequired() || p.isOnCommonShelf() || p.getReminderTimes().isEmpty()) continue;
-            if (!device.allows(p.getMember())) continue;
+            // The member choice only decides whose alarms ring here; the rest only get the 30-minute check
+            List<Alarm> into = device.allows(p.getMember()) ? out : checks;
             String body = "Take " + p.getDoseLabel()
                     + (p.getInstructions() != null && !p.getInstructions().isBlank() ? " · " + p.getInstructions().trim() : "");
             for (LocalDate day = today; day.isBefore(until.toLocalDate()); day = day.plusDays(1)) {
@@ -113,7 +119,7 @@ public class AppScheduleService {
                 for (LocalTime t : p.getReminderTimes()) {
                     LocalDateTime at = day.atTime(t);
                     if (!at.isAfter(now) || answered.contains(p.getId() + "@" + at)) continue;
-                    out.add(new Alarm("dose-" + p.getId() + "-" + at.format(ID_TIME), "DOSE", p.getId(), null,
+                    into.add(new Alarm("dose-" + p.getId() + "-" + at.format(ID_TIME), "DOSE", p.getId(), null,
                             at.atZone(zone).format(AT), p.getTitle(), body,
                             MedicationPlanService.planLink(p)));
                 }
@@ -125,9 +131,10 @@ public class AppScheduleService {
                     r.getDueAt().atZone(zone).format(AT), "Reminder", r.getText(), "/notifications"));
         }
         out.sort(Comparator.comparing(Alarm::at));
+        checks.sort(Comparator.comparing(Alarm::at));
         // Phones that get push notifications already had the downtime notices pushed
         boolean pushed = push.isEnabled() && device.getPushToken() != null;
-        return new Schedule(now.atZone(zone).format(AT), out, pushed ? List.of() : notices());
+        return new Schedule(now.atZone(zone).format(AT), out, pushed ? List.of() : notices(), checks);
     }
 
     private List<Notice> notices() {

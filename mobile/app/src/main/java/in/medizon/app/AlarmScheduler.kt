@@ -106,6 +106,7 @@ object AlarmScheduler {
         synchronized(Store.lock) {
             Store.followUps(c).forEach { cancelFollowUpAlarm(c, it.id) }
             Store.saveFollowUps(c, emptyList())
+            Store.setCheckIds(c, emptySet())
         }
     }
 
@@ -158,6 +159,38 @@ object AlarmScheduler {
         val op = followUpOp(c, id, null)
         alarmManager(c).cancel(op)
         op.cancel()
+    }
+
+    /**
+     * The server's `checks`: doses of members this phone doesn't ring for. Each gets only the 30-minute check, at
+     * dose time + 30 min, with the same id a rung alarm's check would have (so a dose never gets two). A check whose
+     * dose is still to come but is no longer listed (marked, changed, or now rung here) is dropped; one whose dose
+     * time has passed stays until it goes off or the dose is marked ([cancelFollowUps]), since the server only
+     * lists doses still to come.
+     */
+    fun applyChecks(c: Context, fresh: List<AlarmItem>) {
+        val now = System.currentTimeMillis()
+        synchronized(Store.lock) {
+            val wanted = fresh.mapNotNull { dose ->
+                val planId = dose.planId ?: return@mapNotNull null
+                val t = dose.doseInstant ?: return@mapNotNull null
+                if (t <= now) null else dose.copy(id = "followup-$planId@$t", atMillis = t + FOLLOW_UP_DELAY_MS)
+            }
+            val wantedIds = wanted.map { it.id }.toHashSet()
+            val all = Store.followUps(c)
+            val mine = Store.checkIds(c)
+            val stale = all.filter { it.id in mine && it.id !in wantedIds && (it.doseInstant ?: 0L) > now }
+            stale.forEach { cancelFollowUpAlarm(c, it.id) }
+            val staleIds = stale.map { it.id }.toHashSet()
+            val byId = all.filter { it.id !in staleIds }.associateBy { it.id }.toMutableMap()
+            // The id is the dose (plan + time), so one already there is this check, or a rung alarm's: keep it
+            val added = wanted.filter { byId[it.id] == null }
+            added.forEach { byId[it.id] = it }
+            Store.saveFollowUps(c, byId.values.toList())
+            added.forEach { armFollowUp(c, it) }
+            // Remember which follow-ups are checks; forget ids that went off or were cancelled
+            Store.setCheckIds(c, ((mine - staleIds) + added.map { it.id }).filter { it in byId }.toSet())
+        }
     }
 
     /** The dose was answered (here, on another phone or the website): no missed-dose notification. */

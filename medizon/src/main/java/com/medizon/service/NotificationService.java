@@ -52,13 +52,13 @@ public class NotificationService {
     private String baseUrl;
 
     /**
-     * The same notification as a phone notification on each Android app signed in to this account that follows the
-     * member it's about, once it's saved. Dose reminders are left out: the app rings those itself.
+     * The same notification as a phone notification on every Android app signed in to this account, whoever it's
+     * about, once it's saved. Dose reminders are left out: each app rings those itself, for the members it follows.
      */
     private void pushToPhones(Notification n) {
         if (!phones.isEnabled() || n.getType() == NotificationType.DOSE_REMINDER || n.getUser() == null) return;
         List<NotificationDevice> targets = devices.findByUserAndPushTokenIsNotNull(n.getUser()).stream()
-                .filter(d -> d.allows(n.getMember())).toList();
+                .filter(d -> d.shows(n)).toList();
         if (targets.isEmpty()) return;
         Map<String, String> data = Map.of(
                 "nid", String.valueOf(n.getId()),
@@ -187,11 +187,12 @@ public class NotificationService {
 
     public long unreadCount(User user) { return notifications.countByUserAndReadFalse(user); }
 
-    /** Unread count for the bell on one device: members it doesn't follow aren't counted. */
+    /** Unread count for the bell on one device: dose reminders for members it doesn't follow aren't counted. */
     public long unreadCount(User user, NotificationDevice device) {
         if (device == null || device.isAllMembers()) return unreadCount(user);
         Set<Long> ids = device.getMemberIds();
-        return ids.isEmpty() ? notifications.countUnreadWithoutMember(user) : notifications.countUnreadFor(user, ids);
+        return ids.isEmpty() ? notifications.countUnreadWithoutMemberReminders(user, NotificationType.DOSE_REMINDER)
+                : notifications.countUnreadFor(user, ids, NotificationType.DOSE_REMINDER);
     }
 
     /** Returns the link to follow after marking the notification read. */
@@ -217,10 +218,10 @@ public class NotificationService {
                 user, afterId, LocalDateTime.now().minus(ALERT_WINDOW));
     }
 
-    /** As above, minus alerts about members this device doesn't follow. */
+    /** As above, minus dose reminders for members this device doesn't follow. */
     @Transactional(readOnly = true)
     public List<Notification> newSince(User user, long afterId, NotificationDevice device) {
-        return newSince(user, afterId).stream().filter(n -> device == null || device.allows(n.getMember())).toList();
+        return newSince(user, afterId).stream().filter(n -> device == null || device.shows(n)).toList();
     }
 
     public long latestId(User user) { return notifications.latestId(user); }

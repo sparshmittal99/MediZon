@@ -381,6 +381,39 @@ object Notifications {
         } catch (e: SecurityException) { /* notifications not permitted */ }
     }
 
+    /**
+     * The "Dose taken / Dose skipped" notification from the server, on every phone: wherever the dose was marked
+     * (this phone, another phone, the website or the assistant). Same id as [doseMarked], so on the phone that answered
+     * it replaces the one shown there already, and only alerts once.
+     */
+    @SuppressLint("MissingPermission")
+    fun doseMarkedElsewhere(c: Context, planId: Long, at: String, title: String, text: String, path: String) {
+        val t = try { java.time.OffsetDateTime.parse(at).toInstant().toEpochMilli() } catch (e: Exception) { return }
+        val now = System.currentTimeMillis()
+        val open = PendingIntent.getActivity(
+            c, ("done-open-$planId@$t").hashCode(), MainActivity.openIntent(c, path.ifBlank { "/plans" }), FLAGS
+        )
+        val n = NotificationCompat.Builder(c, CHANNEL_DOSE_UPDATES)
+            .setSmallIcon(R.drawable.ic_stat_capsule)
+            .setColor(ContextCompat.getColor(c, R.color.mz_green))
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setOnlyAlertOnce(true)           // already showing (the phone that answered): update quietly
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setAutoCancel(true)
+            .setWhen(now)
+            .setShowWhen(true)
+            .setContentIntent(open)
+            .build()
+        try {
+            NotificationManagerCompat.from(c).notify(("done-$planId@$t").hashCode(), n)
+        } catch (e: SecurityException) { /* notifications not permitted */ }
+    }
+
     @SuppressLint("MissingPermission")
     fun missed(c: Context, item: AlarmItem) {
         val open = PendingIntent.getActivity(c, ("missed-" + item.id).hashCode(), MainActivity.openIntent(c, item.path), FLAGS)

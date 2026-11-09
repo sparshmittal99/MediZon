@@ -11,8 +11,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * One browser a user signs in on, recognised by a long-lived cookie, and whose alerts it pops up:
- * everyone's, or only the selected members'. Alerts that aren't about a member (orders, prescriptions) always show.
+ * One browser or Android app a user signs in on, recognised by a long-lived cookie (or the app's sync token). Its
+ * member choice (everyone, or only the selected members) decides whose dose alarms ring and whose dose reminders it
+ * shows. Every other notification of the account (orders, prescriptions, refills, a dose marked taken or skipped,
+ * whoever it's about) goes to every device.
  */
 @Entity
 @Table(name = "notification_devices", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "device_key"}))
@@ -55,8 +57,14 @@ public class NotificationDevice {
     private String pushToken;
     private LocalDateTime lastSeenAt = LocalDateTime.now();
 
+    /** Whether this device rings and shows dose reminders for {@code member} (its member choice). */
     public boolean allows(Member member) {
         return member == null || allMembers || getMemberIds().contains(member.getId());
+    }
+
+    /** Whether this device shows {@code n}: only dose reminders follow the member choice; everything else always shows. */
+    public boolean shows(Notification n) {
+        return n.getType() != NotificationType.DOSE_REMINDER || allows(n.getMember());
     }
 
     public Set<Long> getMemberIds() {
@@ -67,6 +75,6 @@ public class NotificationDevice {
         if (allMembers) return "All members";
         String names = members.stream().filter(m -> !m.isRemoved()).map(Member::getLabel).sorted()
                 .collect(Collectors.joining(", "));
-        return names.isEmpty() ? "Order and account alerts only" : names;
+        return names.isEmpty() ? "No dose alarms" : names;
     }
 }
