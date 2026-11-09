@@ -189,7 +189,10 @@ object Notifications {
         // the delete intent), then removed by the system.
         if (timeoutMs != null) b.setOngoing(true).setTimeoutAfter(timeoutMs)
         addAnswerActions(c, b, first)
-        return b.build()
+        val n = b.build()
+        // "Clear all" skips it too, on phones that let it clear ongoing notifications (AlarmService also puts it back)
+        if (timeoutMs != null) n.flags = n.flags or Notification.FLAG_NO_CLEAR
+        return n
     }
 
     /** FCM data message -> one heads-up notification. */

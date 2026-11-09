@@ -55,6 +55,16 @@ class AlarmService : Service() {
         private const val KEEP_MS = 2 * 60 * 1000L
         /** A dismissal this close to the end counts as the 2 minutes being over. */
         private const val KEEP_SLACK_MS = 5_000L
+        /** How often the 2-minute notification is checked for, and put back if it was swiped or cleared. */
+        private const val KEEP_CHECK_MS = 1_000L
+
+        /**
+         * The service holding the 2-minute notification. It stays in the foreground until the 2 minutes are up,
+         * so the notification can't be cleared for good: phones like Xiaomi (MIUI/HyperOS) let a swipe or "Clear
+         * all" remove it and then don't wake a closed app to put it back, so the app has to still be running.
+         */
+        @Volatile private var keeper: AlarmService? = null
+
         /** Screen-off right after the ring starts can be the device settling, not the power button. */
         private const val SCREEN_OFF_GRACE_MS = 1_500L
 
@@ -199,6 +209,7 @@ class AlarmService : Service() {
             }
             due(c).clear()
             saveDue(c)
+            keeper?.endKeep()
             instance?.stopAll()
             NotificationManagerCompat.from(c).cancel(Notifications.RINGING_ID)
             listener?.invoke()
@@ -208,6 +219,7 @@ class AlarmService : Service() {
             val list = due(c)
             val nm = NotificationManagerCompat.from(c)
             if (list.isEmpty()) {
+                keeper?.endKeep()   // answered or expired: the held notification goes with it
                 nm.cancel(Notifications.RINGING_ID)
             } else {
                 val left = Store.pendingUntil(c) - System.currentTimeMillis()
@@ -240,6 +252,10 @@ class AlarmService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         instance = this
         val item = AlarmItem.fromIntent(intent)
+        if (item != null && keeper === this) {
+            keeper = null              // a new ring replaces the 2-minute notification
+            handler.removeCallbacks(keepCheck)
+        }
         val list = due(this)
         if (item != null) {
             Store.setPendingUntil(this, 0L) // a new ring: its notification has no 2-minute limit
@@ -247,6 +263,13 @@ class AlarmService : Service() {
             list.add(item)
             list.sortByDescending { it.sortKey } // newest scheduled dose first
             saveDue(this)
+        }
+        if (item == null && keeper === this && list.isNotEmpty()) {
+            // Still holding the 2-minute notification: stay as we are
+            instance = null
+            val left = Store.pendingUntil(this) - System.currentTimeMillis()
+            goForeground(Notifications.pending(this, list, left.coerceAtLeast(1L)))
+            return START_NOT_STICKY
         }
         if (item == null || list.isEmpty()) {
             // Must still satisfy the startForegroundService contract before stopping.
@@ -331,14 +354,17 @@ class AlarmService : Service() {
         if (wasRinging) instance = null
         handler.removeCallbacks(timeout)
         stopRinging()
-        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         val ids = due(this).map { it.id }
         if (wasRinging && ids.isNotEmpty()) {
             // However the ring stopped: the alarm stays in the notification for 2 minutes, then goes.
             val until = System.currentTimeMillis() + KEEP_MS
             Store.setPendingUntil(this, until)
             scheduleExpiry(this, ids, until)
+            startKeep(KEEP_MS)
+            listener?.invoke()
+            return
         }
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         showPendingOrCancel(this)
         stopSelf()
         listener?.invoke()
@@ -425,8 +451,59 @@ class AlarmService : Service() {
         wakeLock = null
     }
 
+    /**
+     * Holds the silent 2-minute notification as this service's foreground notification: the app keeps running,
+     * and every second the notification is put back if it was swiped away or cleared.
+     */
+    private fun startKeep(leftMs: Long) {
+        keeper = this
+        goForeground(Notifications.pending(this, due(this), leftMs))
+        handler.removeCallbacks(keepCheck)
+        handler.postDelayed(keepCheck, KEEP_CHECK_MS)
+    }
+
+    private val keepCheck = object : Runnable {
+        override fun run() {
+            val svc = this@AlarmService
+            if (keeper !== svc) return
+            val list = due(svc)
+            val left = Store.pendingUntil(svc) - System.currentTimeMillis()
+            if (list.isEmpty() || left <= 0) {
+                endKeep()          // the 2 minutes are up (the expiry alarm forgets the alarms)
+                return
+            }
+            if (left > KEEP_SLACK_MS) {
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                val showing = try {
+                    nm.activeNotifications.any { it.id == Notifications.RINGING_ID }
+                } catch (e: Exception) { true }
+                if (!showing) {
+                    try {
+                        goForeground(Notifications.pending(svc, list, left))
+                    } catch (e: Exception) {
+                        try { nm.notify(Notifications.RINGING_ID, Notifications.pending(svc, list, left)) } catch (e2: Exception) { }
+                    }
+                }
+            }
+            handler.postDelayed(this, KEEP_CHECK_MS)
+        }
+    }
+
+    /** The 2 minutes are over, or the alarms were answered: let the notification and the service go. */
+    private fun endKeep() {
+        if (keeper !== this) return
+        keeper = null
+        handler.removeCallbacks(keepCheck)
+        if (instance == null) {    // not ringing again in the meantime
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+    }
+
     private fun stopAll() {
         if (instance === this) instance = null
+        if (keeper === this) keeper = null
+        handler.removeCallbacks(keepCheck)
         handler.removeCallbacks(timeout)
         stopRinging()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -435,6 +512,8 @@ class AlarmService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(timeout)
+        handler.removeCallbacks(keepCheck)
+        if (keeper === this) keeper = null
         stopRinging()
         if (instance === this) instance = null
         super.onDestroy()
