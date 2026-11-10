@@ -540,7 +540,7 @@
     }
 
     /**
-     * Cart page: the item count, each line's "% off", the "You save ... on MRP" strip (ticked lines only) and the
+     * Cart page: the item count, each line's struck MRP, the "You save ... on MRP" strip (ticked lines only) and the
      * ticks: unticked cards dimmed, and "Checkout 2 items" for however many are ticked.
      */
     function refreshCartExtras() {
@@ -563,13 +563,12 @@
             if (row.classList.contains('is-unticked')) return;
             const mrp = Number(row.dataset.mrp || 0), unit = Number(row.dataset.unit || 0);
             const off = mrp > unit ? Math.round((mrp - unit) * 100 / mrp) : 0;
-            const badge = row.querySelector('[data-mz-off]');
-            if (badge) { badge.hidden = off <= 0; badge.textContent = off + '% off'; }
             const struck = row.querySelector('[data-mz-mrp]');
             if (struck) struck.hidden = off <= 0;
             const qty = Number(row.querySelector('[data-mz-cart]')?.dataset.qty || 0);
             if (off > 0 && !row.classList.contains('mz-cart-unavailable')) saved += (mrp - unit) * qty;
         });
+        fitCartAmounts();
         const count = document.querySelector('[data-mz-cart-count]');
         if (count) count.textContent = rows.length + (rows.length === 1 ? ' item' : ' items');
         const save = document.querySelector('[data-mz-savings]');
@@ -578,6 +577,21 @@
             save.querySelector('[data-mz-savings-text]').textContent = `You save ${rupees(saved)} on MRP with this order`;
         }
     }
+    /** Cart cards: a long line amount steps its font down so it stays on the stepper's line (never wraps). */
+    function fitCartAmounts() {
+        document.querySelectorAll('[data-mz-line-total]').forEach(el => {
+            el.style.fontSize = '';
+            let size = parseFloat(getComputedStyle(el).fontSize);
+            const min = size * 0.65;
+            while (el.scrollWidth > el.clientWidth + 0.5 && size > min) {
+                size -= 0.5;
+                el.style.fontSize = size + 'px';
+            }
+        });
+    }
+    let fitTimer;
+    window.addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = setTimeout(fitCartAmounts, 100); });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitCartAmounts);
     refreshCartExtras();
 
     // ---- Cart: tick lines for checkout (partial checkout); the totals count ticked lines only ----

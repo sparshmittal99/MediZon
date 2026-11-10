@@ -380,7 +380,8 @@ class AlarmService : Service() {
                 acquire(ringMs + 60_000)
             }
         }
-        if (player == null) {
+        // "Ring phone" off: the same popup and notification, without the ringtone (vibration follows its own setting)
+        if (player == null && AppSettings.ringPhone(this)) {
             requestFocus()
             // Chosen phone ringtone (if any) -> bundled "MediZon tring" -> phone ringtone / alarm sound.
             val candidates = listOfNotNull(

@@ -23,7 +23,7 @@
     <div class="row g-4" th:unless="${cart.empty}">
         <div class="col-lg-8">
             <div class="mz-cart-list">
-                <!-- One card per line. data-mrp / data-unit feed the "% off" and "You save" figures (medizon.js). -->
+                <!-- One card per line. data-mrp / data-unit feed the struck MRP and "You save" figures (medizon.js). -->
                 <article th:each="i : ${cart.items}" class="mz-cart-item" data-mz-cart-row
                          th:classappend="(${!i.available} ? 'mz-cart-unavailable ' : '') + (${!guest and !i.selected} ? 'is-unticked' : '')"
                          th:with="mrp=${i.medicine.mrp},
@@ -39,7 +39,6 @@
                         <a class="mz-cart-thumb" th:href="@{/medicines/{id}(id=${i.medicine.id})}" th:aria-label="${i.medicine.name}">
                             <img th:if="${i.medicine.imageUrl}" th:src="@{${i.medicine.imageUrl}}" alt="" loading="lazy" data-mz-hide-broken>
                             <i class="bi" th:classappend="${i.medicine.icon}" aria-hidden="true"></i>
-                            <span class="mz-cart-off" data-mz-off th:hidden="${off <= 0}" th:text="${off} + '% off'">10% off</span>
                         </a>
                         <div class="mz-cart-info">
                             <div class="mz-cart-title">

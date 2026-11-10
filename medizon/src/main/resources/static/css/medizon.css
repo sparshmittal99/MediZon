@@ -1598,14 +1598,11 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
 .mz-cart-list { display: flex; flex-direction: column; gap: .75rem; }
 .mz-cart-item { padding: .9rem; background: var(--mz-surface, #fff); border: 1px solid var(--mz-line); border-radius: 1.1rem;
     box-shadow: 0 1px 2px rgba(23, 48, 42, .04), 0 6px 18px rgba(23, 48, 42, .04); transition: border-color .15s ease; }
-.mz-cart-main { display: flex; gap: .95rem; }
+.mz-cart-main { position: relative; display: flex; gap: .95rem; }
 .mz-cart-thumb { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: 6rem; height: 6rem;
     overflow: hidden; border-radius: .9rem; background: var(--mz-mint); color: var(--mz-green); font-size: 2.2rem; text-decoration: none; }
 .mz-cart-thumb img { max-width: 82%; max-height: 82%; object-fit: contain; }
 .mz-cart-thumb img ~ i { display: none; }
-.mz-cart-off { position: absolute; top: 0; left: 0; padding: .12rem .45rem; border-radius: .9rem 0 .55rem 0; background: var(--mz-red);
-    color: #fff; font-size: .66rem; font-weight: 800; letter-spacing: .01em; }
-.mz-cart-off[hidden] { display: none; }
 
 .mz-cart-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .mz-cart-title { display: flex; align-items: flex-start; gap: .4rem; }
@@ -1630,10 +1627,13 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
 .mz-cart-mrp { color: var(--mz-muted); font-size: .82rem; }
 .mz-cart-mrp[hidden] { display: none; }
 .mz-cart-per { color: var(--mz-muted); font-size: .78rem; }
-.mz-cart-foot { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: auto; padding-top: .65rem; }
-.mz-cart-qty { min-width: 0; }
+.mz-cart-foot { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: .5rem; margin-top: auto; padding-top: .65rem; }
+.mz-cart-qty { flex: none; }
 .mz-cart-qty .mz-qty-error { max-width: 14rem; }
-.mz-cart-amount { font-size: .95rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The line amount always stays on the stepper's line: it takes the room left and, if a long figure doesn't fit,
+   medizon.js (fitCartAmount) steps its font down instead of letting it wrap or push the card wider */
+.mz-cart-amount { flex: 1 1 auto; min-width: 0; overflow: hidden; text-align: right; font-size: .95rem; font-weight: 700;
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* The stepper in a cart card: a solid green pill (three classes deep so dark.css's stepper background doesn't win) */
 .mz-cart-item .mz-qty .mz-qty-stepper { background: var(--mz-green); border-color: var(--mz-green); box-shadow: 0 2px 6px rgba(14, 107, 87, .18); }
@@ -1645,7 +1645,7 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
 
 /* A line that can't be delivered */
 .mz-cart-item.mz-cart-unavailable { border-color: #EFCFCF; }
-.mz-cart-unavailable .mz-cart-thumb > :not(.mz-cart-off) { opacity: .45; filter: grayscale(1); }
+.mz-cart-unavailable .mz-cart-thumb > * { opacity: .45; filter: grayscale(1); }
 .mz-cart-unavailable .mz-cart-amount { color: var(--mz-muted); }
 .mz-cart-alert { display: flex; align-items: flex-start; gap: .5rem; margin-top: .8rem; padding: .55rem .75rem; border-radius: .75rem;
     background: #FBEFEF; color: #7A2626; font-size: .82rem; line-height: 1.4; }
@@ -1668,9 +1668,10 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
 .mz-check input:focus-visible + .mz-check-box { outline: 3px solid rgba(14, 107, 87, .45); outline-offset: 2px; }
 .mz-check:active .mz-check-box { transform: scale(.9); }
 
-/* On a card: its own column left of the picture, lined up with it; a bigger tap area than the box */
-.mz-cart-check { align-self: flex-start; margin: 0 -.35rem 0 -.3rem; padding: .3rem; }
-.mz-cart-check::before { content: ""; position: absolute; inset: -.35rem; }
+/* On a card: on the picture's top-left corner (the picture starts at the card's edge); a bigger tap area than the box */
+.mz-cart-check { position: absolute; top: .25rem; left: .25rem; z-index: 2; padding: .2rem; }
+.mz-cart-check::before { content: ""; position: absolute; inset: -.25rem; }
+.mz-cart-check .mz-check-box { box-shadow: 0 1px 3px rgba(23, 48, 42, .18); }
 /* Unticked: dimmed, still editable, and left out of the bill */
 .mz-cart-item.is-unticked .mz-cart-thumb, .mz-cart-item.is-unticked .mz-cart-info { opacity: .55; transition: opacity .15s ease; }
 .mz-cart-item.is-unticked { box-shadow: none; }

@@ -235,3 +235,10 @@ html[data-theme="dark"] .mz-coupon-link:active { background: #1D2A26; }
 .mz-coupons-back:active { background: var(--mz-paper); }
 .mz-coupons-head { margin: .4rem 0 .7rem; font-size: .8rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--mz-muted); }
 .mz-coupons-page .mz-promo-card { padding: .8rem .9rem; border-radius: 1rem; }
+
+/* ---------- Cart: "Checkout 3 items" with no arrow after it ---------- */
+.mz-cart-go .bi-arrow-right { display: none; }
+
+/* ---------- Product cards: the - qty + bar after "Add" is the cart card's compact size ---------- */
+.mz-qty:not(.mz-qty-lg) .mz-qty-btn { width: 1.75rem; height: 1.6rem; font-size: .8rem; }
+.mz-qty:not(.mz-qty-lg) .mz-qty-count { min-width: 1.2rem; font-size: .88rem; }

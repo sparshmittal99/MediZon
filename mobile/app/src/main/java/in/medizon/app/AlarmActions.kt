@@ -109,11 +109,8 @@ class AlarmReceiver : BroadcastReceiver() {
         }
         // Not answered 30 min from now -> "Missed dose" notification (phone only).
         if (item.isDose) AlarmScheduler.scheduleFollowUp(context, item)
-        if (!AppSettings.ringPhone(context)) {
-            // Notification only: heads-up with the default sound once, no ringing service.
-            Notifications.reminder(context, item)
-            return
-        }
+        // "Ring phone" on or off, the alarm works the same way: full-screen popup, and a notification that can't be
+        // cleared until 2 minutes after the alert ends. Off only means no ringtone (AlarmService.startRinging).
         try {
             AlarmService.fire(context, item)
         } catch (e: Exception) {

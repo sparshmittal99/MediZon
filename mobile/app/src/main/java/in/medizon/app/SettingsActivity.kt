@@ -309,7 +309,7 @@ class SettingsActivity : AppCompatActivity() {
 
         val ring = AppSettings.ringPhone(this)
         ringRow.switch?.isChecked = ring
-        setSummary(ringRow, if (ring) "Rings with a full-screen popup, even when locked" else "Notification only")
+        setSummary(ringRow, if (ring) "Rings with a full-screen popup, even when locked" else "Silent full-screen popup, no ringtone")
         setSummary(ringtoneRow, ringtoneTitle())
         setEnabled(ringtoneRow, ring)
         vibrateRow.switch?.isChecked = AppSettings.vibrate(this)
