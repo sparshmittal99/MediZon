@@ -24,12 +24,9 @@
                 <div class="form-text" id="codeHelp">Lost your phone? Enter one of your backup codes instead.</div>
             </div>
 
-            <div class="form-check mz-trust-check mb-4 d-flex align-items-start">
-                <input class="form-check-input mt-1" type="checkbox" id="trust" name="trust" value="true" th:checked="${trust}">
-                <label class="form-check-label" for="trust">
-                    <span class="fw-semibold d-block">Don't ask again on this device</span>
-                    <span class="small text-muted">Only tick this on your own phone or computer. You'll still need your password or Google account.</span>
-                </label>
+            <div class="form-check mb-4">
+                <input class="form-check-input" type="checkbox" id="trust" name="trust" value="true" th:checked="${trust}">
+                <label class="form-check-label" for="trust">Don't ask again on this device</label>
             </div>
 
             <button class="btn btn-primary w-100" type="submit">Verify and sign in</button>
