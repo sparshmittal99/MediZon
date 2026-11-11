@@ -263,3 +263,11 @@ html[data-theme="dark"] .mz-google-btn { background: #131314; border-color: #8E9
 html[data-theme="dark"] .mz-google-btn:hover { background: #1F1F21; color: #E3E3E3; }
 html[data-theme="dark"] .mz-2fa-icon, html[data-theme="dark"] .mz-2fa-status:not(.is-off) { background: rgba(52, 211, 153, .12); color: var(--mz-green); }
 html[data-theme="dark"] .mz-backup-codes li { background: var(--mz-surface); }
+
+/* Search suggestions */
+html[data-theme="dark"] .mz-sx, html[data-theme="dark"] .mz-sd { background-color: var(--mz-surface); }
+html[data-theme="dark"] .mz-sx-box { background-color: #121C19; }
+html[data-theme="dark"] .mz-sx-input { color: var(--mz-ink); }
+html[data-theme="dark"] .mz-sd .mz-sx-item.is-active, html[data-theme="dark"] .mz-sd .mz-sx-item:hover { background-color: #1D2B27; }
+html[data-theme="dark"] .mz-sd .mz-sx-item.is-recent .mz-sx-title { color: #B9A3E3; }
+html[data-theme="dark"] .mz-sx-in { color: var(--mz-green-ink); }

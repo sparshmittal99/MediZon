@@ -16,12 +16,14 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -35,7 +37,7 @@ import java.util.*;
 public class AssistantTools {
 
     private static final Set<String> CUSTOMER = Set.of("search_medicines", "medicine_details", "add_to_cart",
-            "cart_summary", "my_orders", "my_returns", "my_plans", "todays_doses", "create_plan", "mark_dose", "refill_plan",
+            "cart_summary", "my_orders", "my_returns", "my_plans", "todays_doses", "create_plan", "update_plan", "mark_dose", "refill_plan",
             "submit_feedback", "create_reminder", "list_reminders", "complete_reminder", "find_substitutes", "check_medicines");
     private static final Set<String> ADMIN = Set.of("search_medicines", "store_tasks", "review_data", "review_digest",
             "sales_report", "find_order", "create_reminder", "list_reminders", "complete_reminder");
@@ -94,6 +96,7 @@ public class AssistantTools {
                     "dose", s.getPlan().getDoseLabel(),
                     "status", s.getState())).toList();
             case "create_plan" -> createPlan(user, args);
+            case "update_plan" -> updatePlan(user, args);
             case "mark_dose" -> markDose(user, args);
             case "refill_plan" -> refill(user, args.path("plan_id").asLong(), pin);
             case "submit_feedback" -> {
@@ -156,12 +159,9 @@ public class AssistantTools {
         if (!admin) {
             return catalog.search(q, category, 0, pin).getContent().stream().limit(MAX_RESULTS).map(Product::getMedicine).toList();
         }
-        String term = q.toLowerCase();
-        return medicineService.all().stream()
-                .filter(m -> category.isEmpty() || category.equals(m.getCategory()))
-                .filter(m -> term.isEmpty() || contains(m.getName(), term) || contains(m.getGenericName(), term)
-                        || contains(m.getManufacturer(), term))
-                .limit(MAX_RESULTS).toList();
+        List<Medicine> all = medicineService.all().stream()
+                .filter(m -> category.isEmpty() || category.equals(m.getCategory())).toList();
+        return (q.isBlank() ? all : MedicineSearch.rank(all, q)).stream().limit(MAX_RESULTS).toList();
     }
 
     private static boolean contains(String field, String term) {
@@ -406,9 +406,88 @@ public class AssistantTools {
         out.put("active", p.isActive());
         out.put("dose", p.getDoseLabel());
         out.put("times", p.getReminderTimes().stream().map(t -> t.format(HH_MM)).toList());
+        out.putAll(schedule(p));
         out.put("days_left", p.getDaysLeftRounded());
         out.put("running_low", p.isRunningLow());
         return out;
+    }
+
+    /** Which days the doses fall on, spelt out ("Every Tuesday only"), so the model never reads a weekly plan as daily. */
+    static Map<String, Object> schedule(MedicationPlan p) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        switch (p.getScheduleType()) {
+            case DAYS_OF_WEEK -> {
+                List<String> days = p.getDaysOfWeek().stream().map(d -> d.getDisplayName(TextStyle.FULL, Locale.ENGLISH)).toList();
+                out.put("schedule", days.size() == 7 ? "Every day" : "Every " + String.join(", ", days) + " only");
+                out.put("days", days);
+            }
+            case CUSTOM_DATES -> {
+                out.put("schedule", "Only on these dates");
+                out.put("dates", p.getCustomDates().stream().map(LocalDate::toString).toList());
+            }
+            case EVERY_DAY -> out.put("schedule", "Every day");
+        }
+        if (p.getScheduleType() != ScheduleType.CUSTOM_DATES) {
+            if (p.getStartDate() != null && p.getStartDate().isAfter(LocalDate.now())) out.put("starts", p.getStartDate().toString());
+            if (p.getEndDate() != null) out.put("ends", p.getEndDate().toString());
+        }
+        out.put("dose_today", p.isScheduledOn(LocalDate.now()));
+        return out;
+    }
+
+    private static final Map<String, DayOfWeek> DAY_NAMES = new LinkedHashMap<>();
+    static {
+        String[][] names = {{"mon", "MONDAY"}, {"tue", "TUESDAY"}, {"wed", "WEDNESDAY"}, {"thu", "THURSDAY"},
+                {"fri", "FRIDAY"}, {"sat", "SATURDAY"}, {"sun", "SUNDAY"}, {"somvar", "MONDAY"}, {"somwar", "MONDAY"}, {"mangal", "TUESDAY"},
+                {"budh", "WEDNESDAY"}, {"guru", "THURSDAY"}, {"brihaspati", "THURSDAY"}, {"shukra", "FRIDAY"},
+                {"shani", "SATURDAY"}, {"ravi", "SUNDAY"}, {"itvar", "SUNDAY"}, {"etvar", "SUNDAY"}};
+        for (String[] n : names) DAY_NAMES.put(n[0], DayOfWeek.valueOf(n[1]));
+    }
+
+    /** "tue", "Tuesday", "mangalvar" ... as days of the week; "weekdays", "weekends" and "daily" too. */
+    static List<DayOfWeek> days(JsonNode node) {
+        Set<DayOfWeek> out = new TreeSet<>();
+        List<String> words = new ArrayList<>();
+        if (node.isArray()) node.forEach(n -> words.addAll(Arrays.asList(n.asText().split("[,/&]"))));
+        else if (node.isTextual()) words.addAll(Arrays.asList(node.asText().split("[,/&]| and ")));
+        for (String raw : words) {
+            String w = raw.trim().toLowerCase(Locale.ROOT);
+            if (w.isEmpty()) continue;
+            if (w.startsWith("weekday")) { for (int i = 1; i <= 5; i++) out.add(DayOfWeek.of(i)); continue; }
+            if (w.startsWith("weekend")) { out.add(DayOfWeek.SATURDAY); out.add(DayOfWeek.SUNDAY); continue; }
+            if (w.startsWith("daily") || w.startsWith("every day") || w.equals("everyday")) {
+                out.addAll(EnumSet.allOf(DayOfWeek.class));
+                continue;
+            }
+            DayOfWeek d = DAY_NAMES.entrySet().stream().filter(e -> w.startsWith(e.getKey()))
+                    .map(Map.Entry::getValue).findFirst().orElse(null);
+            if (d == null) throw new BusinessException(raw.trim() + " isn't a day of the week.");
+            out.add(d);
+        }
+        return new ArrayList<>(out);
+    }
+
+    /** The days (and end date) asked for, onto a plan form; nothing given leaves the form as it is. */
+    private static void applyDays(PlanForm form, JsonNode args) {
+        JsonNode daysArg = args.path("days");
+        if (!daysArg.isMissingNode() && !daysArg.isNull() && !(daysArg.isArray() && daysArg.isEmpty())) {
+            List<DayOfWeek> d = days(daysArg);
+            if (d.size() == 7) {
+                form.setScheduleType(ScheduleType.EVERY_DAY);
+                form.setDaysOfWeek(new ArrayList<>());
+            } else if (!d.isEmpty()) {
+                form.setScheduleType(ScheduleType.DAYS_OF_WEEK);
+                form.setDaysOfWeek(new ArrayList<>(d));
+            }
+        }
+        String end = args.path("end_date").asText("").trim();
+        if (!end.isEmpty()) {
+            try {
+                form.setEndDate(LocalDate.parse(end));
+            } catch (DateTimeParseException e) {
+                throw new BusinessException("Give the end date as yyyy-MM-dd.");
+            }
+        }
     }
 
     private Object createPlan(User user, JsonNode args) {
@@ -430,14 +509,38 @@ public class AssistantTools {
         form.setMedicineId(m.getId());
         form.setDosePerIntake(Math.max(1, Math.min(args.path("dose").asInt(1), 10)));
         form.setTimes(times);
+        applyDays(form, args);
         int units = args.path("units_remaining").asInt(-1);
         form.setUnitsRemaining(units < 0 ? m.getUnitCount() : Math.min(units, 10_000));
         form.setReorderMode(ReorderMode.MANUAL);
         MedicationPlan p = planService.save(user, form);
         reorderService.evaluate(p.getId());
-        return Map.of("ok", true, "plan_id", p.getId(), "medicine", m.getName(), "dose", p.getDoseLabel(),
-                "times", p.getReminderTimes().stream().map(t -> t.format(HH_MM)).toList(),
-                "days_left", p.getDaysLeftRounded());
+        Map<String, Object> out = new LinkedHashMap<>(Map.of("ok", true, "plan_id", p.getId(), "medicine", m.getName(),
+                "dose", p.getDoseLabel(), "times", p.getReminderTimes().stream().map(t -> t.format(HH_MM)).toList(),
+                "days_left", p.getDaysLeftRounded()));
+        out.putAll(schedule(p));
+        return out;
+    }
+
+    /** Changes the times, days, dose or end date of a My medicines entry; what isn't given stays as it is. */
+    private Object updatePlan(User user, JsonNode args) {
+        MedicationPlan p = planService.get(args.path("plan_id").asLong(), user);
+        PlanForm form = PlanForm.from(p);
+        if (args.path("times").isArray() && !args.get("times").isEmpty()) {
+            List<String> times = new ArrayList<>();
+            args.get("times").forEach(t -> times.add(t.asText()));
+            if (times.size() > 6) return Map.of("error", "Give between 1 and 6 reminder times.");
+            form.setTimes(times);
+        }
+        if (args.hasNonNull("dose")) form.setDosePerIntake(Math.max(1, Math.min(args.get("dose").asInt(1), 10)));
+        applyDays(form, args);
+        MedicationPlan saved = planService.save(user, form);
+        reorderService.evaluate(saved.getId());
+        Map<String, Object> out = new LinkedHashMap<>(Map.of("ok", true, "plan_id", saved.getId(),
+                "medicine", saved.getMedicineName(), "dose", saved.getDoseLabel(),
+                "times", saved.getReminderTimes().stream().map(t -> t.format(HH_MM)).toList()));
+        out.putAll(schedule(saved));
+        return out;
     }
 
     private Object markDose(User user, JsonNode args) {

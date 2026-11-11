@@ -140,6 +140,26 @@ class Bridge(private val activity: MainActivity) {
         main.post { activity.startVoiceSearch() }
     }
 
+    /** The chat's mic: the phone's voice input with its own prompt; the words come back through window.mzVoiceResult. */
+    @JavascriptInterface
+    fun voiceInput(prompt: String?) {
+        if (!trusted()) return
+        main.post { activity.startVoiceSearch(prompt ?: "Speak now") }
+    }
+
+    /** Reads an assistant reply aloud (lang "hi-IN" or "en-IN"); window.mzSpeechDone runs when it's finished. */
+    @JavascriptInterface
+    fun speak(text: String?, lang: String?) {
+        if (!trusted() || text.isNullOrBlank()) return
+        main.post { activity.speak(text.take(4000), lang ?: "en-IN") }
+    }
+
+    @JavascriptInterface
+    fun stopSpeaking() {
+        if (!trusted()) return
+        main.post { activity.stopSpeaking() }
+    }
+
     /**
      * Sign in with Google: the phone's own Google account picker (Google doesn't allow its sign-in page in a WebView).
      * The ID token comes back through window.mzGoogleToken, which posts it to the server.

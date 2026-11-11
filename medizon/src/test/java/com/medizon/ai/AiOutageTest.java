@@ -279,10 +279,13 @@ class AiOutageTest {
         var sent = org.mockito.ArgumentCaptor.forClass(com.fasterxml.jackson.databind.node.ArrayNode.class);
         verify(groq).complete(sent.capture(), any(), anyDouble());
         var msgs = sent.getValue();
-        assertEquals(4, msgs.size());                     // system, the two earlier turns (greeting dropped), the question
+        // system, the two earlier turns (greeting dropped), "earlier replies may be out of date", the question
+        assertEquals(5, msgs.size());
         assertEquals("user", msgs.get(1).path("role").asText());
         assertTrue(msgs.get(2).path("content").asText().contains("Dolo 650 (id 7)"));
-        assertEquals("add the second one", msgs.get(3).path("content").asText());
+        assertEquals("system", msgs.get(3).path("role").asText());
+        assertEquals(ChatFallback.FRESH, msgs.get(3).path("content").asText());
+        assertEquals("add the second one", msgs.get(4).path("content").asText());
     }
 
     @Test

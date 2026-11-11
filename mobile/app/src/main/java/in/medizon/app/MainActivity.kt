@@ -204,8 +204,9 @@ class MainActivity : AppCompatActivity() {
     private val voiceInput = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         voiceListening = false
         val heard = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim()
-        if (result.resultCode != RESULT_OK || heard.isNullOrEmpty()) return@registerForActivityResult
-        callPage("window.mzVoiceResult && window.mzVoiceResult(${org.json.JSONObject.quote(heard)})")
+        // Cancelled or nothing heard: an empty answer, so the chat's mic stops waiting (the search bar ignores it)
+        val words = if (result.resultCode == RESULT_OK && !heard.isNullOrEmpty()) heard else ""
+        callPage("window.mzVoiceResult && window.mzVoiceResult(${org.json.JSONObject.quote(words)})")
     }
 
     // ---------------------------------------------------------------- lifecycle
@@ -291,6 +292,7 @@ class MainActivity : AppCompatActivity() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
         closePopup()
+        speech.shutdown()
         (webView.parent as? android.view.ViewGroup)?.removeView(webView)
         webView.destroy()
         super.onDestroy()
@@ -873,19 +875,26 @@ class MainActivity : AppCompatActivity() {
 
     fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 
-    private fun voiceIntent() = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+    private fun voiceIntent(prompt: String = "Say a medicine, salt or brand") = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        putExtra(RecognizerIntent.EXTRA_PROMPT, "Say a medicine, salt or brand")
+        putExtra(RecognizerIntent.EXTRA_PROMPT, prompt)
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
     }
 
+    // ---------------------------------------------------------------- the assistant's replies read aloud
+    private val speech by lazy { Speech(this) { runOnUiThread { callPage("window.mzSpeechDone && window.mzSpeechDone()") } } }
+
+    fun speak(text: String, lang: String) = speech.speak(text, lang)
+
+    fun stopSpeaking() = speech.stop()
+
     fun canVoiceSearch(): Boolean = voiceIntent().resolveActivity(packageManager) != null
 
-    fun startVoiceSearch() {
+    fun startVoiceSearch(prompt: String? = null) {
         // Back from the voice screen: the page is waiting on it, so no auto refresh (onPause)
         try {
             voiceListening = true
-            voiceInput.launch(voiceIntent())
+            voiceInput.launch(if (prompt.isNullOrBlank()) voiceIntent() else voiceIntent(prompt.take(80)))
         } catch (e: ActivityNotFoundException) {
             voiceListening = false
             toast("Voice search isn't available on this phone")

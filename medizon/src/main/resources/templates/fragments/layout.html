@@ -793,6 +793,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script th:src="@{/js/medizon.js}"></script>
+    <script th:src="@{/js/voice.js}"></script>
+    <script th:src="@{/js/search.js}"></script>
 
     <!-- MediZon Assistant: floating chat for signed-in users -->
     <th:block sec:authorize="hasAnyRole('CUSTOMER','ADMIN')">
@@ -809,6 +811,8 @@
                         <h2 class="mz-bot-title" id="mzBotTitle">MediZon Assistant</h2>
                         <div class="mz-bot-status"><span class="mz-bot-dot"></span><span data-mz-bot-status>Online</span></div>
                     </div>
+                    <button type="button" class="mz-bot-icon" data-mz-bot-voice title="Read replies aloud" aria-label="Read replies aloud" aria-pressed="false">
+                        <i class="bi bi-volume-mute"></i></button>
                     <button type="button" class="mz-bot-icon" data-mz-bot-reset title="Start over" aria-label="Start a new conversation">
                         <i class="bi bi-arrow-counterclockwise"></i></button>
                     <button type="button" class="mz-bot-icon" data-mz-bot-close title="Close" aria-label="Close assistant">
@@ -817,7 +821,9 @@
                 <div class="mz-bot-log" role="log" aria-live="polite" aria-relevant="additions"></div>
                 <div class="mz-bot-chips" aria-label="Suggested replies"></div>
                 <form class="mz-bot-form" autocomplete="off">
-                    <input class="mz-bot-input" id="mzBotInput" name="message" type="text" autocomplete="off" maxlength="1000" placeholder="Type a message…" aria-label="Message the assistant">
+                    <input class="mz-bot-input" id="mzBotInput" name="message" type="text" autocomplete="off" maxlength="1000" placeholder="Type or tap the mic…" aria-label="Message the assistant">
+                    <!-- WhatsApp style: the mic while the box is empty, send once there's text (assistant.js, voice.js) -->
+                    <button class="mz-bot-mic" type="button" aria-label="Speak your message" title="Speak your message"><i class="bi bi-mic-fill"></i></button>
                     <button class="mz-bot-send" type="submit" aria-label="Send"><i class="bi bi-send-fill"></i></button>
                 </form>
             </section>

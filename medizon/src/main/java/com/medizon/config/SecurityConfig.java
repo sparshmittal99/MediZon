@@ -149,7 +149,7 @@ public class SecurityConfig {
                 .requestMatchers("/.well-known/assetlinks.json").permitAll()
                 // Visitors can fill a cart and pick a delivery location before signing in; checkout needs an account.
                 // Admin accounts are turned away in CartController / CartService.
-                .requestMatchers("/cart", "/cart/add", "/cart/*/remove", "/api/cart", "/api/cart/*", "/api/location/**").permitAll()
+                .requestMatchers("/cart", "/cart/add", "/cart/*/remove", "/api/cart", "/api/cart/*", "/api/location/**", "/api/search/**").permitAll()
                 // The back office. One admin can do everything; every other staff role only reaches its own pages.
                 .requestMatchers("/admin/users/**", "/admin/stores/**", "/admin/locations/**", "/admin/monitoring/**").hasRole("ADMIN")
                 .requestMatchers("/admin/prescriptions/**").hasAnyRole("ADMIN", "PHARMACIST")

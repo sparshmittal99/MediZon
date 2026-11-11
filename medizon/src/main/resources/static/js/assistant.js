@@ -1,6 +1,8 @@
 /* MediZon Assistant: the floating chat in the bottom-right corner.
    Talks to /api/assistant (which forwards to the built-in Python assistant). The conversation lives in the
-   server session, so it carries on across pages; whether the panel is open is remembered per tab. */
+   server session, so it carries on across pages; whether the panel is open is remembered per tab.
+   Voice (voice.js): the mic speaks a message, WhatsApp style; a question asked by voice is answered aloud, every reply
+   has a speaker button, and the header's speaker reads all replies aloud (remembered on this device). */
 (function () {
     const root = document.getElementById('mzBot');
     if (!root) return;
@@ -12,6 +14,9 @@
     const form = root.querySelector('.mz-bot-form');
     const input = root.querySelector('.mz-bot-input');
     const sendBtn = root.querySelector('.mz-bot-send');
+    const micBtn = root.querySelector('.mz-bot-mic');
+    const voiceToggle = root.querySelector('[data-mz-bot-voice]');
+    const voice = window.mzVoice;
     const status = root.querySelector('[data-mz-bot-status]');
     const teaser = root.querySelector('.mz-bot-teaser');
     const firstName = root.dataset.firstName || '';
@@ -24,6 +29,10 @@
     };
     const url = (path) => (typeof path === 'string' && path.startsWith('/')) ? mzUrl(path) : path;
     let loaded = false, busy = false;
+    const local = {
+        get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+        set(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) { /* private mode */ } },
+    };
 
     // ---------------------------------------------------------------- text formatting (safe: escape first)
     function esc(s) {
@@ -43,8 +52,44 @@
         const el = document.createElement('div');
         el.className = 'mz-bot-msg ' + (from === 'user' ? 'is-user' : 'is-bot');
         el.innerHTML = format(text);
+        if (from !== 'user' && voice && voice.canSpeak() && text && text.trim()) {
+            const say = document.createElement('button');
+            say.type = 'button';
+            say.className = 'mz-bot-say';
+            say.setAttribute('aria-label', 'Read this aloud');
+            say.title = 'Read aloud';
+            say.innerHTML = '<i class="bi bi-volume-up"></i>';
+            say.addEventListener('click', () => el.classList.contains('is-speaking') ? voice.stopSpeaking() : speak(el, text));
+            el.appendChild(say);
+        }
         log.appendChild(el);
         return el;
+    }
+
+    // ---------------------------------------------------------------- reading replies aloud
+    function speak(el, text) {
+        if (!voice || !voice.canSpeak()) return;
+        log.querySelectorAll('.mz-bot-msg.is-speaking').forEach(b => b.classList.remove('is-speaking'));
+        el.classList.add('is-speaking');
+        voice.speak(text, () => el.classList.remove('is-speaking'));
+    }
+
+    const readAloud = () => local.get('mzBotReadAloud') === '1';
+    function showReadAloud() {
+        if (!voiceToggle) return;
+        const on = readAloud();
+        voiceToggle.hidden = !(voice && voice.canSpeak());
+        voiceToggle.setAttribute('aria-pressed', String(on));
+        voiceToggle.title = on ? 'Reading replies aloud (tap to stop)' : 'Read replies aloud';
+        voiceToggle.querySelector('i').className = 'bi ' + (on ? 'bi-volume-up-fill' : 'bi-volume-mute');
+    }
+    if (voiceToggle) {
+        showReadAloud();
+        voiceToggle.addEventListener('click', () => {
+            local.set('mzBotReadAloud', readAloud() ? null : '1');
+            if (!readAloud() && voice) voice.stopSpeaking();
+            showReadAloud();
+        });
     }
 
     function actionButton(a) {
@@ -148,12 +193,13 @@
     }
 
     // ---------------------------------------------------------------- talking to the server
-    async function send({ message, payload, label, silent }) {
+    async function send({ message, payload, label, silent, spoken }) {
         if (busy) return;
         const text = (message || '').trim();
         if (!text && !payload) return;
         busy = true;
         sendBtn.disabled = true;
+        if (voice) voice.stopSpeaking();
         if (!silent) bubble('user', text || label || '…');
         setChips([]);
         typing(true);
@@ -167,6 +213,8 @@
             typing(false);
             const first = renderBot({ text: data.reply, cards: data.cards });
             setChips(data.suggestions);
+            // Asked by voice (or read-aloud is on): answer aloud, like a voice search
+            if ((spoken || readAloud()) && !silent && data.reply && first && first.classList.contains('mz-bot-msg')) speak(first, data.reply);
             status.textContent = data.offline ? 'Offline' : 'Online';
             root.classList.toggle('is-offline', !!data.offline);
             if (data.cartCount !== null && data.cartCount !== undefined) {
@@ -185,7 +233,41 @@
         } finally {
             busy = false;
             sendBtn.disabled = false;
+            syncButtons();
         }
+    }
+
+    // ---------------------------------------------------------------- voice typing (the mic)
+    let stopListening = null;
+    function syncButtons() {
+        const hasText = input.value.trim().length > 0;
+        form.classList.toggle('has-text', hasText || !micBtn || !voice || !voice.canListen());
+    }
+    function listening(on) {
+        root.classList.toggle('is-listening', on);
+        micBtn.setAttribute('aria-label', on ? 'Stop listening' : 'Speak your message');
+        input.placeholder = on ? 'Listening… speak now' : 'Type or tap the mic…';
+    }
+    if (micBtn) {
+        micBtn.addEventListener('click', () => {
+            if (stopListening) { stopListening(); return; }
+            if (!voice) return;
+            const before = input.value;
+            listening(true);
+            stopListening = voice.listen({
+                prompt: 'Ask MediZon Assistant',
+                onInterim: (t) => { input.value = (before ? before + ' ' : '') + t; },
+                onResult: (t) => {
+                    const text = ((before ? before + ' ' : '') + t).trim();
+                    input.value = '';
+                    send({ message: text, spoken: true });
+                },
+                onError: (msg) => { bubble('bot', msg); scrollDown(); },
+                onEnd: () => { stopListening = null; listening(false); syncButtons(); },
+            });
+        });
+        input.addEventListener('input', syncButtons);
+        syncButtons();
     }
 
     async function loadHistory() {
@@ -219,6 +301,8 @@
     }
 
     function close() {
+        if (voice) voice.stopSpeaking();
+        if (stopListening) stopListening();
         root.classList.remove('is-open');
         launcher.setAttribute('aria-expanded', 'false');
         launcher.setAttribute('aria-label', 'Open MediZon assistant');
@@ -241,6 +325,7 @@
         e.preventDefault();
         const text = input.value;
         input.value = '';
+        syncButtons();
         send({ message: text });
     });
 

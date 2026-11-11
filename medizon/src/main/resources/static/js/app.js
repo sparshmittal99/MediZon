@@ -314,20 +314,22 @@
     if (mic) {
         const voiceOk = () => typeof app.voiceSearch === 'function' && call('canVoiceSearch') === true;
         mic.addEventListener('click', () => {
-            if (voiceOk()) { call('voiceSearch'); return; }
+            if (voiceOk()) { if (window.mzVoice) window.mzVoice.cancel(); call('voiceSearch'); return; }
             const box = search.querySelector('input[name="q"]');
             if (box) box.focus();
             alert(typeof app.voiceSearch === 'function'
                 ? "Voice search isn't available on this phone. Type to search instead."
                 : 'Update the MediZon app to search by voice.');
         });
-        window.mzVoiceResult = (text) => {
-            const box = search.querySelector('input[name="q"]');
-            if (!box || !text) return;
-            box.value = String(text);
-            if (search.requestSubmit) search.requestSubmit(); else search.submit();
-        };
     }
+    // What the phone heard: the chat's mic (or the search screen's) gets it when it asked, else the search bar searches
+    window.mzVoiceResult = (text) => {
+        if (window.mzVoice && window.mzVoice.deliver(text)) return;
+        const box = search && search.querySelector('input[name="q"]');
+        if (!box || !text) return;
+        box.value = String(text);
+        if (search.requestSubmit) search.requestSubmit(); else search.submit();
+    };
     sendColor(true);
     // Dark mode or text size changed in App settings: the header colour and its height may have changed
     const applyTheme2 = window.mzApplyTheme;

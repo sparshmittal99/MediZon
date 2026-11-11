@@ -92,8 +92,18 @@ public class ChatFallback {
               together" or checking their or a family member's medicines, call check_medicines first and report what it
               finds; if it finds nothing or doesn't know a name, you may add widely known general information, and
               always say it's a limited check and to confirm with their doctor or our pharmacist.
-            - Only change something (add to cart, create or complete a reminder, set up or mark a dose, send feedback)
-              when they clearly asked for it, then say what you did.
+            - Only change something (add to cart, create or complete a reminder, set up, change or mark a dose, send
+              feedback) when they clearly asked for it, then say what you did.
+            - Customers often give only part of a medicine's name, a misspelling or a spoken version ("dolo", "azithro",
+              "paracitamol", "pan d"). Call search_medicines with the word they used; it understands these. If one
+              medicine clearly fits, go ahead with it; if several do, list them briefly and ask which one. Never ask
+              them for the full exact name.
+            - Dose reminders run on a schedule: every day, only on certain weekdays, or on set dates. Always say the
+              days exactly as my_plans or the tool returned them in "schedule" (e.g. "1:30 pm every Tuesday"); never
+              say "daily" or "every day" unless the schedule says so. Pass days to create_plan or update_plan when they
+              name days ("every Tuesday", "weekdays", "Mon and Thu"); leave days out for every day.
+            - Their orders, cart, reminders, stock and prices change all the time, in the app too. For any question
+              about them call the tool again now; never answer from what an earlier message in this chat said.
             - Some things only the app does; point to the page: cancelling or returning an order (open it from Orders
               /orders), placing the order (Cart /cart), uploading a prescription (/prescriptions), help (/support).
             """;
@@ -128,6 +138,9 @@ public class ChatFallback {
     private static final String ADMIN_TOOLS = """
             You are the chat assistant of MediZon, an online pharmacy in India, talking to the store's admin, %s.
             It is now %s (India time).
+            Medicine names may be partial or misspelt; search_medicines understands that, so search with the word given.
+            Store figures, orders and reminders change all the time: call the tool again for each question, never
+            answer from an earlier message in this chat.
             Use the tools for today's store figures (orders to confirm or ship, pending prescriptions, low stock,
             revenue), the catalogue and the admin's own reminders. To read or analyse customer reviews and feedback,
             call review_digest (rating to see only 1★ or 5★ ones, days for another period) and analyse what it returns:
@@ -142,6 +155,14 @@ public class ChatFallback {
             Prescriptions /admin/prescriptions, Reviews /admin/reviews, Monitoring /admin/monitoring.
             Plain text, no markdown, at most 120 words.
             """;
+
+    /**
+     * Sent after the earlier turns: the customer may have changed things in the app since (a reminder edited, an order
+     * placed), so those replies can be out of date. Without this the model repeats them instead of looking again.
+     */
+    static final String FRESH = "Earlier replies in this chat may be out of date: the user may have changed things in "
+            + "the app since. For anything about their orders, cart, reminders, doses, stock, prices or store figures, "
+            + "call the tools again now and answer only from what they return.";
 
     private final GroqClient groq;
     private final GeminiClient gemini;
@@ -200,6 +221,7 @@ public class ChatFallback {
         messages.addObject().put("role", "system")
                 .put("content", (user.isAdmin() ? ADMIN_TOOLS : CUSTOMER_TOOLS).formatted(user.getFirstName(), now));
         for (Turn t : history) messages.addObject().put("role", t.fromUser() ? "user" : "assistant").put("content", t.text());
+        if (!history.isEmpty()) messages.addObject().put("role", "system").put("content", FRESH);
         messages.addObject().put("role", "user").put("content", message);
         ArrayNode toolList = toolsFor(user);
         try {
@@ -287,8 +309,9 @@ public class ChatFallback {
      */
     private ArrayNode toolsFor(User user) {
         ArrayNode t = json.createArrayNode();
-        tool(t, "search_medicines", "Find medicines in the catalogue with price and stock.",
-                "query", "string", "Medicine name, salt or brand", true,
+        tool(t, "search_medicines", "Find medicines in the catalogue with price and stock. Understands part of a name, "
+                        + "misspellings and spoken spellings, best match first.",
+                "query", "string", "Medicine name, salt or brand, or any part of it, as the user said it", true,
                 "category", "string", "Optional category", false);
         if (user.isAdmin()) {
             tool(t, "store_tasks", "Today's store figures: orders to confirm, ship and in transit, pending "
@@ -316,16 +339,24 @@ public class ChatFallback {
             tool(t, "cart_summary", "What's in the cart, with totals.");
             tool(t, "my_orders", "The customer's recent orders with status, items and link.");
             tool(t, "my_returns", "The customer's return requests with status and refund.");
-            tool(t, "my_plans", "The customer's medicines with dose reminders (My medicines).");
+            tool(t, "my_plans", "The customer's medicines with dose reminders (My medicines): times, and on which days "
+                    + "(schedule).");
             tool(t, "todays_doses", "Today's doses from My medicines and whether each was taken.");
-            ObjectNode plan = tool(t, "create_plan", "Set up dose reminders for a medicine the customer takes.",
+            ObjectNode plan = tool(t, "create_plan", "Set up dose reminders for a medicine the customer takes: every day, "
+                            + "or only on the days given.",
                     "medicine_id", "integer", "Medicine id from search_medicines", true,
                     "dose", "integer", "Units per dose, default 1", false,
-                    "units_remaining", "integer", "Units they have left, optional", false);
-            ObjectNode params = (ObjectNode) plan.path("function").path("parameters");
-            ((ObjectNode) params.get("properties")).putObject("times").put("type", "array")
-                    .put("description", "Reminder times, HH:mm, 1 to 6").putObject("items").put("type", "string");
-            ((ArrayNode) params.get("required")).add("times");
+                    "units_remaining", "integer", "Units they have left, optional", false,
+                    "end_date", "string", "Last day, yyyy-MM-dd, optional", false);
+            stringArray(plan, "times", "Reminder times, HH:mm (24-hour), 1 to 6", true);
+            stringArray(plan, "days", "Only on these weekdays, e.g. [\"Tuesday\"] or [\"Mon\",\"Thu\"]; leave out for every day", false);
+            ObjectNode change = tool(t, "update_plan", "Change a My medicines entry's reminder times, days, dose or end "
+                            + "date; what isn't given stays the same.",
+                    "plan_id", "integer", "Plan id from my_plans", true,
+                    "dose", "integer", "Units per dose", false,
+                    "end_date", "string", "Last day, yyyy-MM-dd", false);
+            stringArray(change, "times", "New reminder times, HH:mm (24-hour)", false);
+            stringArray(change, "days", "Weekdays, e.g. [\"Tuesday\"]; [\"daily\"] for every day", false);
             tool(t, "mark_dose", "Mark a dose from todays_doses as taken or skipped.",
                     "plan_id", "integer", "plan_id from todays_doses", true,
                     "time", "string", "Dose time, HH:mm", true,
@@ -354,6 +385,14 @@ public class ChatFallback {
         tool(t, "complete_reminder", "Mark a reminder done.",
                 "id", "integer", "Reminder id from list_reminders", true);
         return t;
+    }
+
+    /** Adds a list-of-strings parameter to a tool made by {@link #tool}. */
+    private static void stringArray(ObjectNode tool, String name, String description, boolean required) {
+        ObjectNode params = (ObjectNode) tool.path("function").path("parameters");
+        ((ObjectNode) params.get("properties")).putObject(name).put("type", "array")
+                .put("description", description).putObject("items").put("type", "string");
+        if (required) ((ArrayNode) params.get("required")).add(name);
     }
 
     /** Adds a function tool; {@code params} are groups of name, type, description, required. */

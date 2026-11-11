@@ -11,6 +11,7 @@ import com.medizon.repository.StoreAreaRepository;
 import com.medizon.repository.StoreItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -92,16 +93,45 @@ public class CatalogService {
 
     // ------------------------------------------------------------------ the shop
 
+    /**
+     * The shop's search. With words typed it searches like a search engine ({@link MedicineSearch}): part of a name,
+     * typos and spellings by sound find the medicine, best matches first. Without, the category (or everything) A to Z.
+     */
     public Page<Product> search(String q, String category, int page, String pincode) {
         String query = q == null ? "" : q.trim();
         String cat = category == null ? "" : category;
         PageRequest pr = PageRequest.of(Math.max(page, 0), MedicineService.PAGE_SIZE, Sort.by("name"));
-        List<StoreArea> scope = scope(pincode);
-        Page<Medicine> found = scope == null ? medicines.searchSold(query, cat, pr)
-                : medicines.searchIn(query, cat, storeIds(scope), pr);
+        Page<Medicine> found;
+        if (query.isEmpty()) {
+            List<StoreArea> scope = scope(pincode);
+            found = scope == null ? medicines.searchSold(query, cat, pr) : medicines.searchIn(query, cat, storeIds(scope), pr);
+        } else {
+            List<Medicine> ranked = MedicineSearch.rank(sold(pincode).stream()
+                    .filter(m -> cat.isEmpty() || cat.equals(m.getCategory())).toList(), query);
+            int from = (int) Math.min(pr.getOffset(), ranked.size());
+            int to = Math.min(from + pr.getPageSize(), ranked.size());
+            found = new PageImpl<>(ranked.subList(from, to), pr, ranked.size());
+        }
         Map<Long, Offer> o = offers(found.getContent(), pincode, 1);
         return found.map(m -> new Product(m, o.get(m.getId())));
     }
+
+    /** What the search box suggests while typing: the best few matches, priced for this PIN code. */
+    public Suggestions suggest(String q, String pincode, int limit) {
+        String query = q == null ? "" : q.trim();
+        if (query.isEmpty()) return new Suggestions(List.of(), List.of(), null);
+        List<MedicineSearch.Hit<Medicine>> hits = MedicineSearch.rank(sold(pincode), query, m -> m);
+        List<Medicine> top = hits.stream().limit(limit).map(MedicineSearch.Hit::item).toList();
+        String norm = MedicineSearch.normalise(query);
+        List<String> cats = categories(pincode).stream()
+                .filter(c -> MedicineSearch.normalise(c).contains(norm) || norm.length() >= 3 && MedicineSearch.normalise(c).startsWith(norm))
+                .limit(3).toList();
+        // Nothing matched as typed: the spelling was fixed, so say what it's showing
+        String corrected = !hits.isEmpty() && !hits.get(0).exact() ? hits.get(0).item().getName() : null;
+        return new Suggestions(products(top, pincode), cats, corrected);
+    }
+
+    public record Suggestions(List<Product> products, List<String> categories, String didYouMean) {}
 
     public List<String> categories(String pincode) {
         List<StoreArea> scope = scope(pincode);
