@@ -352,6 +352,11 @@ public class OrderService {
             stores.put(o.store().getId(), o.store());
         }
 
+        // Every stock row is locked up front, lowest id first, so two checkouts sharing medicines wait for each other
+        // instead of deadlocking; the locks below are then already held
+        lines.stream().map(l -> offers.get(l.medicineId()).item().getId()).distinct().sorted()
+                .forEach(storeItems::lockById);
+
         String ref = byStore.size() > 1 ? newCheckoutRef() : null;
         List<Order> placed = new ArrayList<>();
         for (Map.Entry<Long, List<Line>> group : byStore.entrySet()) {
