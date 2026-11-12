@@ -1646,6 +1646,8 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
 .mz-cart-per { color: var(--mz-muted); font-size: .78rem; }
 .mz-cart-foot { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: .5rem; margin-top: auto; padding-top: .65rem; }
 .mz-cart-qty { flex: none; }
+.mz-cart-oos { display: inline-block; padding: .4rem .95rem; border-radius: 2rem; background: #FBEFEF; color: #7A2626;
+    font-size: .85rem; font-weight: 600; white-space: nowrap; }
 .mz-cart-qty .mz-qty-error { max-width: 14rem; }
 /* The line amount always stays on the stepper's line: it takes the room left and, if a long figure doesn't fit,
    medizon.js (fitCartAmount) steps its font down instead of letting it wrap or push the card wider */
@@ -1696,6 +1698,7 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
     background: var(--mz-surface, #fff); color: var(--mz-muted); font-size: .88rem; font-weight: 600; }
 .mz-cart-none[hidden] { display: none; }
 .mz-cart-none i { color: var(--mz-green); font-size: 1.1rem; }
+.mz-cart-none[data-mz-blocked] i { color: var(--mz-red); }
 .mz-cart-go-n { margin-left: .3rem; }   /* a flex item: a leading space would be dropped */
 .mz-cart-go-n[hidden] { display: none; }
 

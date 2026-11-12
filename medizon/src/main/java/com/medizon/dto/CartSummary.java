@@ -94,6 +94,12 @@ public class CartSummary {
     /** Lines ticked for checkout. */
     public long getSelectedCount() { return items.stream().filter(CartItem::isSelected).count(); }
 
+    /**
+     * Ticked lines that can't be ordered right now (out of stock, too few packs, or not sold here): checkout waits until
+     * they're unticked or removed, as placing the order would stop on them.
+     */
+    public long getBlockedCount() { return items.stream().filter(i -> i.isSelected() && !i.isAvailable()).count(); }
+
     /** Every line is ticked (true for an empty cart). */
     public boolean isAllSelected() { return items.stream().allMatch(CartItem::isSelected); }
 

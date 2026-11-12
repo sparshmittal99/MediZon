@@ -624,14 +624,18 @@
         const short = Number(data.minOrderShort), min = Number(data.minOrderValue);
         // Nothing ticked for checkout: no "add ₹X more", just "select items" (refreshCartExtras) and checkout waits
         const none = data.selectedCount === 0;
-        box.hidden = short <= 0 || none;
+        // A ticked item that can't be ordered right now: checkout waits until it's unticked or removed
+        const blocked = (data.blockedCount || 0) > 0;
+        const blockedNote = summary.querySelector('[data-mz-blocked]');
+        if (blockedNote) blockedNote.hidden = !blocked;
+        box.hidden = short <= 0 || none || data.blockedCount === data.selectedCount;
         box.querySelector('[data-mz-min-order-text]').textContent = `Add ${rupees(short)} more to place your order`;
         const bar = box.querySelector('[data-mz-min-order-bar]');
         if (bar) bar.style.width = (min > 0 ? Math.min(100, Math.floor(Number(data.subtotal) * 100 / min)) : 100) + '%';
         const link = summary.querySelector('[data-mz-checkout-link]');
         if (link) {
-            link.classList.toggle('disabled', short > 0 || none);
-            link.setAttribute('aria-disabled', String(short > 0 || none));
+            link.classList.toggle('disabled', short > 0 || none || blocked);
+            link.setAttribute('aria-disabled', String(short > 0 || none || blocked));
         }
     }
 

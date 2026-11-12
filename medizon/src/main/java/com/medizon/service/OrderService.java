@@ -78,11 +78,7 @@ public class OrderService {
         if (cart.isEmpty()) {
             throw new BusinessException(cartService.count(user) > 0 ? "Tick at least one item in your cart to check out." : "Your cart is empty.");
         }
-        if (!cart.getUnavailable().isEmpty()) {
-            throw new BusinessException(cart.getUnavailable().stream().map(i -> i.getMedicine().getName()).collect(Collectors.joining(", "))
-                    + " can't be delivered to " + ship.getPincode() + " right now. Remove " + (cart.getUnavailable().size() == 1 ? "it" : "them")
-                    + " from the cart or choose another address.");
-        }
+        if (!cart.getUnavailable().isEmpty()) throw new BusinessException(unavailableReason(cart.getUnavailable(), ship.getPincode()));
 
         // The admin's minimum order value, on the medicines before any promo or delivery fee
         orderSettings.requireMinimum(cart.getSubtotal());
@@ -97,6 +93,31 @@ public class OrderService {
             if (i.getMembers().isEmpty()) throw new BusinessException("Choose who " + i.getMedicine().getName() + " is for.");
         }
         return new Ready(ship, cart, coverage, promo);
+    }
+
+    /**
+     * Why ticked lines can't be ordered, as the cart shows them: out of stock, fewer packs than wanted, or not sold to
+     * this PIN code at all. "Dolo 650 is out of stock right now. Untick or remove it to check out."
+     */
+    static String unavailableReason(List<CartItem> unavailable, String pincode) {
+        List<String> gone = new ArrayList<>(), notSold = new ArrayList<>(), parts = new ArrayList<>();
+        for (CartItem i : unavailable) {
+            String name = i.getMedicine().getName();
+            int left = i.getProduct().getStock();
+            if (i.getProduct().isUnavailable()) notSold.add(name);
+            else if (left <= 0) gone.add(name);
+            else parts.add(left == 1 ? "Only 1 pack of " + name + " is available right now."
+                    : "Only " + left + " packs of " + name + " are available right now.");
+        }
+        if (!gone.isEmpty()) {
+            parts.add(0, String.join(", ", gone) + (gone.size() == 1 ? " is" : " are") + " out of stock right now.");
+        }
+        if (!notSold.isEmpty()) {
+            parts.add(String.join(", ", notSold) + (notSold.size() == 1 ? " isn't" : " aren't") + " sold for delivery to " + pincode + ".");
+        }
+        int n = unavailable.size();
+        return String.join(" ", parts) + " Untick or remove " + (n == 1 ? "it" : "them") + " to check out"
+                + (notSold.isEmpty() ? "." : ", or choose another address.");
     }
 
     /** What MediZon Money pays of {@code total} (as far as the balance goes, if it's used) and what's left to pay. */

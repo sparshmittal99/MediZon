@@ -156,6 +156,7 @@ public class CartApi {
     /** How many lines are ticked for checkout, and whether all of them are. */
     private static void selection(Map<String, Object> out, CartSummary c) {
         out.put("selectedCount", c.getSelectedCount());
+        out.put("blockedCount", c.getBlockedCount());
         out.put("itemCount", c.getItems().size());
         out.put("allSelected", c.isAllSelected());
     }
