@@ -51,6 +51,7 @@ public class OrderService {
     private final WalletService wallet;
     private final OrderSettingsService orderSettings;
     private final PaymentGateways gateways;
+    private final StockHoldService stockHolds;
 
     /** One order line: packs of a medicine and how many packs each person gets. */
     /** @param othersPatient who the "Others" share is for, when known (from a prescription) */
@@ -185,6 +186,7 @@ public class OrderService {
             }
         }
         prescriptionService.finishUse(coverage.prescriptions());
+        stockHolds.releaseFor(user.getId());                        // what was held for them is now sold to them
         Cart from = cartService.checkOut(user, cart.getItems());   // only what was ordered; unticked lines stay in the cart
         placed.forEach(o -> o.setCart(from));
         if (placed.size() == 1) {
@@ -327,7 +329,7 @@ public class OrderService {
             wanted.merge(m, line.quantity(), Integer::sum);
             byId.put(m.getId(), m);
         }
-        Map<Long, Offer> offers = catalog.offers(wanted, pincode);
+        Map<Long, Offer> offers = catalog.offers(wanted, pincode, user);
 
         // The promo spread over the lines in cart order, as the cart showed it
         Map<Line, BigDecimal> lineDiscount = new IdentityHashMap<>();
@@ -353,9 +355,10 @@ public class OrderService {
         }
 
         // Every stock row is locked up front, lowest id first, so two checkouts sharing medicines wait for each other
-        // instead of deadlocking; the locks below are then already held
-        lines.stream().map(l -> offers.get(l.medicineId()).item().getId()).distinct().sorted()
-                .forEach(storeItems::lockById);
+        // instead of deadlocking; stock held for others paying online right now can't be sold
+        List<Long> itemIds = lines.stream().map(l -> offers.get(l.medicineId()).item().getId()).distinct().toList();
+        Map<Long, StoreItem> locked = stockHolds.lock(itemIds);
+        Map<Long, Integer> heldForOthers = stockHolds.heldByOthers(itemIds, user.getId());
 
         String ref = byStore.size() > 1 ? newCheckoutRef() : null;
         List<Order> placed = new ArrayList<>();
@@ -366,12 +369,13 @@ public class OrderService {
             BigDecimal subtotal = BigDecimal.ZERO;
             for (Line line : group.getValue()) {
                 Offer offer = offers.get(line.medicineId());
-                StoreItem si = storeItems.lockById(offer.item().getId())
-                        .orElseThrow(() -> new BusinessException("A medicine in your order is no longer listed."));
+                StoreItem si = locked.get(offer.item().getId());
+                if (si == null) throw new BusinessException("A medicine in your order is no longer listed.");
                 Medicine m = si.getMedicine();
                 int qty = line.quantity();
-                if (!si.isSellable() || si.getStock() < qty) {
-                    throw new BusinessException("Only " + Math.max(0, si.getStock()) + " packs of " + m.getName() + " are left. Try again.");
+                si.setHeld(heldForOthers.getOrDefault(si.getId(), 0));
+                if (!si.isSellable() || si.getAvailable() < qty) {
+                    throw new BusinessException(StockHoldService.shortBy(si, m.getName()));
                 }
                 si.setStock(si.getStock() - qty);
 

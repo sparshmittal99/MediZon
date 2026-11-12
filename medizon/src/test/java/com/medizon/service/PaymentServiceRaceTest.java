@@ -34,7 +34,7 @@ class PaymentServiceRaceTest {
     private final OrderService orderService = mock(OrderService.class);
     private final NotificationService notifications = mock(NotificationService.class);
     private final PaymentService service = new PaymentService(gateways, mock(RazorpayGateway.class), mock(MediZonUpiGateway.class),
-            payments, orders, orderService, notifications, mock(OrderSettingsService.class));
+            payments, orders, orderService, notifications, mock(OrderSettingsService.class), mock(StockHoldService.class));
 
     private final User user = new User();
     private final CheckoutPayment payment = new CheckoutPayment();

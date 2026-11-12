@@ -69,7 +69,7 @@ class CartSelectionTest {
             listing.setStock(100);
             offers.put(m.getId(), new Offer(m, listing, null, 100));
         }
-        when(catalog.offers(any(), any())).thenReturn(offers);
+        when(catalog.offers(anyMap(), any(), nullable(User.class))).thenReturn(offers);
         when(lines.findByUserOrderByIdAsc(user)).thenAnswer(i -> new ArrayList<>(List.of(dolo, azithral)));
         when(carts.findFirstByUserAndStatusOrderByIdAsc(user, CartStatus.ACTIVE)).thenReturn(Optional.of(open));
         when(carts.findByUserAndStatus(user, CartStatus.ACTIVE)).thenReturn(List.of(open));

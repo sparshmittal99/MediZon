@@ -241,7 +241,7 @@ public class CartService {
      */
     @Transactional(readOnly = true)
     public CartSummary summary(User user, String pincode) {
-        return price(cart.findByUserOrderByIdAsc(user), pincode, null, null);
+        return price(cart.findByUserOrderByIdAsc(user), pincode, user, null);
     }
 
     /**
@@ -254,11 +254,14 @@ public class CartService {
         return price(ticked, pincode, user, couponCode);
     }
 
-    /** Works out each line's store and price; unticked lines, and lines nobody here can supply, don't count towards the totals. */
+    /**
+     * Works out each line's store and price for {@code user} (null for a visitor), their own stock holds counting as
+     * theirs; unticked lines, and lines nobody here can supply, don't count towards the totals.
+     */
     private CartSummary price(List<CartItem> items, String pincode, User user, String couponCode) {
         Map<Medicine, Integer> wanted = new LinkedHashMap<>();
         items.forEach(i -> wanted.put(i.getMedicine(), i.getQuantity()));
-        Map<Long, Offer> offers = catalog.offers(wanted, pincode);
+        Map<Long, Offer> offers = catalog.offers(wanted, pincode, user);
         items.forEach(i -> i.setOffer(offers.get(i.getMedicine().getId())));
         BigDecimal subtotal = items.stream().filter(CartItem::isCounted).map(CartItem::getLineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

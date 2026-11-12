@@ -37,7 +37,7 @@ public record Offer(Medicine medicine, StoreItem item, StoreArea area, int avail
 
     public boolean isExpired() { return item != null && item.isExpired(); }
 
-    public boolean canSell(int quantity) { return item != null && item.isSellable() && item.getStock() >= quantity; }
+    public boolean canSell(int quantity) { return item != null && item.isSellable() && item.getAvailable() >= quantity; }
 
     /**
      * Picks the offer for {@code quantity} packs.
@@ -51,8 +51,8 @@ public record Offer(Medicine medicine, StoreItem item, StoreArea area, int avail
             Comparator<StoreItem> cheapest = Comparator.comparing(StoreItem::getSellingPrice).thenComparing(i -> i.getStore().getId());
             List<StoreItem> open = listings.values().stream()
                     .filter(i -> i.isActive() && i.getStore().isActive()).sorted(cheapest).toList();
-            int most = open.stream().filter(StoreItem::isSellable).mapToInt(StoreItem::getStock).max().orElse(0);
-            return open.stream().filter(i -> i.isSellable() && i.getStock() >= quantity).findFirst()
+            int most = open.stream().filter(StoreItem::isSellable).mapToInt(i -> Math.max(0, i.getAvailable())).max().orElse(0);
+            return open.stream().filter(i -> i.isSellable() && i.getAvailable() >= quantity).findFirst()
                     .or(() -> open.stream().findFirst())
                     .map(i -> new Offer(m, i, null, most)).orElse(none(m));
         }
@@ -62,8 +62,8 @@ public record Offer(Medicine medicine, StoreItem item, StoreArea area, int avail
         for (StoreArea area : serving) {
             StoreItem i = listings.get(area.getStore().getId());
             if (i == null || !i.isActive() || !area.getStore().isActive()) continue;
-            if (i.isSellable()) most = Math.max(most, i.getStock());
-            if (chosen == null && i.isSellable() && i.getStock() >= quantity) { chosen = i; chosenArea = area; }
+            if (i.isSellable()) most = Math.max(most, i.getAvailable());
+            if (chosen == null && i.isSellable() && i.getAvailable() >= quantity) { chosen = i; chosenArea = area; }
             if (fallback == null) { fallback = i; fallbackArea = area; }
         }
         if (chosen != null) return new Offer(m, chosen, chosenArea, most);

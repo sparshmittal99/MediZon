@@ -38,6 +38,9 @@ import java.util.stream.Collectors;
  * </ul>
  * Money is never kept without an order: a payment whose orders can't be placed (the cart changed, stock ran out) is
  * refunded at once.
+ *
+ * <p>While the customer pays, the cart's packs are held for them ({@link StockHoldService}), so nobody else can buy the
+ * last ones meanwhile; one paid after its hold ran out is placed if the stock is still there, else refunded.
  */
 @Slf4j
 @Service
@@ -59,6 +62,7 @@ public class PaymentService {
     private final OrderService orderService;
     private final NotificationService notifications;
     private final OrderSettingsService orderSettings;
+    private final StockHoldService stockHolds;
 
     /** Minutes a payment is checked for before, still unpaid, it's closed. A later payment still arrives by webhook. */
     @Value("${medizon.payment.settle-minutes:20}")
@@ -115,7 +119,9 @@ public class PaymentService {
         p.setAmount(amount);
         p.setPaymentFee(charge.amount());
         p.setPaymentFeeGstRate(charge.gstRate());
-        payments.save(p);
+        // Saved with the cart's packs held for it while they pay; if someone else got the last ones first, it stops
+        // here, before anything is paid (the gateway order is left unpaid, and lapses)
+        stockHolds.open(p, ready.cart());
         return new Opened(gateway.id(), gatewayOrderId, paise, method.getLabel(), RazorpayGateway.checkoutMethod(method),
                 gateway.id() == Gateway.RAZORPAY ? razorpay.getKeyId() : null, MediZonUpiGateway.REQUEST_TIME.toSeconds());
     }
@@ -400,6 +406,7 @@ public class PaymentService {
             p.setOrderCount(placed.size());
         }
         payments.save(p);
+        stockHolds.release(p.getId());   // placed, refunded or closed: nothing to hold any more
     }
 
     private Placed placedFrom(CheckoutPayment p) {

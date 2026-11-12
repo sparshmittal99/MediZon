@@ -3,9 +3,7 @@ package com.medizon.repository;
 import com.medizon.domain.Medicine;
 import com.medizon.domain.Store;
 import com.medizon.domain.StoreItem;
-import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -44,11 +42,6 @@ public interface StoreItemRepository extends JpaRepository<StoreItem, Long> {
            order by i.stock, i.medicine.name
            """)
     List<StoreItem> lowStockIn(@Param("below") int below, @Param("store") Store store);
-
-    /** Row lock while taking stock off, so two checkouts can't oversell. */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select i from StoreItem i where i.id = :id")
-    Optional<StoreItem> lockById(@Param("id") Long id);
 
     long countByStoreAndActiveTrue(Store store);
 }

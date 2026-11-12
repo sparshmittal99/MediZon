@@ -1,12 +1,15 @@
 package com.medizon.service;
 
 import com.medizon.domain.Medicine;
+import com.medizon.domain.StockHold;
 import com.medizon.domain.StoreArea;
 import com.medizon.domain.StoreItem;
+import com.medizon.domain.User;
 import com.medizon.dto.DeliveryEstimate;
 import com.medizon.dto.Offer;
 import com.medizon.dto.Product;
 import com.medizon.repository.MedicineRepository;
+import com.medizon.repository.StockHoldRepository;
 import com.medizon.repository.StoreAreaRepository;
 import com.medizon.repository.StoreItemRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +20,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -34,6 +39,8 @@ public class CatalogService {
     private final StoreAreaRepository areas;
     private final StoreItemRepository items;
     private final DeliveryAreaService deliveryAreas;
+    private final StockHoldRepository holds;
+    private final CurrentUser currentUser;
 
     /** Open stores delivering to this PIN code, nearest first; empty when it isn't served. */
     public List<StoreArea> serving(String pincode) {
@@ -65,17 +72,43 @@ public class CatalogService {
         return offers(wanted, pincode);
     }
 
-    /** One offer per medicine for the packs wanted of each, by medicine id. */
+    /** One offer per medicine for the packs wanted of each, by medicine id, for whoever is signed in. */
     public Map<Long, Offer> offers(Map<Medicine, Integer> wanted, String pincode) {
+        return offers(wanted, pincode, () -> currentUser.find().map(User::getId).orElse(null));
+    }
+
+    /**
+     * One offer per medicine for the packs wanted of each, by medicine id, for {@code shopper} (null: nobody signed in).
+     * Stock held for others paying online right now doesn't count; the shopper's own holds do.
+     */
+    public Map<Long, Offer> offers(Map<Medicine, Integer> wanted, String pincode, User shopper) {
+        return offers(wanted, pincode, () -> shopper == null ? null : shopper.getId());
+    }
+
+    private Map<Long, Offer> offers(Map<Medicine, Integer> wanted, String pincode, Supplier<Long> shopperId) {
         Map<Long, Offer> out = new HashMap<>();
         if (wanted.isEmpty()) return out;
         List<StoreArea> scope = scope(pincode);
         Set<Long> ids = wanted.keySet().stream().map(Medicine::getId).collect(Collectors.toSet());
         List<StoreItem> found = scope == null ? items.findOpenFor(ids) : items.findFor(ids, storeIds(scope));
+        applyHolds(found, shopperId);
         Map<Long, Map<Long, StoreItem>> byMedicine = new HashMap<>();
         found.forEach(i -> byMedicine.computeIfAbsent(i.getMedicine().getId(), k -> new HashMap<>()).put(i.getStore().getId(), i));
         wanted.forEach((m, qty) -> out.put(m.getId(), Offer.pick(m, scope, byMedicine.getOrDefault(m.getId(), Map.of()), Math.max(1, qty))));
         return out;
+    }
+
+    /** Sets on each listing what's held for others; the shopper is looked up only when something is held at all. */
+    private void applyHolds(List<StoreItem> found, Supplier<Long> shopperId) {
+        if (found.isEmpty()) return;
+        List<StockHold> active = holds.findActive(found.stream().map(StoreItem::getId).toList(), LocalDateTime.now());
+        Map<Long, Integer> held = new HashMap<>();
+        if (!active.isEmpty()) {
+            Long me = shopperId.get();
+            active.stream().filter(h -> !h.getUserId().equals(me))
+                    .forEach(h -> held.merge(h.getStoreItemId(), h.getQuantity(), Integer::sum));
+        }
+        found.forEach(i -> i.setHeld(held.getOrDefault(i.getId(), 0)));
     }
 
     public Product product(Medicine m, String pincode) { return new Product(m, offer(m, pincode, 1)); }

@@ -39,6 +39,16 @@ public class StoreItem {
     /** Listed in this store's catalogue. */
     private boolean active = true;
 
+    /**
+     * Packs held for other customers paying online right now ({@link StockHold}), set when the listing is priced for a
+     * shopper. Not stored: holds are their own rows.
+     */
+    @Transient
+    private int held;
+
+    /** What can be sold to this shopper now: the stock less what's held for others. */
+    public int getAvailable() { return stock - held; }
+
     /** What this store charges per pack. */
     public BigDecimal getSellingPrice() {
         if (medicine.isPrescriptionRequired() || price == null) return medicine.getPrice();
