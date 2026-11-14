@@ -38,8 +38,8 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -56,6 +56,8 @@ import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.lifecycleScope
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -188,6 +190,15 @@ class MainActivity : AppCompatActivity() {
         val clip = data.clipData
         if (clip != null) for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris += it }
         else data.data?.let { uris += it }
+        deliverFiles(if (uris.isEmpty()) null else uris.toTypedArray())
+    }
+
+    private val pickPhotoOne = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        deliverFiles(uri?.let { arrayOf(it) })
+    }
+
+    // Up to 5: the most the site takes at once (prescriptions); return photos stop at 3 on the page itself
+    private val pickPhotoMany = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(5)) { uris ->
         deliverFiles(if (uris.isEmpty()) null else uris.toTypedArray())
     }
 
@@ -712,7 +723,7 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             val pdfAllowed = mimes.any { it == "application/pdf" || it == "*/*" }
-            showUploadChoice(if (pdfAllowed) "Add prescription" else "Add photo", mimes, multiple)
+            showUploadChoice(pdfAllowed, mimes, multiple)
             return true
         }
 
@@ -726,46 +737,48 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** "Take a photo" / "Choose from files". Any way of closing it without a choice cancels the input. */
-    private fun showUploadChoice(title: String, mimes: List<String>, multiple: Boolean) {
+    /**
+     * The upload sheet that slides up from the bottom: take a photo, choose from the gallery, or browse files, in
+     * MediZon's colours. Any way of closing it without a choice (swipe down, tap outside, Back) cancels the input.
+     */
+    @SuppressLint("InflateParams") // the sheet's content has no parent until setContentView
+    private fun showUploadChoice(pdfAllowed: Boolean, mimes: List<String>, multiple: Boolean) {
+        val sheet = BottomSheetDialog(this, R.style.Theme_MediZon_UploadSheet)
+        val view = layoutInflater.inflate(R.layout.sheet_upload, null)
+        view.findViewById<TextView>(R.id.sheetTitle).setText(
+            if (pdfAllowed) R.string.upload_title_prescription else R.string.upload_title_photo)
+        view.findViewById<TextView>(R.id.sheetSubtitle).setText(
+            if (pdfAllowed) R.string.upload_subtitle_prescription else R.string.upload_subtitle_photo)
+        view.findViewById<TextView>(R.id.optionFilesHint).setText(
+            if (pdfAllowed) R.string.upload_files_hint_pdf else R.string.upload_files_hint_images)
         var chosen = false
-        lateinit var dialog: AlertDialog
-        val dp = resources.displayMetrics.density
-        val box = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+        fun option(id: Int, action: () -> Unit) = view.findViewById<View>(id).setOnClickListener {
+            chosen = true
+            sheet.dismiss()
+            action()
         }
-        fun option(icon: Int, label: String, action: () -> Unit) {
-            val row = android.widget.LinearLayout(this).apply {
-                orientation = android.widget.LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-                minimumHeight = (64 * dp).toInt()
-                setPadding((24 * dp).toInt(), 0, (24 * dp).toInt(), 0)
-                val ripple = ColorStateList.valueOf(0x220E6B57)
-                background = android.graphics.drawable.RippleDrawable(ripple, null, android.graphics.drawable.ColorDrawable(0xFFFFFFFF.toInt()))
-                setOnClickListener { chosen = true; dialog.dismiss(); action() }
-            }
-            row.addView(android.widget.ImageView(this).apply {
-                setImageResource(icon)
-                imageTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.mz_accent))
-            })
-            row.addView(TextView(this).apply {
-                text = label
-                textSize = 17f
-                setTextColor(ContextCompat.getColor(context, R.color.mz_text))
-                setPadding((20 * dp).toInt(), 0, 0, 0)
-            })
-            box.addView(row)
+        option(R.id.optionCamera) { startCamera() }
+        option(R.id.optionGallery) { pickPhotos(multiple) }
+        option(R.id.optionFiles) { pickFiles(mimes, multiple) }
+        sheet.setOnDismissListener { if (!chosen) deliverFiles(null) }
+        sheet.setContentView(view)
+        sheet.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        sheet.behavior.skipCollapsed = true
+        sheet.show()
+        // The sheet draws its own rounded background: keep Material's square container out of sight
+        sheet.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            ?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+    }
+
+    /** The phone's photo picker (or the gallery on older phones), photos only. */
+    private fun pickPhotos(multiple: Boolean) {
+        val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        try {
+            if (multiple) pickPhotoMany.launch(request) else pickPhotoOne.launch(request)
+        } catch (e: ActivityNotFoundException) {
+            toast("No photo picker found")
+            deliverFiles(null)
         }
-        option(R.drawable.ic_camera, "Take a photo") { startCamera() }
-        option(R.drawable.ic_folder, "Choose from files") { pickFiles(mimes, multiple) }
-        dialog = AlertDialog.Builder(this)
-            .setTitle(title)
-            .setView(box)
-            .setNegativeButton(android.R.string.cancel, null)
-            .create()
-        dialog.setOnDismissListener { if (!chosen) deliverFiles(null) }
-        dialog.show()
     }
 
     private fun hasLocationPermission(): Boolean =

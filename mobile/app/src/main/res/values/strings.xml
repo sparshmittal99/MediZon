@@ -7,6 +7,18 @@
     <string name="unreachable_title">Couldn\'t reach MediZon</string>
     <string name="unreachable_body">The server may be waking up. This can take up to a minute.</string>
     <string name="try_again">Try again</string>
+    <!-- Upload bottom sheet -->
+    <string name="upload_title_prescription">Add prescription</string>
+    <string name="upload_subtitle_prescription">A clear photo or PDF of your doctor\'s prescription</string>
+    <string name="upload_title_photo">Add photo</string>
+    <string name="upload_subtitle_photo">A clear, well-lit photo works best</string>
+    <string name="upload_camera">Take a photo</string>
+    <string name="upload_camera_hint">Big photos are shrunk to fit the upload limit</string>
+    <string name="upload_gallery">Choose from gallery</string>
+    <string name="upload_gallery_hint">Photos and screenshots</string>
+    <string name="upload_files">Browse files</string>
+    <string name="upload_files_hint_pdf">PDFs and other documents</string>
+    <string name="upload_files_hint_images">Images saved on your phone</string>
     <string name="taken">Taken</string>
     <string name="skip">Skip</string>
     <string name="snooze">Snooze 10 min</string>

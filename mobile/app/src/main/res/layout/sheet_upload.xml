@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Add prescription" / "Add photo": slides up from the bottom when an upload button is tapped -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_sheet"
+    android:orientation="vertical"
+    android:paddingBottom="20dp">
+
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_sheet_handle"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/sheetTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="24dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="24dp"
+        android:textColor="@color/mz_text"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/sheetSubtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="24dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="12dp"
+        android:textColor="@color/mz_text2"
+        android:textSize="14sp" />
+
+    <LinearLayout
+        android:id="@+id/optionCamera"
+        style="@style/MzSheet.Option">
+
+        <ImageView
+            style="@style/MzSheet.OptionIcon"
+            android:src="@drawable/ic_camera" />
+
+        <LinearLayout style="@style/MzSheet.Texts">
+
+            <TextView
+                style="@style/MzSheet.Title"
+                android:text="@string/upload_camera" />
+
+            <TextView
+                style="@style/MzSheet.Hint"
+                android:text="@string/upload_camera_hint" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/optionGallery"
+        style="@style/MzSheet.Option">
+
+        <ImageView
+            style="@style/MzSheet.OptionIcon"
+            android:src="@drawable/ic_photo_library" />
+
+        <LinearLayout style="@style/MzSheet.Texts">
+
+            <TextView
+                style="@style/MzSheet.Title"
+                android:text="@string/upload_gallery" />
+
+            <TextView
+                style="@style/MzSheet.Hint"
+                android:text="@string/upload_gallery_hint" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/optionFiles"
+        style="@style/MzSheet.Option">
+
+        <ImageView
+            style="@style/MzSheet.OptionIcon"
+            android:src="@drawable/ic_folder" />
+
+        <LinearLayout style="@style/MzSheet.Texts">
+
+            <TextView
+                style="@style/MzSheet.Title"
+                android:text="@string/upload_files" />
+
+            <TextView
+                android:id="@+id/optionFilesHint"
+                style="@style/MzSheet.Hint"
+                android:text="@string/upload_files_hint_pdf" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

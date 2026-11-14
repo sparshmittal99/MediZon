@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mint tile behind each upload option's icon -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/mz_sheet_tile" />
+    <corners android:radius="14dp" />
+</shape>

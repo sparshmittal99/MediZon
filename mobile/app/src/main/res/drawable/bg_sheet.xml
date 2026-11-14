@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The upload bottom sheet: rounded top, flat bottom -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/mz_sheet" />
+    <corners android:topLeftRadius="24dp" android:topRightRadius="24dp" />
+</shape>

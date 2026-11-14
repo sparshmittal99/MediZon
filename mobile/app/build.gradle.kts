@@ -26,10 +26,10 @@ android {
         applicationId = "in.medizon.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
         // The site the app shows. Links to it (in emails, etc.) open the app: see the App Links filter in the manifest
-        val siteHost = "medizon-mze9.onrender.com"
+        val siteHost = "medizon.me"
         buildConfigField("String", "BASE_URL", "\"https://$siteHost\"")
         manifestPlaceholders["siteHost"] = siteHost
         buildConfigField("String", "FIREBASE_API_KEY", "\"${firebase("apiKey")}\"")
@@ -77,6 +77,8 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-ktx:1.9.2")
+    // The upload bottom sheet (BottomSheetDialog)
+    implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("com.google.firebase:firebase-messaging:23.4.1")

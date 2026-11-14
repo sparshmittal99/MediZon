@@ -24,4 +24,8 @@
     <color name="mz_switch_off">#F4F4F4</color>
     <color name="mz_track_off">#33000000</color>
     <bool name="mz_light_nav">true</bool>
+    <!-- Upload bottom sheet -->
+    <color name="mz_sheet">#FFFFFF</color>
+    <color name="mz_sheet_tile">#E6F2EC</color>
+    <color name="mz_sheet_handle">#26000000</color>
 </resources>

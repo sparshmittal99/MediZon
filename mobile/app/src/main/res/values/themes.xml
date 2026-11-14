@@ -34,4 +34,66 @@
     <style name="Theme.MediZon.Settings" parent="Theme.MediZon">
         <item name="android:windowBackground">@color/mz_bg</item>
     </style>
+
+    <!-- Upload bottom sheet: the sheet draws its own rounded background (bg_sheet), so the container is transparent -->
+    <style name="Theme.MediZon.UploadSheet" parent="Theme.MaterialComponents.DayNight.BottomSheetDialog">
+        <item name="colorPrimary">@color/mz_green</item>
+        <item name="colorAccent">@color/mz_accent</item>
+        <item name="bottomSheetStyle">@style/MzSheet.Modal</item>
+        <item name="android:backgroundDimAmount">0.45</item>
+        <item name="android:navigationBarColor">@color/mz_sheet</item>
+        <item name="android:windowLightNavigationBar">@bool/mz_light_nav</item>
+    </style>
+
+    <style name="MzSheet.Modal" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="backgroundTint">@android:color/transparent</item>
+    </style>
+
+    <style name="MzSheet.Option" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">72dp</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">24dp</item>
+        <item name="android:paddingEnd">24dp</item>
+        <item name="android:paddingTop">10dp</item>
+        <item name="android:paddingBottom">10dp</item>
+        <item name="android:background">?attr/selectableItemBackground</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="MzSheet.OptionIcon" parent="">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:layout_marginEnd">16dp</item>
+        <item name="android:padding">11dp</item>
+        <item name="android:background">@drawable/bg_icon_tile</item>
+        <item name="android:tint">@color/mz_accent</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+
+    <style name="MzSheet.Texts" parent="">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <style name="MzSheet.Title" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/mz_text</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="MzSheet.Hint" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:textColor">@color/mz_text2</item>
+        <item name="android:textSize">13sp</item>
+    </style>
 </resources>
