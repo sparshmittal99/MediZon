@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -107,8 +108,20 @@ public class OrderController {
         List<Coupon> promos = couponService.available();
         Set<String> usedToday = promos.stream().filter(c -> couponService.usedToday(user, c))
                 .map(Coupon::getCode).collect(java.util.stream.Collectors.toSet());
-        model.addAttribute("promos", CouponService.bestFirst(promos, cart.getSubtotal(), usedToday));
+        List<Coupon> ranked = CouponService.bestFirst(promos, cart.getSubtotal(), usedToday);
+        model.addAttribute("promos", ranked);
         model.addAttribute("promosUsedToday", usedToday);
+        // The biggest saving this cart can get right now (the list puts the coupons that work first, biggest first):
+        // the Android app's checkout offers it with a one-tap Apply, like food-delivery apps do
+        BigDecimal subtotal = cart.getSubtotal();
+        ranked.stream()
+                .filter(c -> !usedToday.contains(c.getCode()) && subtotal.compareTo(c.getMinOrder()) >= 0)
+                .filter(c -> c.discountOn(subtotal).signum() > 0)
+                .findFirst()
+                .ifPresent(c -> {
+                    model.addAttribute("bestPromo", c);
+                    model.addAttribute("bestSaving", c.discountOn(subtotal));
+                });
     }
 
     /** Applies a promo typed in or picked from the cards, if it gives a discount on this cart. */

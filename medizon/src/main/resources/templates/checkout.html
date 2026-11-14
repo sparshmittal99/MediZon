@@ -91,8 +91,27 @@
             </section>
             <!-- Android app: one "Apply coupon" row; the code box and the coupons are on their own screen (/checkout/coupons) -->
             <section class="mb-4" th:if="${inApp == true}">
+                <!-- Nothing applied and a coupon works on this cart: the biggest saving, one tap to apply, and the full list below -->
+                <div class="mz-coupon-best" th:if="${!cart.discounted and bestPromo != null}">
+                    <div class="mz-coupon-best-main">
+                        <span class="mz-coupon-ico" aria-hidden="true"><i class="bi bi-ticket-perforated-fill"></i></span>
+                        <span class="mz-coupon-text">
+                            <strong>Save <span th:text="'₹' + ${bestSaving}">₹45</span> with <span class="mz-coupon-code" th:text="${bestPromo.code}">MEDI10</span></strong>
+                            <small th:text="${bestPromo.title}">10% off up to ₹100</small>
+                        </span>
+                        <form th:action="@{/checkout/coupon}" method="post" class="mz-coupon-apply">
+                            <input type="hidden" name="address" th:value="${selectedAddress}">
+                            <input type="hidden" name="code" th:value="${bestPromo.code}">
+                            <button class="btn btn-sm btn-outline-primary" type="submit"
+                                    th:attr="aria-label='Apply coupon ' + ${bestPromo.code}">Apply</button>
+                        </form>
+                    </div>
+                    <a class="mz-coupon-all"
+                       th:href="${selectedAddress != null} ? @{/checkout/coupons(address=${selectedAddress})} : @{/checkout/coupons}">
+                        View all coupons<i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+                </div>
                 <!-- Applied: the code and the saving (tap to change it) with Remove beside; otherwise "Apply coupon ›" -->
-                <div class="mz-coupon-row" th:classappend="${cart.discounted} ? 'is-on'">
+                <div class="mz-coupon-row" th:classappend="${cart.discounted} ? 'is-on'" th:unless="${!cart.discounted and bestPromo != null}">
                     <a class="mz-coupon-link"
                        th:href="${selectedAddress != null} ? @{/checkout/coupons(address=${selectedAddress})} : @{/checkout/coupons}">
                         <span class="mz-coupon-ico" aria-hidden="true"><i class="bi" th:classappend="${cart.discounted} ? 'bi-patch-check-fill' : 'bi-ticket-perforated'"></i></span>

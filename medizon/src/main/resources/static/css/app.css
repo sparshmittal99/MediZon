@@ -228,6 +228,22 @@ html[data-theme="dark"] .mz-coupon-link:active { background: #1D2A26; }
 .mz-coupon-row.is-on .mz-coupon-text strong { color: var(--mz-green); }
 .mz-coupon-row.is-on .mz-coupon-text small { color: var(--mz-green); opacity: .85; }
 
+/* Best coupon for this cart: the same card as the row, with Apply, and "View all coupons ›" under a dashed line */
+.mz-coupon-best { border: 1px solid var(--mz-line); border-radius: 1rem; background: var(--mz-surface, #fff);
+    box-shadow: 0 1px 2px rgba(23, 48, 42, .04); overflow: hidden; }
+.mz-coupon-best-main { display: flex; align-items: center; gap: .75rem; padding: .7rem .9rem; }
+.mz-coupon-best .mz-coupon-text strong { font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mz-coupon-code { color: var(--mz-green); letter-spacing: .02em; }
+.mz-coupon-apply { flex: none; margin: 0; }
+.mz-coupon-apply .btn { font-weight: 700; padding-inline: .9rem; }
+.mz-coupon-all { display: flex; align-items: center; gap: .2rem; padding: .5rem .9rem .55rem 3.75rem;   /* lines up with the text above */
+    border-top: 1px dashed var(--mz-line); font-size: .8rem; font-weight: 600; color: var(--mz-muted); text-decoration: none;
+    transition: background-color .15s ease; }
+.mz-coupon-all .bi { font-size: .75rem; }
+.mz-coupon-all:hover { color: var(--mz-green); }
+.mz-coupon-all:active { background: var(--mz-paper); }
+html[data-theme="dark"] .mz-coupon-all:active { background: #1D2A26; }
+
 /* ---------- The coupons screen ---------- */
 .mz-coupons-title { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
 .mz-coupons-back { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.4rem;
