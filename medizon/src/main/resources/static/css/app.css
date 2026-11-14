@@ -164,6 +164,12 @@ html .mz-search:focus-within, html[data-theme="dark"] .mz-search:focus-within { 
     .mz-nav.mz-nav-mini .mz-brand, .mz-nav.mz-nav-mini .mz-nav-icons > li:not(.mz-app-rx-li) { display: none !important; }
     .mz-nav.mz-nav-mini .mz-search { order: 1; flex: 1 1 auto; }
     .mz-nav.mz-nav-mini .mz-nav-icons { order: 2; margin-left: 0; }
+    /* "<" back, left of the search box (app.js shows it): a plain icon, no box, like the prescription icon */
+    .mz-nav.mz-nav-mini .mz-nav-back:not([hidden]) { order: 0; flex: none; display: flex; align-items: center; justify-content: center;
+        width: 2rem; height: 2.75rem; margin-left: -.4rem; padding: 0; border: 0; background: none; color: #fff; font-size: 1.35rem;
+        -webkit-tap-highlight-color: transparent; }
+    .mz-nav.mz-nav-mini .mz-nav-back:active { opacity: .6; }
+    .mz-nav.mz-nav-mini .mz-nav-back .bi::before { -webkit-text-stroke: .6px currentColor; }   /* a touch bolder, like the app's icons */
 
     /* ---------- Home, scrolled down: the same compact bar ----------
        The bar is sticky with a negative top (set by app.js), so the brand row simply scrolls away above the search
@@ -258,6 +264,9 @@ html[data-theme="dark"] .mz-coupon-all:active { background: #1D2A26; }
 /* ---------- Product cards: the - qty + bar after "Add" is the cart card's compact size ---------- */
 .mz-qty:not(.mz-qty-lg) .mz-qty-btn { width: 1.75rem; height: 1.6rem; font-size: .8rem; }
 .mz-qty:not(.mz-qty-lg) .mz-qty-count { min-width: 1.2rem; font-size: .88rem; }
+
+.mz-nav-back { display: none; }
+.mz-nav-back[hidden] { display: none !important; }
 
 /* "← Parent page" links at the top of pages (.mz-back-link): the phone's own back button does this in the app, so
    they're website-only. What came after them moves up into their place. */

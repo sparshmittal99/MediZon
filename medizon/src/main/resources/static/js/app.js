@@ -278,6 +278,34 @@
         }
     }
 
+    // "<" back beside the search box, like shopping apps: only on a screen opened from another screen in the app.
+    // Not on the screens the bottom tabs open (they're starting points, even when you come back to them), a screen
+    // opened fresh (app start, a notification), nor home, sign-in, checkout and payment.
+    const navBack = document.querySelector('[data-mz-back]');
+    if (navBack) {
+        document.addEventListener('click', (e) => {
+            const tab = e.target.closest && e.target.closest('.mz-tabbar a');
+            if (!tab) return;
+            try { sessionStorage.setItem('mzTabNav', new URL(tab.href, location.href).pathname); } catch (_) { /* no storage */ }
+        }, true);
+        const here = path.replace(/\/+$/, '') || '/';      // without the app's base path (above)
+        let tabStart = !!(history.state && history.state.mzTabStart);
+        try {
+            if (sessionStorage.getItem('mzTabNav') === location.pathname) {
+                tabStart = true;            // remembered on this history entry, so it holds when Back returns here
+                history.replaceState(Object.assign({}, history.state, { mzTabStart: true }), '');
+            }
+            sessionStorage.removeItem('mzTabNav');
+        } catch (_) { /* no storage */ }
+        const noBack = here === '/' || /^\/(login|register|forgot-password|verify-code|reset-password|checkout)(\/|$)/.test(here);
+        let fromApp = false;
+        try { fromApp = !!document.referrer && new URL(document.referrer).origin === location.origin; } catch (_) { /* bad referrer */ }
+        if (!noBack && !tabStart && fromApp && history.length > 1) {
+            navBack.hidden = false;
+            navBack.addEventListener('click', () => history.back());
+        }
+    }
+
     // Compact bar: just the search box, with upload prescription beside it. Every screen but home always has it
     // (.mz-nav-mini, from the template so it's there at first paint). Home has the full header at the top and turns compact on scrolling down: the bar is sticky
     // with a negative top, so the brand row scrolls away and only the search box stays. Measured, because text

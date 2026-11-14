@@ -68,6 +68,9 @@
                 <i class="bi bi-chevron-down mz-loc-caret" aria-hidden="true"></i>
             </button>
 
+            <!-- Android app: "<" back, left of the search box, on a screen opened from another one (app.js decides) -->
+            <button type="button" class="mz-nav-back" data-mz-back hidden aria-label="Back" th:if="${inApp == true}"
+                    sec:authorize="!hasRole('STAFF')"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>
             <form class="mz-search" th:action="@{/medicines}" method="get" role="search" sec:authorize="!hasRole('STAFF')">
                 <!-- Android app: one white bar - magnifier on the left, voice search mic on the right (app.css, app.js).
                      -->
