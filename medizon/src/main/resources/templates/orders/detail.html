@@ -8,7 +8,7 @@
 
 <main class="container mz-page">
     <a th:href="${adminView} ? @{/admin/orders} : @{/orders(tab=${o.status.name() == 'DELIVERED'} ? 'completed' : (${o.status.name() == 'CANCELLED'} ? 'cancelled' : 'pending'))}"
-       class="small"><i class="bi bi-arrow-left"></i> All orders</a>
+       class="mz-back-link small"><i class="bi bi-arrow-left"></i> All orders</a>
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mt-2 mb-4">
         <div>
             <h1 class="mz-page-title" th:text="'Order ' + ${o.orderNumber}">Order</h1>

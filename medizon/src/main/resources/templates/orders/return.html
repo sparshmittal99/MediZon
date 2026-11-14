@@ -6,7 +6,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-page">
-    <a th:href="@{/orders/{id}(id=${o.ref})}" class="small"><i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
+    <a th:href="@{/orders/{id}(id=${o.ref})}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
     <h1 class="mz-page-title mt-2">Return items</h1>
     <p class="text-muted mb-3" th:text="'Return by ' + ${#temporals.format(returnBy, 'd MMMM yyyy')}"></p>
 

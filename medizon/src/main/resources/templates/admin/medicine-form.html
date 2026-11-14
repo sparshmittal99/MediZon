@@ -7,7 +7,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-wide">
-    <a th:href="${listIn != null} ? @{/admin/medicines(store=${listIn.id})} : @{/admin/medicines}" class="small"><i class="bi bi-arrow-left"></i> Catalogue</a>
+    <a th:href="${listIn != null} ? @{/admin/medicines(store=${listIn.id})} : @{/admin/medicines}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> Catalogue</a>
     <h1 class="mz-page-title mt-2 mb-1" th:text="${medicine.id == null} ? 'Add a product' : ('Edit ' + ${medicine.name})">Product</h1>
     <p th:if="${medicine.productCode != null}" class="small mb-1">Product code <span class="mz-code fw-semibold" th:text="${medicine.productCode}"></span>
         <span class="text-muted">· staff only, never changes</span></p>

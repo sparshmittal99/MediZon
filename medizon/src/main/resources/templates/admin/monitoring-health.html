@@ -7,7 +7,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-doc">
-    <a th:href="@{/admin/monitoring}" class="small"><i class="bi bi-arrow-left"></i> Monitoring</a>
+    <a th:href="@{/admin/monitoring}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> Monitoring</a>
     <div class="d-flex flex-wrap align-items-center gap-2 mt-2 mb-1">
         <h1 class="mz-page-title mb-0" th:text="${check.label}">Assistant service</h1>
         <span class="badge" th:classappend="${check.up} ? 'text-bg-success' : (${check.down} ? 'text-bg-danger' : 'text-bg-warning')"

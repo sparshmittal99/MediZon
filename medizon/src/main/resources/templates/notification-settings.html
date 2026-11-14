@@ -6,7 +6,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-page">
-    <a th:href="@{/notifications}" class="small"><i class="bi bi-arrow-left"></i> Notifications</a>
+    <a th:href="@{/notifications}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> Notifications</a>
     <h1 class="mz-page-title mt-2 mb-4">Alerts on this device</h1>
 
     <form th:action="@{/notifications/settings}" method="post" class="mz-panel mb-4" data-mz-device-form>

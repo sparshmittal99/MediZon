@@ -7,7 +7,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <a th:href="@{/admin/returns}" class="small"><i class="bi bi-arrow-left"></i> All returns</a>
+    <a th:href="@{/admin/returns}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> All returns</a>
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mt-2 mb-4">
         <div>
             <h1 class="mz-page-title" th:text="'Return ' + ${r.returnNumber}">Return</h1>

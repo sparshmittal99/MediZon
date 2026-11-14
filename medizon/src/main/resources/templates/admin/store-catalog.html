@@ -7,7 +7,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <a sec:authorize="hasRole('ADMIN')" th:href="@{/admin/medicines}" class="small"><i class="bi bi-arrow-left"></i> Master catalogue</a>
+    <a sec:authorize="hasRole('ADMIN')" th:href="@{/admin/medicines}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> Master catalogue</a>
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mt-2 mb-2">
         <div>
             <h1 class="mz-page-title mb-0" th:text="${store.name} + ' catalogue'">Store catalogue</h1>

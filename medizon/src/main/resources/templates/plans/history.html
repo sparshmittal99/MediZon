@@ -6,7 +6,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page" th:with="who=${plan.member.self and plan.member.name != null and plan.member.name != ''} ? (${plan.member.name} + ' (you)') : ${plan.member.label}">
-    <a th:href="@{/plans(member=${plan.member.id})} + '#plan-' + ${plan.id}" class="small"><i class="bi bi-arrow-left"></i> My medicines</a>
+    <a th:href="@{/plans(member=${plan.member.id})} + '#plan-' + ${plan.id}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> My medicines</a>
 
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mt-2 mb-4">
         <div class="d-flex align-items-center gap-3 min-w-0">

@@ -7,7 +7,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-page">
-    <a th:href="@{/admin/orders}" class="small"><i class="bi bi-arrow-left"></i> Orders</a>
+    <a th:href="@{/admin/orders}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> Orders</a>
     <h1 class="mz-page-title mt-2">Order settings</h1>
     <p class="small text-muted mb-4">Applies to checkouts from now on; orders already placed aren't affected.
         <span th:if="${settings.updatedAt != null}"

@@ -242,3 +242,8 @@ html[data-theme="dark"] .mz-coupon-link:active { background: #1D2A26; }
 /* ---------- Product cards: the - qty + bar after "Add" is the cart card's compact size ---------- */
 .mz-qty:not(.mz-qty-lg) .mz-qty-btn { width: 1.75rem; height: 1.6rem; font-size: .8rem; }
 .mz-qty:not(.mz-qty-lg) .mz-qty-count { min-width: 1.2rem; font-size: .88rem; }
+
+/* "← Parent page" links at the top of pages (.mz-back-link): the phone's own back button does this in the app, so
+   they're website-only. What came after them moves up into their place. */
+.mz-back-link { display: none !important; }
+.mz-back-link + * { margin-top: 0 !important; }

@@ -7,7 +7,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <a th:href="@{/admin/orders/{id}(id=${o.id})}" class="small"><i class="bi bi-arrow-left"></i> Order <span th:text="${o.orderNumber}"></span></a>
+    <a th:href="@{/admin/orders/{id}(id=${o.id})}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> Order <span th:text="${o.orderNumber}"></span></a>
     <h1 class="mz-page-title mt-2 mb-1">Raise a return</h1>
     <p class="text-muted mb-4">
         For <strong th:text="${o.user.fullName}"></strong> on order <strong th:text="${o.orderNumber}"></strong>,

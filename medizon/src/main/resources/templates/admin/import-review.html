@@ -7,7 +7,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-wide">
-    <a th:href="@{/admin/medicines}" class="small"><i class="bi bi-arrow-left"></i> Master catalogue</a>
+    <a th:href="@{/admin/medicines}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> Master catalogue</a>
     <h1 class="mz-page-title mt-2 mb-1">Review changes from the import</h1>
     <p class="small text-muted mb-4" th:text="${pending.reviews.size() == 1}
         ? 'This product is already in the catalogue, and ' + ${pending.file} + ' says something different about it.'

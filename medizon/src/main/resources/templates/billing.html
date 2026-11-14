@@ -6,7 +6,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-form">
-    <a th:href="${fromCheckout} ? @{/checkout} : @{/account}" class="small">
+    <a th:href="${fromCheckout} ? @{/checkout} : @{/account}" class="mz-back-link small">
         <i class="bi bi-arrow-left"></i> <span th:text="${fromCheckout} ? 'Checkout' : 'Account settings'">Account settings</span></a>
     <h1 class="mz-page-title mt-2 mb-4">Billing address</h1>
 

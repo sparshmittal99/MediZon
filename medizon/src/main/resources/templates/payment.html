@@ -11,7 +11,7 @@
 <main class="container mz-page mz-w-page mz-checkout-pay" data-mz-payment data-mz-hold-live
       th:attr="data-address=${ship.id}, data-total=${cart.total}, data-balance=${walletBalance},
                data-name=${me.fullName}, data-email=${me.email}, data-phone=${me.phone}">
-    <a th:href="@{/checkout(address=${ship.id})}" class="mz-pay-back"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back to checkout</a>
+    <a th:href="@{/checkout(address=${ship.id})}" class="mz-back-link mz-pay-back"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back to checkout</a>
     <div class="mz-pay-head">
         <h1 class="mz-page-title mb-0">Payment</h1>
         <ol class="mz-pay-steps" aria-label="Checkout steps">

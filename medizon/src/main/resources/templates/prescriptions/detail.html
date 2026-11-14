@@ -6,7 +6,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page" th:with="pending=${p.status.name() == 'PENDING'}">
-    <a th:href="@{/prescriptions}" class="small text-decoration-none"><i class="bi bi-arrow-left me-1"></i>All prescriptions</a>
+    <a th:href="@{/prescriptions}" class="mz-back-link small text-decoration-none"><i class="bi bi-arrow-left me-1"></i>All prescriptions</a>
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mt-2 mb-4">
         <div>
             <h1 class="mz-page-title mb-1" th:text="${p.doctorName != null and p.doctorName != ''} ? ('Dr. ' + ${p.doctorName}) : 'Your prescription'">Prescription</h1>

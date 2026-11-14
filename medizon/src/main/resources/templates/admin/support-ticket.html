@@ -7,7 +7,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page" th:attr="data-mz-ticket-poll=@{/admin/support/{id}/latest(id=${t.id})},data-latest=${t.latestMessageId}">
-    <a th:href="@{/admin/support}" class="small"><i class="bi bi-arrow-left"></i> Support desk</a>
+    <a th:href="@{/admin/support}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> Support desk</a>
 
     <header class="mz-ticket-head mt-2 mb-3">
         <div class="min-w-0">

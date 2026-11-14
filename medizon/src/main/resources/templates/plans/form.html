@@ -6,7 +6,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-page">
-    <a th:href="${form.memberId != null} ? @{/plans(member=${form.memberId})} : @{/plans}" class="small"><i class="bi bi-arrow-left"></i> My medicines</a>
+    <a th:href="${form.memberId != null} ? @{/plans(member=${form.memberId})} : @{/plans}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> My medicines</a>
     <h1 class="mz-page-title mt-2 mb-2"
         th:text="${form.id == null} ? 'Add a medicine' : (${form.setupRequired} ? 'Set reminders' : 'Edit medicine')">Add a medicine</h1>
     <p th:if="${form.setupRequired}" class="mz-setup small mb-4">
