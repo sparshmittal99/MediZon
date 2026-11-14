@@ -262,4 +262,4 @@ html[data-theme="dark"] .mz-coupon-all:active { background: #1D2A26; }
 /* "← Parent page" links at the top of pages (.mz-back-link): the phone's own back button does this in the app, so
    they're website-only. What came after them moves up into their place. */
 .mz-back-link { display: none !important; }
-.mz-back-link + * { margin-top: 0 !important; }
+.mz-back-link + :not(.row) { margin-top: 0 !important; }   /* a .row keeps its own (negative) gutter margin */

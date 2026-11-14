@@ -6,7 +6,7 @@
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page">
-    <nav aria-label="breadcrumb">
+    <nav aria-label="breadcrumb" class="mz-back-link">
         <ol class="breadcrumb small">
             <li class="breadcrumb-item"><a th:href="@{/medicines}">Shop</a></li>
             <li class="breadcrumb-item"><a th:href="@{/medicines(category=${m.category})}" th:text="${m.category}">Category</a></li>
