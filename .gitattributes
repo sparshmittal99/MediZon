@@ -1,0 +1,4 @@
+# Scripts and config that run on the Linux VM keep Unix line endings, even when checked out on Windows
+*.sh text eol=lf
+deploy/** text eol=lf
+.github/** text eol=lf

@@ -41,6 +41,7 @@ public class CatalogService {
     private final DeliveryAreaService deliveryAreas;
     private final StockHoldRepository holds;
     private final CurrentUser currentUser;
+    private final CatalogCache cache;
 
     /** Open stores delivering to this PIN code, nearest first; empty when it isn't served. */
     public List<StoreArea> serving(String pincode) {
@@ -166,15 +167,22 @@ public class CatalogService {
 
     public record Suggestions(List<Product> products, List<String> categories, String didYouMean) {}
 
+    /** The categories of what's sold here; shown on every page, so kept in {@link CatalogCache}. */
     public List<String> categories(String pincode) {
-        List<StoreArea> scope = scope(pincode);
-        return scope == null ? medicines.findActiveCategories() : medicines.categoriesIn(storeIds(scope));
+        List<Long> stores = storesFor(pincode);
+        return cache.categories(stores, () -> stores.isEmpty() ? medicines.findActiveCategories() : medicines.categoriesIn(stores));
     }
 
-    /** Everything on sale here, A to Z. */
+    /** Everything on sale here, A to Z; searched on every keystroke, so kept in {@link CatalogCache}. Read-only. */
     public List<Medicine> sold(String pincode) {
-        List<StoreArea> scope = scope(pincode);
-        return scope == null ? medicines.sold() : medicines.soldIn(storeIds(scope));
+        List<Long> stores = storesFor(pincode);
+        return cache.sold(stores, () -> stores.isEmpty() ? medicines.sold() : medicines.soldIn(stores));
+    }
+
+    /** Ids of the open stores delivering to this PIN code, sorted; empty when none do (shop from any open store). */
+    private List<Long> storesFor(String pincode) {
+        String p = DeliveryAreaService.normalize(pincode);
+        return cache.stores(p, () -> serving(p).stream().map(a -> a.getStore().getId()).distinct().sorted().toList());
     }
 
     /**

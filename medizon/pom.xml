@@ -72,6 +72,11 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
+        <!-- In-memory cache for the shop's catalogue lists (CatalogCache); version from Spring Boot -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
         <!-- Excel: the sales report export and catalogue imports -->
         <dependency>
             <groupId>org.apache.poi</groupId>

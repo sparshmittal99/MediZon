@@ -102,7 +102,7 @@ class StockHoldTest {
         StoreItemRepository items = mock(StoreItemRepository.class);
         CurrentUser current = mock(CurrentUser.class);
         DeliveryAreaService areas = mock(DeliveryAreaService.class);
-        CatalogService catalog = new CatalogService(null, null, items, areas, holds, current);
+        CatalogService catalog = new CatalogService(null, null, items, areas, holds, current, new CatalogCache());
         dolo.setActive(true);
         when(items.findOpenFor(any())).thenReturn(List.of(lastPack));
         when(holds.findActive(any(), any())).thenReturn(List.of(hold(asha, 1)));

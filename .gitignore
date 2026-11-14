@@ -35,3 +35,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 *.log
+
+# ---------- Private deployment runbook and VM scripts (kept only on this PC) ----------
+deploy/
