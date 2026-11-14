@@ -174,9 +174,11 @@
         clearTimeout(busy.timer);
         busy.timer = setTimeout(idle, 30000);   // a download, or a page that never came: don't leave it spinning
         // No spinner on search buttons, the coupon buttons (Apply / Remove on the coupons screen, Remove on
-        // checkout) or a button marked data-mz-no-spinner (Remove on "Check your prescription"): the top bar is enough
+        // checkout) or a button marked data-mz-no-spinner (Remove on "Check your prescription"): the top bar is enough.
+        // Prescription-reading forms (data-mz-ai-busy) get their own "Reading your prescription…" spinner from
+        // medizon.js: a second one here showed two spinners on the button.
         if (button && !button.classList.contains('is-busy')
-                && !button.closest('[role=search], .mz-coupons-page, .mz-coupon-remove, [data-mz-no-spinner]')) {
+                && !button.closest('[role=search], .mz-coupons-page, .mz-coupon-remove, [data-mz-no-spinner], [data-mz-ai-busy]')) {
             button.classList.add('is-busy');
             button.insertAdjacentHTML('afterbegin', '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>');
         }
