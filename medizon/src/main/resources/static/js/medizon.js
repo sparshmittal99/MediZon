@@ -704,13 +704,46 @@
         }
     });
 
-    // ---- "Upload prescription" in the category bar: pick a file and it uploads straight away ----
+    // ---- "Reading your prescription": the page fades behind a spinner while the AI reads it (5-15 s) ----
+    // Shown for prescription uploads and "Read the medicines on it"; other uploads keep just their button's spinner.
+    const reading = (() => {
+        let box = null;
+        const show = (count) => {
+            if (!box) {
+                box = document.createElement('div');
+                box.className = 'mz-reading';
+                box.setAttribute('role', 'status');
+                box.setAttribute('aria-live', 'polite');
+                box.innerHTML = '<div class="mz-reading-spinner" aria-hidden="true"><i class="bi bi-file-earmark-medical"></i></div>'
+                    + '<div class="mz-reading-title"></div><div class="mz-reading-hint"></div>';
+                document.body.appendChild(box);
+            }
+            const many = count > 1;
+            box.querySelector('.mz-reading-title').textContent =
+                many ? `Reading ${count} prescriptions…` : 'Reading your prescription…';
+            box.querySelector('.mz-reading-hint').textContent =
+                many ? 'A few are read at a time. This can take up to a minute.' : 'This usually takes 5–15 seconds.';
+            box.classList.add('show');
+        };
+        // Back on this page (kept in memory): hide it
+        window.addEventListener('pageshow', () => box?.classList.remove('show'));
+        return { show };
+    })();
+    const filesIn = (form) => [...form.querySelectorAll('input[type="file"]')].reduce((n, i) => n + i.files.length, 0);
+
+    // "Upload prescription" in the header / category bar: pick a file and it uploads and is read straight away
     document.addEventListener('change', (e) => {
         if (!e.target.matches('[data-mz-rx-quick] input[type="file"]') || !e.target.files.length) return;
         const form = e.target.form;
-        const label = form.querySelector('[data-mz-rx-quick-label]');
-        if (label) label.textContent = 'Reading your prescription…';
-        form.submit();
+        reading.show(e.target.files.length);
+        form.submit();      // submit() fires no submit event, so the screen is shown here
+    });
+
+    // Prescriptions page, checkout, "Read the medicines on it": the same screen once the form really goes
+    document.addEventListener('submit', (e) => {
+        const form = e.target;
+        if (!form.matches || !form.matches('[data-mz-ai-busy]')) return;
+        setTimeout(() => { if (!e.defaultPrevented) reading.show(filesIn(form) || 1); }, 0);
     });
 
     // ---- "Notify me" on out-of-stock products: a back-in-stock alert, on or off through /api/stock-alerts ----

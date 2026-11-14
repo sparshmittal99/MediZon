@@ -32,7 +32,7 @@
                             </div>
                             <div class="small text-muted" th:if="${p.prescribedOn != null}" th:text="'Dated ' + ${#temporals.format(p.prescribedOn, 'd MMM yyyy')}"></div>
                         </div>
-                        <button type="submit" class="btn btn-sm btn-outline-danger" formnovalidate
+                        <button type="submit" class="btn btn-sm btn-outline-danger" formnovalidate data-mz-no-spinner
                                 th:formaction="@{/prescriptions/{id}/discard(id=${p.id}, returnTo=${returnTo})}"
                                 th:attr="aria-label='Remove ' + ${p.originalFileName}"><i class="bi bi-trash me-1"></i>Remove</button>
                     </div>

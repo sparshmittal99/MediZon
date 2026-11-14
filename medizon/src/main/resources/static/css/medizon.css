@@ -1912,3 +1912,21 @@ html.mz-sx-open, html.mz-sx-open body { overflow: hidden; }
     html.mz-search-loading .mz-search, html.mz-search-loading .mz-sx-box, .mz-sx.is-listening .mz-sx-mic,
     .mz-bot.is-listening .mz-bot-mic, .mz-bot-msg.is-speaking .mz-bot-say { animation: none; }
 }
+
+/* ---------- "Reading your prescription": the page fades behind a spinner while the AI reads it (medizon.js) ---------- */
+.mz-reading { position: fixed; inset: 0; z-index: 3100; display: none; flex-direction: column; align-items: center;
+    justify-content: center; gap: .35rem; padding: 16px; text-align: center; background: rgba(246, 249, 247, .92); }
+html[data-theme="dark"] .mz-reading { background: rgba(15, 23, 21, .92); }
+.mz-reading.show { display: flex; animation: mz-reading-in .15s ease-out; }
+.mz-reading-spinner { position: relative; width: 4rem; height: 4rem; margin-bottom: 1rem; border-radius: 50%;
+    background: var(--mz-mint); color: var(--mz-green); display: grid; place-items: center; font-size: 1.6rem; }
+.mz-reading-spinner::after { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 3px solid transparent;
+    border-top-color: var(--mz-green); border-right-color: var(--mz-green); animation: mz-reading-spin .9s linear infinite; }
+.mz-reading-title { font-weight: 700; font-size: 1.1rem; color: var(--mz-ink); }
+.mz-reading-hint { font-size: .9rem; color: var(--mz-muted); }
+@keyframes mz-reading-spin { to { transform: rotate(360deg); } }
+@keyframes mz-reading-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .mz-reading.show { animation: none; }
+    .mz-reading-spinner::after { animation-duration: 2.5s; }
+}
