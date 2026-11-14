@@ -147,7 +147,12 @@
                             <div class="small text-muted" th:if="${p.dailyUnits > 0}"
                                  th:text="${p.doseLabel} + ', ' + ${p.reminderTimes.size()} + ' time(s) a day' + (${p.instructions != null and p.instructions != ''} ? (', ' + ${p.instructions}) : '')"></div>
                         </div>
-                        <span th:unless="${p.active}" class="badge text-bg-secondary">Paused</span>
+                        <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+                            <a th:href="@{/plans/{id}/history(id=${p.id})}" class="mz-plan-history"
+                               th:aria-label="'Dose history of ' + ${p.medicineName}" title="Dose history">
+                                <i class="bi bi-clock-history" aria-hidden="true"></i>History</a>
+                            <span th:unless="${p.active}" class="badge text-bg-secondary">Paused</span>
+                        </div>
                     </div>
 
                     <div class="mb-3" th:if="${p.dailyUnits > 0}">

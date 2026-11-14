@@ -43,6 +43,16 @@
         if (e.target.matches && e.target.matches('input[type="date"][data-mz-autosubmit]') && e.target.value
             && e.target.checkValidity()) e.target.form.submit();
     });
+    // ---- dose history filter popup: show the date / month / year picker for the chosen period ----
+    document.addEventListener('change', (e) => {
+        if (!(e.target.matches && e.target.matches('[data-mz-hist-filter] input[name="period"]'))) return;
+        const period = e.target.value;
+        e.target.form.querySelectorAll('[data-mz-hist-for]').forEach((el) => {
+            const on = el.dataset.mzHistFor.split(' ').includes(period);
+            el.hidden = !on;
+            el.querySelectorAll(':scope > input, :scope > select').forEach((f) => { f.disabled = !on; });
+        });
+    });
     document.addEventListener('click', (e) => {
         if (e.target.closest && e.target.closest('[data-mz-print]')) window.print();
     });

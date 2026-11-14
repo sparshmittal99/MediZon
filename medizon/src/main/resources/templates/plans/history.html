@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Dose history')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page" th:with="who=${plan.member.self and plan.member.name != null and plan.member.name != ''} ? (${plan.member.name} + ' (you)') : ${plan.member.label}">
+    <a th:href="@{/plans(member=${plan.member.id})} + '#plan-' + ${plan.id}" class="small"><i class="bi bi-arrow-left"></i> My medicines</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mt-2 mb-4">
+        <div class="d-flex align-items-center gap-3 min-w-0">
+            <span class="mz-hist-icon" aria-hidden="true"><i class="bi" th:classappend="${plan.medicineIcon}"></i></span>
+            <div class="min-w-0">
+                <h1 class="mz-page-title mb-0" th:text="${plan.medicineName}">Medicine</h1>
+                <div class="small text-muted">
+                    <span>Dose history</span> · <span th:text="'for ' + ${who}">for Me</span>
+                    <th:block th:if="${plan.dailyUnits > 0}"> · <span th:text="${plan.doseLabel}">1 tablet(s)</span></th:block>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 ms-auto">
+            <button type="button" class="btn btn-sm mz-hist-filter-btn" data-bs-toggle="modal" data-bs-target="#histFilter"
+                    th:classappend="${filtered} ? 'btn-primary' : 'btn-outline-secondary'">
+                <i class="bi bi-funnel me-1" aria-hidden="true"></i>Filter<span th:if="${filtered}" class="mz-hist-filter-count"
+                    th:text="${(period != 'recent' ? 1 : 0) + (show != 'all' ? 1 : 0)}">1</span></button>
+        </div>
+    </div>
+
+    <!-- A reminder time that keeps being missed: a nudge to move it. In the Android app it's the usual short
+         pop-up (app.js); tapping it opens the schedule. -->
+    <div th:if="${missedHint != null}" class="alert alert-warning alert-dismissible fade show mz-hist-hint mb-3" role="status"
+         th:with="line='The ' + ${#temporals.format(missedHint.time(), 'h:mm a')} + ' dose wasn’t taken ' + ${missedHint.missed()} + ' of the last ' + ${missedHint.total()} + ' times.'"
+         data-mz-popup data-mz-popup-title="Doses being missed"
+         th:attr="data-mz-popup-text=${line} + ' Tap to change the reminder time.',data-mz-popup-link=@{/plans/{id}/edit(id=${plan.id})}">
+        <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i><span th:text="${line}">The 9:00 PM dose wasn’t taken 4 of the last 7 times.</span>
+        <a th:href="@{/plans/{id}/edit(id=${plan.id})}" class="alert-link text-nowrap ms-1">Change reminder time<i class="bi bi-arrow-right ms-1"></i></a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+
+    <!-- What the filter shows now, with quick steps through days / months / years -->
+    <div class="mz-hist-active mb-3" th:if="${filtered}">
+        <th:block th:if="${period != 'recent'}">
+            <a th:if="${prevLink != null}" th:href="@{${prevLink}}" class="btn btn-sm btn-outline-secondary mz-hist-step"
+               th:aria-label="${period == 'day'} ? 'Previous day' : (${period == 'month'} ? 'Previous month' : 'Previous year')"><i class="bi bi-chevron-left"></i></a>
+            <span th:if="${prevLink == null}" class="btn btn-sm btn-outline-secondary mz-hist-step disabled" aria-hidden="true"><i class="bi bi-chevron-left"></i></span>
+            <span class="mz-hist-active-label" th:text="${periodLabel}">November 2026</span>
+            <a th:if="${nextLink != null}" th:href="@{${nextLink}}" class="btn btn-sm btn-outline-secondary mz-hist-step"
+               th:aria-label="${period == 'day'} ? 'Next day' : (${period == 'month'} ? 'Next month' : 'Next year')"><i class="bi bi-chevron-right"></i></a>
+            <span th:if="${nextLink == null}" class="btn btn-sm btn-outline-secondary mz-hist-step disabled" aria-hidden="true"><i class="bi bi-chevron-right"></i></span>
+        </th:block>
+        <span th:if="${show != 'all'}" class="mz-hist-tag" th:classappend="'is-' + ${show}"
+              th:text="${show == 'taken'} ? 'Taken' : (${show == 'skipped'} ? 'Skipped' : 'Not marked')">Taken</span>
+        <a th:href="@{/plans/{id}/history(id=${plan.id})}" class="mz-hist-clear"><i class="bi bi-x-lg me-1" aria-hidden="true"></i>Clear</a>
+    </div>
+
+    <!-- Summary of the chosen period -->
+    <div class="row row-cols-2 row-cols-md-4 g-2 g-md-3 mb-4" th:if="${total > 0}">
+        <div class="col"><div class="mz-stat mz-hist-stat is-taken">
+            <div class="mz-stat-value" th:text="${counts.get(T(com.medizon.domain.DoseStatus).TAKEN)}">0</div>
+            <div class="mz-stat-label"><i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i>Taken</div>
+        </div></div>
+        <div class="col"><div class="mz-stat mz-hist-stat is-skipped">
+            <div class="mz-stat-value" th:text="${counts.get(T(com.medizon.domain.DoseStatus).SKIPPED)}">0</div>
+            <div class="mz-stat-label"><i class="bi bi-dash-circle-fill me-1" aria-hidden="true"></i>Skipped</div>
+        </div></div>
+        <div class="col"><div class="mz-stat mz-hist-stat is-missed">
+            <div class="mz-stat-value" th:text="${counts.get(T(com.medizon.domain.DoseStatus).PENDING)}">0</div>
+            <div class="mz-stat-label"><i class="bi bi-question-circle-fill me-1" aria-hidden="true"></i>Not marked</div>
+        </div></div>
+        <div class="col"><div class="mz-stat mz-hist-stat">
+            <div class="mz-stat-value" th:text="${takenPercent} + '%'">0%</div>
+            <div class="mz-stat-label">Taken overall</div>
+        </div></div>
+    </div>
+
+
+    <!-- Empty -->
+    <div th:if="${#lists.isEmpty(logs)}" class="mz-panel mz-empty">
+        <i class="bi" th:classappend="${hasDoses} ? 'bi-calendar-x' : 'bi-clock-history'"></i>
+        <p class="mb-1" th:if="${!hasDoses}" th:text="${periodLabel == null} ? 'No doses yet.'
+                : (${period == 'day'} ? ('No doses on ' + ${periodLabel} + '.') : ('No doses in ' + ${periodLabel} + '.'))">No doses yet.</p>
+        <p class="mb-1" th:if="${hasDoses and total == 0}"
+           th:text="${period == 'day'} ? ('No doses on ' + ${periodLabel} + '.') : ('No doses in ' + ${periodLabel} + '.')">No doses in November 2026.</p>
+        <p class="mb-1" th:if="${hasDoses and total > 0}"
+           th:text="${show == 'taken'} ? 'No doses marked taken here.' : (${show == 'skipped'} ? 'No doses skipped here.' : 'Every dose here was marked.')">No doses here.</p>
+        <p class="small mb-0" th:text="${!hasDoses}
+                ? 'Each dose shows up here once its reminder rings, along with whether it was marked taken or skipped.'
+                : 'Pick another period or status to see more.'"></p>
+    </div>
+
+    <!-- One card per dose, newest first -->
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-3xl-4 g-3" th:unless="${#lists.isEmpty(logs)}">
+        <div class="col" th:each="l : ${logs}"
+             th:with="st=${l.status.name() == 'TAKEN'} ? 'taken' : (${l.status.name() == 'SKIPPED'} ? 'skipped' : 'missed')">
+            <article class="mz-hist" th:classappend="'is-' + ${st}">
+                <div class="mz-hist-head">
+                    <div class="min-w-0">
+                        <h2 class="mz-hist-day" th:text="${#temporals.format(l.scheduledAt, 'EEEE')}">Saturday</h2>
+                        <div class="mz-hist-date" th:text="${#temporals.format(l.scheduledAt, 'd MMM yyyy')}">14 Nov 2026</div>
+                    </div>
+                    <span class="mz-hist-status">
+                        <i class="bi" th:classappend="${st == 'taken'} ? 'bi-check-circle-fill' : (${st == 'skipped'} ? 'bi-dash-circle-fill' : 'bi-question-circle-fill')" aria-hidden="true"></i>
+                        <span th:text="${st == 'taken'} ? 'Taken' : (${st == 'skipped'} ? 'Skipped' : 'Not marked')">Taken</span>
+                    </span>
+                </div>
+
+                <div class="mz-hist-med">
+                    <i class="bi" th:classappend="${plan.medicineIcon}" aria-hidden="true"></i>
+                    <span th:text="${plan.medicineName}">Medicine</span>
+                </div>
+
+                <dl class="mz-hist-facts">
+                    <div>
+                        <dt>Reminder time</dt>
+                        <dd th:text="${#temporals.format(l.scheduledAt, 'h:mm a')}">8:00 AM</dd>
+                    </div>
+                    <div>
+                        <!-- The moment the alarm was answered; left blank when nobody marked the dose -->
+                        <dt th:text="${st == 'taken'} ? 'Taken at' : (${st == 'skipped'} ? 'Skipped at' : 'Marked at')">Taken at</dt>
+                        <dd th:if="${l.respondedAt != null and st != 'missed'}">
+                            <span th:text="${#temporals.format(l.respondedAt, 'h:mm a')}">8:04 AM</span>
+                            <span th:unless="${l.respondedAt.toLocalDate() == l.scheduledAt.toLocalDate()}" class="mz-hist-note"
+                                  th:text="${#temporals.format(l.respondedAt, 'd MMM')}"></span>
+                        </dd>
+                        <dd th:unless="${l.respondedAt != null and st != 'missed'}" class="mz-hist-blank" aria-label="Not marked">&nbsp;</dd>
+                    </div>
+                    <div>
+                        <dt th:text="${st == 'taken'} ? 'Taken by' : (${st == 'skipped'} ? 'Skipped by' : 'For')">Taken by</dt>
+                        <dd class="text-truncate" th:text="${who}">Me</dd>
+                    </div>
+                    <div>
+                        <dt>Dose</dt>
+                        <dd th:text="${plan.doseLabel}">1 tablet(s)</dd>
+                    </div>
+                </dl>
+            </article>
+        </div>
+    </div>
+
+    <!-- Pages, for a month or a year with many doses -->
+    <nav class="d-flex justify-content-between align-items-center gap-2 mt-4" th:if="${pages != null and pages.totalPages > 1}" aria-label="History pages">
+        <a class="btn btn-sm btn-outline-secondary" th:classappend="${pages.first} ? 'disabled'"
+           th:href="@{${pageLink + (pages.number - 1)}}"><i class="bi bi-chevron-left me-1"></i>Newer</a>
+        <span class="small text-muted" th:text="'Page ' + ${pages.number + 1} + ' of ' + ${pages.totalPages}">Page 1 of 2</span>
+        <a class="btn btn-sm btn-outline-secondary" th:classappend="${pages.last} ? 'disabled'"
+           th:href="@{${pageLink + (pages.number + 1)}}">Older<i class="bi bi-chevron-right ms-1"></i></a>
+    </nav>
+    <!-- Filter popup: choose, then Apply reloads the page with the filter (and the popup is gone) -->
+    <div class="modal fade" id="histFilter" tabindex="-1" aria-labelledby="histFilterTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <form class="modal-content" method="get" th:action="@{/plans/{id}/history(id=${plan.id})}" data-mz-hist-filter>
+                <div class="modal-header border-0 pb-0">
+                    <h2 class="modal-title h5" id="histFilterTitle"><i class="bi bi-funnel me-2" aria-hidden="true"></i>Filter doses</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <fieldset class="mb-3">
+                        <legend class="mz-hist-filter-label">Period</legend>
+                        <div class="mz-seg w-100" role="radiogroup">
+                            <th:block th:each="opt : ${ {'recent','day','month','year'} }">
+                                <input type="radio" class="btn-check" name="period" th:id="'hp-' + ${opt}" th:value="${opt}" th:checked="${period == opt}">
+                                <label class="mz-seg-btn" th:for="'hp-' + ${opt}"
+                                       th:text="${opt == 'recent'} ? 'Recent' : (${opt == 'day'} ? 'Date' : (${opt == 'month'} ? 'Month' : 'Year'))">Recent</label>
+                            </th:block>
+                        </div>
+                        <p class="small text-muted mt-2 mb-0" data-mz-hist-for="recent" th:hidden="${period != 'recent'}">The latest doses, newest first.</p>
+                        <div class="mt-2" data-mz-hist-for="day" th:hidden="${period != 'day'}">
+                            <label class="form-label small mb-1" for="histDate">Date</label>
+                            <input class="form-control" type="date" id="histDate" name="date" th:value="${pickDate}"
+                                   th:min="${minDate}" th:max="${today}" th:disabled="${period != 'day'}">
+                        </div>
+                        <div class="row g-2 mt-0" data-mz-hist-for="month year" th:hidden="${period != 'month' and period != 'year'}">
+                            <div class="col-7" data-mz-hist-for="month" th:hidden="${period != 'month'}">
+                                <label class="form-label small mb-1" for="histMonth">Month</label>
+                                <select class="form-select" id="histMonth" name="month" th:disabled="${period != 'month'}">
+                                    <option th:each="mo : ${months}" th:value="${mo.key}" th:text="${mo.value}" th:selected="${mo.key == pickMonth}">November</option>
+                                </select>
+                            </div>
+                            <div class="col" data-mz-hist-for="month year">
+                                <label class="form-label small mb-1" for="histYear">Year</label>
+                                <select class="form-select" id="histYear" name="year" th:disabled="${period != 'month' and period != 'year'}">
+                                    <option th:each="yr : ${years}" th:value="${yr}" th:text="${yr}" th:selected="${yr == pickYear}">2026</option>
+                                </select>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend class="mz-hist-filter-label">Status</legend>
+                        <div class="d-flex flex-wrap gap-2" role="radiogroup">
+                            <th:block th:each="opt : ${ {'all','taken','skipped','missed'} }">
+                                <input type="radio" class="btn-check" name="show" th:id="'hs-' + ${opt}" th:value="${opt}" th:checked="${show == opt}">
+                                <label class="mz-chip" th:for="'hs-' + ${opt}">
+                                    <i class="bi me-1" aria-hidden="true" th:classappend="${opt == 'all'} ? 'bi-list-ul' : (${opt == 'taken'} ? 'bi-check-circle-fill text-success'
+                                        : (${opt == 'skipped'} ? 'bi-dash-circle-fill text-secondary' : 'bi-question-circle-fill text-warning'))"></i><span
+                                        th:text="${opt == 'all'} ? 'All' : (${opt == 'taken'} ? 'Taken' : (${opt == 'skipped'} ? 'Skipped' : 'Not marked'))">All</span>
+                                </label>
+                            </th:block>
+                        </div>
+                    </fieldset>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <a th:href="@{/plans/{id}/history(id=${plan.id})}" class="btn btn-link text-muted me-auto">Reset</a>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Apply</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

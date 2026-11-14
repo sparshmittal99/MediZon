@@ -8,6 +8,8 @@ import com.medizon.repository.MedicationPlanRepository;
 import com.medizon.repository.MedicineRepository;
 import com.medizon.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -424,6 +426,67 @@ public class MedicationPlanService {
         doseLogs.save(log);
         appSync.doseAnswered(user, p, at, status);   // every phone stops ringing and shows it was marked
         return p;
+    }
+
+    // ------------------------------------------------------------------ dose history
+
+    // A dose is logged when its reminder fires, or when it's marked from the web or the app.
+
+    public static final int HISTORY_PAGE_SIZE = 30;
+
+    /** The plan's latest doses (10), newest first: the history page's default view. */
+    @Transactional(readOnly = true)
+    public List<DoseLog> latestDoses(MedicationPlan p) {
+        return doseLogs.findTop10ByPlanOrderByScheduledAtDesc(p);
+    }
+
+    /** Doses due from {@code from} to {@code to}, newest first; {@code status} null means taken, skipped and unmarked. */
+    @Transactional(readOnly = true)
+    public Page<DoseLog> dosesBetween(MedicationPlan p, LocalDateTime from, LocalDateTime to, DoseStatus status, int page) {
+        PageRequest req = PageRequest.of(Math.max(0, page), HISTORY_PAGE_SIZE);
+        return status == null ? doseLogs.findByPlanAndScheduledAtBetweenOrderByScheduledAtDesc(p, from, to, req)
+                : doseLogs.findByPlanAndStatusAndScheduledAtBetweenOrderByScheduledAtDesc(p, status, from, to, req);
+    }
+
+    /** How many doses due from {@code from} to {@code to} were taken, skipped and never marked. */
+    @Transactional(readOnly = true)
+    public Map<DoseStatus, Long> doseCountsBetween(MedicationPlan p, LocalDateTime from, LocalDateTime to) {
+        Map<DoseStatus, Long> counts = new EnumMap<>(DoseStatus.class);
+        for (DoseStatus s : DoseStatus.values()) counts.put(s, doseLogs.countByPlanAndStatusAndScheduledAtBetween(p, s, from, to));
+        return counts;
+    }
+
+    /** A reminder time whose dose often isn't taken: {@code missed} of its last {@code total} doses. */
+    public record MissedPattern(LocalTime time, int missed, int total) {}
+
+    /**
+     * The reminder time (still in the schedule) most often not taken over the last 14 days: skipped or never marked
+     * at least 3 times and in at least half its doses. Empty for a paused plan or when doses are mostly taken.
+     */
+    @Transactional(readOnly = true)
+    public Optional<MissedPattern> missedPattern(MedicationPlan p) {
+        if (!p.isActive() || p.getReminderTimes().isEmpty()) return Optional.empty();
+        Map<LocalTime, int[]> byTime = new HashMap<>();          // time -> {missed, total}
+        LocalDateTime now = LocalDateTime.now();
+        for (DoseLog l : doseLogs.findByPlanAndScheduledAtAfter(p, now.minusDays(14))) {
+            LocalTime t = l.getScheduledAt().toLocalTime();
+            if (!p.getReminderTimes().contains(t)) continue;      // a time since taken off the schedule
+            // A dose still waiting within its first hour hasn't been missed yet
+            if (l.getStatus() == DoseStatus.PENDING && l.getScheduledAt().isAfter(now.minusHours(1))) continue;
+            int[] c = byTime.computeIfAbsent(t, k -> new int[2]);
+            if (l.getStatus() != DoseStatus.TAKEN) c[0]++;
+            c[1]++;
+        }
+        return byTime.entrySet().stream()
+                .filter(e -> e.getValue()[0] >= 3 && e.getValue()[0] * 2 >= e.getValue()[1])
+                .max(Comparator.comparingDouble(e -> (double) e.getValue()[0] / e.getValue()[1]))
+                .map(e -> new MissedPattern(e.getKey(), e.getValue()[0], e.getValue()[1]));
+    }
+
+    /** Day of the plan's first logged dose; null before any. */
+    @Transactional(readOnly = true)
+    public LocalDate firstDoseDay(MedicationPlan p) {
+        return doseLogs.findFirstByPlanOrderByScheduledAtAsc(p).map(l -> l.getScheduledAt().toLocalDate()).orElse(null);
     }
 
     // ------------------------------------------------------------------ scheduler hook

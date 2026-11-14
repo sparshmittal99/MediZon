@@ -128,7 +128,8 @@
     const takePopups = (root) => root.querySelectorAll('[data-mz-popup]:not([hidden])').forEach(el => {
         if (el.dataset.mzPopped === textOf(el)) return;
         el.dataset.mzPopped = textOf(el);
-        popup(kindOf(el), textOf(el));
+        // data-mz-popup-text / -title / -link: shorter wording for the pop-up, its heading, and where a tap goes
+        popup(kindOf(el), el.dataset.mzPopupText || textOf(el), el.dataset.mzPopupTitle, el.dataset.mzPopupLink);
         el.hidden = true;
     });
     takePopups(document);
