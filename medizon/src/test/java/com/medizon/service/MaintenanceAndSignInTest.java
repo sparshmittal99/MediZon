@@ -48,7 +48,9 @@ class MaintenanceAndSignInTest {
         when(users.findByRoleAndDeletedFalseAndEnabledTrue(Role.CUSTOMER)).thenReturn(List.of(a, b));
         MaintenanceService service = new MaintenanceService(windows, users, notifications);
 
-        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        // Tomorrow 10:00-12:00: in the future, and never crossing midnight whatever time (or time zone) the test runs in.
+        // now()+1 day failed on GitHub's UTC runners late in the evening: the window crossed midnight ("from ... to").
+        LocalDateTime start = java.time.LocalDate.now().plusDays(1).atTime(10, 0);
         service.schedule(start, start.plusHours(2));
 
         verify(notifications, times(2)).notify(any(), eq(NotificationType.MAINTENANCE), eq("Scheduled downtime"),
