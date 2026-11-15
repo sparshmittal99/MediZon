@@ -84,7 +84,8 @@ class InvoicePdfServiceTest {
         assertThat(new String(pdf, 0, 5)).isEqualTo("%PDF-");
         try (PDDocument doc = Loader.loadPDF(pdf)) {
             assertThat(doc.getNumberOfPages()).isEqualTo(1);
-            String text = new PDFTextStripper().getText(doc);
+            // Long item names wrap inside their cell, as on the website
+            String text = new PDFTextStripper().getText(doc).replaceAll("\\s+", " ");
             assertThat(text).contains("TAX INVOICE", "MZ/2026-27/00031", "MZ26102867325", "Metformin 500 mg",
                     "Delivery charges", "Sparsh Mittal", "₹209.50", "Rupees Two Hundred Nine and Fifty Paise Only");
             // A look at the page while developing: mvn test -Dmz.invoicePng=path/to/file.png
