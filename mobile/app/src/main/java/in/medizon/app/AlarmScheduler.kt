@@ -204,6 +204,20 @@ object AlarmScheduler {
         }
     }
 
+    /**
+     * The server's DOSE_CHECK push: the dose is still unmarked 30 min after its time. Run this phone's check for it
+     * now if it's due (within 2 min), instead of waiting for its alarm, which Android may hold back. A check that is
+     * later (the dose was snoozed) or already gone (answered, or already shown) is left alone, so nothing shows twice.
+     */
+    fun runFollowUpNow(c: Context, planId: Long, instant: Long) {
+        val check = synchronized(Store.lock) {
+            Store.followUps(c).firstOrNull { it.isSameDose(planId, instant) }
+        } ?: return
+        if (check.atMillis > System.currentTimeMillis() + 2 * 60 * 1000L) return
+        cancelFollowUpAlarm(c, check.id)
+        AlarmReceiver.followUp(c, check)
+    }
+
     /** The check went off: forget it. */
     fun removeFollowUp(c: Context, id: String) {
         synchronized(Store.lock) {

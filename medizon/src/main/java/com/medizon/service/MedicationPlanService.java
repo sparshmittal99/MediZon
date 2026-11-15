@@ -531,6 +531,22 @@ public class MedicationPlanService {
         return touched;
     }
 
+    /** Minutes after a dose's time that phones are told to show "Missed dose" if it's still unmarked. */
+    static final int MISSED_DOSE_AFTER_MINUTES = 30;
+
+    /**
+     * Doses still pending {@link #MISSED_DOSE_AFTER_MINUTES} after their time (called once a minute, on the minute):
+     * tell the phones to run their missed-dose check now. The window is one minute wide, so each dose is sent once.
+     */
+    @Transactional(readOnly = true)
+    public void sendMissedDoseChecks(LocalDateTime now) {
+        LocalDateTime to = now.withSecond(0).withNano(0).minusMinutes(MISSED_DOSE_AFTER_MINUTES);
+        for (DoseLog l : doseLogs.findByStatusAndScheduledAtBetween(DoseStatus.PENDING, to.minusSeconds(59), to)) {
+            MedicationPlan p = l.getPlan();
+            appSync.doseCheck(p.getUser(), p, l.getScheduledAt());
+        }
+    }
+
     private static String capitalize(String s) {
         return s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }

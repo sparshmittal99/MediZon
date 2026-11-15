@@ -137,6 +137,16 @@ class PushService : FirebaseMessagingService() {
             }
             return
         }
+        // A dose is still unmarked 30 min after its time: show the missed-dose reminder now if this phone has one due
+        if (d["type"] == "DOSE_CHECK") {
+            val planId = d["planId"]?.trim()?.toLongOrNull()
+            val t = try { java.time.OffsetDateTime.parse(d["at"]?.trim()).toInstant().toEpochMilli() } catch (e: Exception) { null }
+            if (planId != null && t != null) {
+                val app = applicationContext
+                android.os.Handler(android.os.Looper.getMainLooper()).post { AlarmScheduler.runFollowUpNow(app, planId, t) }
+            }
+            return
+        }
         // A medicine or reminder changed (on any device): fetch the schedule now so the alarms are right
         if (d["type"] == "SYNC") {
             Sync.syncNow(applicationContext)

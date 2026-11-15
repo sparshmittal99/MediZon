@@ -49,7 +49,16 @@ public class AppSyncSignal {
         sendAfterCommit(user, data);
     }
 
-    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
+    /**
+     * A dose is still unmarked 30 minutes after its time: wake the phones (high-priority push) so each runs its own
+     * missed-dose check now. The phone's local 30-minute alarm alone can be held back by Android for up to an hour.
+     */
+    public void doseCheck(User user, MedicationPlan plan, LocalDateTime at) {
+        sendAfterCommit(user, Map.of("type", "DOSE_CHECK", "planId", String.valueOf(plan.getId()),
+                "at", at.atZone(ZoneId.systemDefault()).format(AT)));
+    }
+
+    private static final DateTimeFormatter TIME =DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
     private static final DateTimeFormatter DAY_TIME = DateTimeFormatter.ofPattern("d MMM, h:mm a", Locale.ENGLISH);
 
     /**

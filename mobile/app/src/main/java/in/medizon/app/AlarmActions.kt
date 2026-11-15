@@ -119,28 +119,30 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    /**
-     * 30 min after a dose alarm rang. Answers cancel this check, so getting here means the dose is
-     * still unmarked as far as this phone knows. Unmarked doses are closed at the end of the day anyway,
-     * so this is only a nudge.
-     */
-    private fun followUp(c: Context, check: AlarmItem) {
-        AlarmScheduler.removeFollowUp(c, check.id)
-        val planId = check.planId ?: return
-        val t = check.doseInstant ?: return
-        val now = System.currentTimeMillis()
-        if (AlarmService.isDismissed(check)) return
-        // Answered on this phone but not sent yet (offline).
-        if (Store.doseQueue(c).any { it.optLong("planId") == planId && instantOf(it.optString("at")) == t }) return
-        // Snoozed and will ring again: that ring sets its own check.
-        if (Store.oneOffs(c).any { it.isSameDose(planId, t) && it.atMillis > now }) return
-        Notifications.missedDose(c, check)
-    }
+    companion object {
+        /**
+         * 30 min after a dose alarm rang (its local alarm, or the server's DOSE_CHECK push, whichever is first).
+         * Answers cancel this check, so getting here means the dose is still unmarked as far as this phone knows.
+         * Unmarked doses are closed at the end of the day anyway, so this is only a nudge.
+         */
+        fun followUp(c: Context, check: AlarmItem) {
+            AlarmScheduler.removeFollowUp(c, check.id)
+            val planId = check.planId ?: return
+            val t = check.doseInstant ?: return
+            val now = System.currentTimeMillis()
+            if (AlarmService.isDismissed(check)) return
+            // Answered on this phone but not sent yet (offline).
+            if (Store.doseQueue(c).any { it.optLong("planId") == planId && instantOf(it.optString("at")) == t }) return
+            // Snoozed and will ring again: that ring sets its own check.
+            if (Store.oneOffs(c).any { it.isSameDose(planId, t) && it.atMillis > now }) return
+            Notifications.missedDose(c, check)
+        }
 
-    private fun instantOf(at: String): Long? = try {
-        java.time.OffsetDateTime.parse(at).toInstant().toEpochMilli()
-    } catch (e: Exception) {
-        null
+        private fun instantOf(at: String): Long? = try {
+            java.time.OffsetDateTime.parse(at).toInstant().toEpochMilli()
+        } catch (e: Exception) {
+            null
+        }
     }
 }
 

@@ -27,4 +27,5 @@ public interface DoseLogRepository extends JpaRepository<DoseLog, Long> {
     long countByPlanAndStatusAndScheduledAtBetween(MedicationPlan plan, DoseStatus status, LocalDateTime from, LocalDateTime to);
     Optional<DoseLog> findFirstByPlanOrderByScheduledAtAsc(MedicationPlan plan);
     List<DoseLog> findByPlanAndScheduledAtAfter(MedicationPlan plan, LocalDateTime after);
+    List<DoseLog> findByStatusAndScheduledAtBetween(DoseStatus status, LocalDateTime from, LocalDateTime to);
 }

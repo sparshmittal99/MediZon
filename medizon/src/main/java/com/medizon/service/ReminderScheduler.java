@@ -39,6 +39,16 @@ public class ReminderScheduler {
         }
     }
 
+    /** On the minute: wake phones for doses still unmarked 30 minutes after their time. */
+    @Scheduled(cron = "0 * * * * *")
+    public void missedDoseChecks() {
+        try {
+            planService.sendMissedDoseChecks(LocalDateTime.now());
+        } catch (Exception e) {
+            log.error("Missed-dose check run failed", e);
+        }
+    }
+
     /** Every morning: clear expired stock, close finished courses and sweep all plans for low supply. */
     @Scheduled(cron = "0 0 9 * * *")
     public void dailySupplyCheck() {
