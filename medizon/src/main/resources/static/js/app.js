@@ -401,7 +401,7 @@
     const holdRefresh = () => {
         if (refreshing || document.hidden || !navigator.onLine) return true;
         if (busyBar && !busyBar.hidden) return true;                              // already going somewhere
-        if (document.querySelector('.mz-pop, .is-invalid, .alert-danger:not([hidden])')) return true;
+        if (document.querySelector('.mz-pop, .is-invalid, .alert-danger:not([hidden]), .mz-zoom:not([hidden])')) return true;
         if (/\/(checkout|payment)(\/|$)/.test(path)) return true;                 // never mid-checkout
         try { if (window.mzPageBusy && window.mzPageBusy()) return true; } catch (e) { return true; }
         return false;

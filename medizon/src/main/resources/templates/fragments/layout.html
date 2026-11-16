@@ -653,9 +653,9 @@
         <!-- In the Android app Cart takes this place (its header icon is gone); Orders is under "You" -->
         <a th:unless="${inApp == true}" th:href="@{/orders}" data-mz-tab="/orders"><i class="bi bi-box-seam" aria-hidden="true"></i><span>Orders</span></a>
         <th:block th:if="${inApp == true}"><a th:replace="~{fragments/layout :: cartTab}"></a></th:block>
-        <!-- In the Android app the tab carries the user's first name and opens the account menu (/you) -->
+        <!-- In the Android app the tab opens the account menu (/you); always labelled "You" so long names never get cut off -->
         <a th:href="${inApp == true} ? @{/you} : @{/account}" data-mz-tab="/account /you /profile /addresses /members /prescriptions /billing-address /notifications">
-            <i class="bi bi-person" aria-hidden="true"></i><span th:text="${inApp == true and me != null} ? ${me.firstName} : 'You'">You</span></a>
+            <i class="bi bi-person" aria-hidden="true"></i><span>You</span></a>
     </th:block>
     <th:block sec:authorize="!isAuthenticated()">
         <th:block th:if="${inApp == true}"><a th:replace="~{fragments/layout :: cartTab}"></a></th:block>
