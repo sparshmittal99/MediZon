@@ -7,6 +7,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
@@ -74,6 +75,10 @@ public class NotificationPush {
     private void send(SseEmitter emitter, SseEmitter.SseEventBuilder event) {
         try {
             emitter.send(event);
+        } catch (IOException gone) {
+            // The tab was closed or the proxy dropped it. The container already knows and closes the connection;
+            // completeWithError here would replay the IOException through Spring MVC and log it as a 500.
+            emitters.values().forEach(set -> set.remove(emitter));
         } catch (Exception e) {
             try {
                 emitter.completeWithError(e);   // the tab was closed; onError removes it
