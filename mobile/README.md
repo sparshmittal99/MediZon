@@ -2,7 +2,7 @@
 
 A small native Android app (Kotlin, no Capacitor/Flutter) for personal use. It:
 
-- shows the live MediZon website (`https://medizon-mze9.onrender.com`) in a WebView, with a branded splash, pull-to-refresh, an offline screen, camera/file uploads, location, downloads and printing/Save as PDF;
+- shows the live MediZon website (`https://medizon.me`) in a WebView, with a branded splash, pull-to-refresh, an offline screen, camera/file uploads, location, downloads and printing/Save as PDF;
 - rings **real alarms** for medicine doses and reminders, even when the app is closed and the phone is locked. Alarms come from the server (`GET /api/app/schedule`) and are set with `AlarmManager.setAlarmClock`, so they fire on time in Doze. Each alarm plays the bundled "MediZon tring" sound (or a phone ringtone you choose) on the alarm stream, which rings even in silent/vibrate mode. It also vibrates and opens an incoming-call style full-screen page with **Skip / Taken** buttons and a Snooze option.
 
 The website switches on its app-only features (alarm banner, link button, etc.) when the user agent contains `MediZonApp`. The page talks to the app through the `window.MediZonApp` JavaScript bridge.
@@ -100,10 +100,10 @@ If it only shows a notification instead of the full-screen page, check the full-
 
 ## Change the website URL
 
-Edit `BASE_URL` in `app/build.gradle.kts`:
+Edit `siteHost` in `app/build.gradle.kts`. It sets `BASE_URL` and the App Links host together:
 
 ```kotlin
-buildConfigField("String", "BASE_URL", "\"https://medizon-mze9.onrender.com\"")
+val siteHost = "medizon.me"
 ```
 
 Then rebuild. Only pages on that host load inside the app, plus Razorpay checkout pages and the bank / 3-D Secure pages reached from them. Net-banking popups open in an in-app window with a close button. Other links open in the browser or the matching app (phone, mail, UPI, maps, WhatsApp).

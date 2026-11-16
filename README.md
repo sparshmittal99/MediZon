@@ -2,7 +2,7 @@
 
 An online pharmacy for the whole family. Customers order medicines for themselves, their family members, a shared household shelf or someone else, deliver to any of their saved addresses, get dose reminders, track how much supply they have at home and when it expires, and get refills manually or automatically. Uploaded prescriptions are read by AI (Google Gemini) and, once a pharmacist approves them, their medicines go into the cart by themselves. Behind the shop, one admin and staff in their own roles (pharmacist, store, support, finance) run several stores, each with its own stock and prices, manage orders, prescriptions, returns and the PIN codes each store delivers to, issue GST tax invoices, answer support tickets and run sales reports with Excel export. Customers and the admin get a built-in chat assistant.
 
-**Live demo:** https://medizon-mze9.onrender.com/
+**Live demo:** https://medizon.me/
 
 The repository has two services:
 
@@ -447,4 +447,4 @@ MediZon/
     └── tests/
 ```
 
-For live demo of this application visit https://medizon-mze9.onrender.com/.
+For live demo of this application visit https://medizon.me/.
