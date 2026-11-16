@@ -2,13 +2,13 @@
  * Product photo zoom, like shopping apps:
  *  - with a mouse, hovering the photo magnifies it in place, following the cursor;
  *  - clicking / tapping it opens a full-screen viewer: pinch or double-tap to zoom (phones), click or the mouse wheel
- *    to zoom (computers), drag to move around, + / - buttons, Esc or the phone's back button to close.
+ *    to zoom (computers), drag to move around, Esc or the phone's back button to close.
  */
 (function () {
     const thumbs = document.querySelectorAll('[data-mz-zoom]');
     if (!thumbs.length) return;
 
-    const MAX = 5, STEP = 1.5, DOUBLE = 2.5;
+    const MAX = 5, DOUBLE = 2.5;
     const canHover = window.matchMedia('(hover: hover) and (pointer: fine)');
 
     // ---- In-place magnifier (mouse only) ----
@@ -25,7 +25,7 @@
     });
 
     // ---- Full-screen viewer ----
-    let viewer, stage, big, title, level, btnIn, btnOut, lastFocus;
+    let viewer, stage, big, lastFocus;
     let scale = 1, tx = 0, ty = 0;
     let openedWithHistory = false;
 
@@ -37,40 +37,17 @@
         viewer.setAttribute('aria-modal', 'true');
         viewer.innerHTML =
             '<div class="mz-zoom-bar">' +
-            '  <p class="mz-zoom-title"></p>' +
             '  <button type="button" class="mz-zoom-btn" data-z="close" aria-label="Close"><i class="bi bi-x-lg" aria-hidden="true"></i></button>' +
             '</div>' +
-            '<div class="mz-zoom-stage"><img alt=""></div>' +
-            '<div class="mz-zoom-tools">' +
-            '  <button type="button" class="mz-zoom-btn" data-z="out" aria-label="Zoom out"><i class="bi bi-dash-lg" aria-hidden="true"></i></button>' +
-            '  <span class="mz-zoom-level" aria-live="polite">100%</span>' +
-            '  <button type="button" class="mz-zoom-btn" data-z="in" aria-label="Zoom in"><i class="bi bi-plus-lg" aria-hidden="true"></i></button>' +
-            '  <button type="button" class="mz-zoom-btn" data-z="reset" aria-label="Fit to screen"><i class="bi bi-arrows-angle-contract" aria-hidden="true"></i></button>' +
-            '</div>';
+            '<div class="mz-zoom-stage"><img alt=""></div>';
         document.body.appendChild(viewer);
         stage = viewer.querySelector('.mz-zoom-stage');
         big = stage.querySelector('img');
-        title = viewer.querySelector('.mz-zoom-title');
-        level = viewer.querySelector('.mz-zoom-level');
-        btnIn = viewer.querySelector('[data-z="in"]');
-        btnOut = viewer.querySelector('[data-z="out"]');
 
-        viewer.addEventListener('click', (e) => {
-            const b = e.target.closest('[data-z]');
-            if (!b) return;
-            const c = centre();
-            if (b.dataset.z === 'close') close(false);
-            else if (b.dataset.z === 'in') zoomTo(scale * STEP, c.x, c.y, true);
-            else if (b.dataset.z === 'out') zoomTo(scale / STEP, c.x, c.y, true);
-            else reset(true);
-        });
+        viewer.querySelector('[data-z="close"]').addEventListener('click', () => close(false));
         viewer.addEventListener('keydown', (e) => {
-            const c = centre();
             if (e.key === 'Escape') { e.preventDefault(); close(false); }
-            else if (e.key === '+' || e.key === '=') zoomTo(scale * STEP, c.x, c.y, true);
-            else if (e.key === '-') zoomTo(scale / STEP, c.x, c.y, true);
-            else if (e.key === '0') reset(true);
-            else if (e.key === 'Tab') trapFocus(e);
+            else if (e.key === 'Tab') { e.preventDefault(); viewer.querySelector('[data-z="close"]').focus(); }
         });
         stage.addEventListener('wheel', (e) => {
             e.preventDefault();
@@ -90,7 +67,6 @@
         lastFocus = document.activeElement;
         big.src = img.currentSrc || img.src;
         big.alt = img.alt;
-        title.textContent = img.alt;
         viewer.setAttribute('aria-label', img.alt ? `${img.alt}, zoomable image` : 'Zoomable image');
         viewer.hidden = false;
         document.documentElement.classList.add('mz-zoom-open');
@@ -110,15 +86,7 @@
         if (lastFocus && lastFocus.focus) lastFocus.focus();
     }
 
-    function trapFocus(e) {
-        const items = [...viewer.querySelectorAll('button:not(:disabled)')];
-        const first = items[0], last = items[items.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    }
-
     // ---- Geometry: points are relative to the stage centre, where the unzoomed photo sits ----
-    function centre() { return { x: 0, y: 0 }; }
     function local(cx, cy) {
         const r = stage.getBoundingClientRect();
         return { x: cx - r.left - r.width / 2, y: cy - r.top - r.height / 2 };
@@ -135,9 +103,6 @@
         big.classList.toggle('is-animating', !!animate);
         big.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
         stage.classList.toggle('is-zoomed', scale > 1.01);
-        level.textContent = `${Math.round(scale * 100)}%`;
-        btnIn.disabled = scale >= MAX - 0.01;
-        btnOut.disabled = scale <= 1.01;
     }
 
     // Zoom to `next`, keeping the photo point under (px, py) where it is
