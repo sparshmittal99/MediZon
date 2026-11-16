@@ -261,7 +261,7 @@
 <!-- Medicine card used on home and shop pages -->
 <div th:fragment="medCard(m)" class="mz-med h-100" th:classappend="${!m.inStock and !m.unavailable} ? 'is-oos'">
     <a th:href="@{/medicines/{id}(id=${m.id})}" class="mz-med-thumb" th:aria-label="${m.name}">
-        <img th:if="${m.imageUrl}" th:src="@{${m.imageUrl}}" th:alt="${m.name}" data-mz-hide-broken>
+        <img th:if="${m.imageUrl}" th:src="@{${m.imageUrl}}" th:alt="${m.name}" loading="lazy" decoding="async" data-mz-hide-broken>
         <i class="bi" th:classappend="${m.icon}" aria-hidden="true"></i>
         <span th:if="${m.prescriptionRequired}" class="mz-rx" title="Prescription required">Rx</span>
         <span th:if="${!m.inStock and !m.unavailable}" class="mz-oos-tag">Out of stock</span>

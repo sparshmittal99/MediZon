@@ -5,9 +5,12 @@ import com.medizon.web.PhoneRequiredInterceptor;
 import com.medizon.web.VisitInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.CacheControl;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.time.Duration;
 
 @Configuration
 @RequiredArgsConstructor
@@ -17,11 +20,18 @@ public class WebConfig implements WebMvcConfigurer {
     private final PhoneRequiredInterceptor phoneRequired;
     private final FileStorageService fileStorage;
 
-    /** Uploaded medicine images are public, unlike prescription files. */
+    /**
+     * Uploaded medicine images are public, unlike prescription files. Each upload gets a new random name and a file is
+     * never overwritten (a new picture is a new name), so browsers, the app and Cloudflare keep them for a year without
+     * asking again; without this every screen downloaded every picture afresh.
+     */
+    static final CacheControl MEDICINE_IMAGE_CACHE = CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable();
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler(FileStorageService.MEDICINE_IMAGE_PATH + "**")
-                .addResourceLocations(fileStorage.imageRoot().toUri().toString());
+                .addResourceLocations(fileStorage.imageRoot().toUri().toString())
+                .setCacheControl(MEDICINE_IMAGE_CACHE);
     }
 
     @Override

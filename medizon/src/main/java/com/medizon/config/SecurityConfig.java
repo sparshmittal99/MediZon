@@ -5,6 +5,7 @@ import com.medizon.service.CartService;
 import com.medizon.service.GoogleAccountService;
 import com.medizon.service.SignInService;
 import com.medizon.service.UserService;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -27,6 +28,7 @@ import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer;
 import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -111,6 +113,17 @@ public class SecurityConfig {
     private static final RequestMatcher API = new AntPathRequestMatcher("/api/**");
 
     /**
+     * An async dispatch only carries on a request that was already let through: the live-update stream
+     * (/api/notifications/stream) being closed once its browser has gone. Checking the user again then fails whenever
+     * the sign-in ended meanwhile (signed out, or ended from another device), on a response already sent, and was
+     * logged as a server error. The stream itself is still checked when it is opened.
+     */
+    static AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry continueStartedRequests(
+            AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
+        return auth.dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll();
+    }
+
+    /**
      * Every sign-in gets its own HTTP session, so any number of customers and admins can be signed in
      * at once (one per browser or private window). The registry lets admins see who is online and
      * sign a user out everywhere.
@@ -129,7 +142,7 @@ public class SecurityConfig {
             .addFilterBefore(loginThrottleFilter(loginThrottle), UsernamePasswordAuthenticationFilter.class)
             // Signs out disabled accounts and sessions ended from another device, remember-me ones (the app) included
             .addFilterAfter(new SignInGuard(users, signIns, rememberMeServices), RememberMeAuthenticationFilter.class)
-            .authorizeHttpRequests(auth -> auth
+            .authorizeHttpRequests(auth -> continueStartedRequests(auth)
                 // Monitoring: health for load balancers and uptime checks; Prometheus with a bearer token or as an admin
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers("/actuator/prometheus").access(adminOrToken(monitoringToken))
