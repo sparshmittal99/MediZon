@@ -6,17 +6,20 @@ import com.medizon.service.CurrentUser;
 import com.medizon.service.DeviceService;
 import com.medizon.service.LiveUpdates;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import com.medizon.service.NotificationPush;
 import com.medizon.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
@@ -63,5 +66,14 @@ public class NotificationApi {
                 .toList();
         return Map.of("unread", notificationService.unreadCount(user, device), "items", fresh,
                 "latest", notificationService.latestId(user), "version", liveUpdates.version(user));
+    }
+
+    /**
+     * The browser went away (tab closed, page changed, proxy dropped it). Tomcat hands the write failure back to
+     * the stream request; it is a normal disconnect, so nothing is written and it isn't logged or counted as a 500.
+     */
+    @ExceptionHandler(IOException.class)
+    public void clientGone(HttpServletResponse response) {
+        // nothing to send: the connection is already closed
     }
 }

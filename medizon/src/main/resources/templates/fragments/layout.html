@@ -445,6 +445,23 @@
     </div>
     <p class="small text-muted mt-2 mb-0">The downloaded sheet has these headings and what's in the catalogue now: change it and import it back.
         A PDF needs the table as text (exported from Excel or a billing system), not a scan.</p>
+
+    <!-- Product pictures from a folder, matched to products by file name (catalog-images.js, CatalogImageApi):
+         the admin's master catalogue only -->
+    <div th:if="${storeId == null}" sec:authorize="hasRole('ADMIN')" class="border-top pt-3 mt-3" data-mz-image-import>
+        <h2 class="h6 mb-1">Product pictures from a folder</h2>
+        <p class="small text-muted mb-2">Name each picture after its product. Part of the name is enough when it tells the product
+            apart (<em>dolo 650.jpg</em> finds Dolo 650 Tablet), or put the product code in it (<em>MZP00042.jpg</em>).
+            You see every match and can change it before anything is uploaded. Products that already have a picture
+            are marked and left unticked; tick the pictures you want to upload. JPG, PNG, WebP or GIF, up to 5 MB each.</p>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <label class="btn btn-outline-primary mb-0"><i class="bi bi-folder2-open me-1" aria-hidden="true"></i>Choose folder
+                <input type="file" class="visually-hidden" webkitdirectory multiple data-mz-image-pick></label>
+            <label class="btn btn-outline-secondary mb-0"><i class="bi bi-images me-1" aria-hidden="true"></i>Choose pictures
+                <input type="file" class="visually-hidden" multiple accept="image/jpeg,image/png,image/webp,image/gif" data-mz-image-pick></label>
+        </div>
+        <div class="mt-3" data-mz-image-result hidden></div>
+    </div>
 </section>
 
 <!-- After an import: the rows that weren't imported and why -->
