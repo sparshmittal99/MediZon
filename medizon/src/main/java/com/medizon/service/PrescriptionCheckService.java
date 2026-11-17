@@ -210,7 +210,7 @@ public class PrescriptionCheckService {
         TicketMessage m = new TicketMessage();
         m.setKind(TicketMessageKind.STAFF);
         m.setAuthor(staff);
-        m.setAuthorRole(staff.getRole());
+        m.setAuthorRole(Role.PHARMACIST);           // the admin, too, talks to the customer as the pharmacist
         m.setBody(body.length() > SupportService.MAX_BODY ? body.substring(0, SupportService.MAX_BODY - 1) + "…" : body);
         t.addMessage(m);
         t.setChatStartedAt(LocalDateTime.now());
@@ -253,9 +253,11 @@ public class PrescriptionCheckService {
                     d.food() + " · " + d.days() + (d.days() == 1 ? " day" : " days")));
         }
 
-        byte[] file = pdf.render(new PrescriptionPdfService.Sheet(patient, t.getUser().getFullName(), staff.getFullName(),
+        // Customers only ever see a pharmacist: the pharmacist's name, or just "MediZon pharmacist" when the admin issued it
+        String issuer = staff.is(Role.PHARMACIST) ? staff.getFullName() : null;
+        byte[] file = pdf.render(new PrescriptionPdfService.Sheet(patient, t.getUser().getFullName(), issuer,
                 java.time.LocalDate.now(), numbers(open), lines, note));
-        Prescription rx = prescriptionService.issueDigital(t.getUser(), patient, staff.getFullName(), note, lines, file);
+        Prescription rx = prescriptionService.issueDigital(t.getUser(), patient, issuer, note, lines, file);
         t.setConsultReview(RxReview.APPROVED);
         t.setConsultPrescription(rx);
         for (Order o : open) {

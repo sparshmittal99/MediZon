@@ -251,10 +251,14 @@ public class SupportService {
                     : "Support is handling this ticket now. Add an internal note instead.");
         }
         String b = text(body, MAX_BODY, internal ? "a note" : "your reply");
-        t.addMessage(message(internal ? TicketMessageKind.NOTE : TicketMessageKind.STAFF, staff, b, photos(images)));
+        TicketMessage m = t.addMessage(message(internal ? TicketMessageKind.NOTE : TicketMessageKind.STAFF, staff, b, photos(images)));
+        // A prescription consultation: the admin talks to the customer as the pharmacist, without their own name
+        boolean asPharmacist = t.isConsult() && staff.isAdmin();
+        if (asPharmacist) m.setAuthorRole(Role.PHARMACIST);
         if (!internal) {
             notifications.notify(t.getUser(), NotificationType.SUPPORT_UPDATE, "New reply on " + t.getNumber(),
-                    staff.getFirstName() + " (" + SupportTicket.teamLabel(staff.getRole()) + "): " + preview(b), link(t));
+                    (asPharmacist ? "MediZon pharmacist" : staff.getFirstName() + " (" + SupportTicket.teamLabel(staff.getRole()) + ")")
+                            + ": " + preview(b), link(t));
         }
     }
 

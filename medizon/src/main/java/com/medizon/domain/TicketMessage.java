@@ -48,7 +48,8 @@ public class TicketMessage {
 
     /** "Priya · Pharmacy team", as the customer sees a staff reply; the one admin account is just "MediZon team". */
     public String getStaffLabel() {
-        if (author == null || authorRole == Role.ADMIN) return SupportTicket.teamLabel(authorRole);
+        // The admin is never named: "MediZon team", or "Pharmacy team" when writing as the pharmacist
+        if (author == null || authorRole == Role.ADMIN || author.getRole() == Role.ADMIN) return SupportTicket.teamLabel(authorRole);
         return author.getFirstName() + " · " + SupportTicket.teamLabel(authorRole);
     }
 }

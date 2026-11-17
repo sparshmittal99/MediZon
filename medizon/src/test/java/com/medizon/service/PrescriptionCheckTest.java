@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -152,6 +151,29 @@ class PrescriptionCheckTest {
                 argThat(l -> l.size() == 1 && l.get(0).dosage().equals("1-0-1") && l.get(0).instructions().equals("After food · 5 days")), any());
         // Decided: it can't be approved or rejected again
         assertThatThrownBy(() -> service.reject(t.getId(), pharmacist)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void theAdminIsNeverNamedToTheCustomerOnlyAsThePharmacist() {
+        User admin = user(12, Role.ADMIN, "Rahul Admin");
+        Order o = order(1, RxCheck.CONSULT);
+        SupportTicket t = consult(o);
+        when(supportService.getForStaff(t.getId(), admin)).thenReturn(t);
+
+        service.startChat(t.getId(), admin);
+        TicketMessage hello = t.getMessages().get(t.getMessages().size() - 1);
+        assertThat(hello.getStaffLabel()).isEqualTo("Pharmacy team");
+
+        when(prescriptionService.issueDigital(any(), any(), isNull(), any(), anyList(), any())).thenAnswer(a -> {
+            Prescription rx = new Prescription();
+            rx.setDigital(true);
+            assertThat(rx.getPrescriber()).isEqualTo("MediZon pharmacist");
+            rx.setStatus(PrescriptionStatus.APPROVED);
+            return rx;
+        });
+        service.approve(t.getId(), admin, "Asha Sharma", null,
+                List.of(new PrescriptionCheckService.Dose(acitrom.getId(), "1", "0", "1", "After food", 5)));
+        verify(prescriptionService).issueDigital(eq(customer), eq("Asha Sharma"), isNull(), any(), anyList(), any());
     }
 
     @Test

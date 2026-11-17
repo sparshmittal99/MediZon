@@ -73,7 +73,7 @@
 
 <table class="sign">
     <tr><td>
-        <p style="font-weight: 700;" th:text="${rx.issuedBy}">Priya Shah</p>
+        <p style="font-weight: 700;" th:if="${rx.issuedBy != null}" th:text="${rx.issuedBy}">Priya Shah</p>
         <div class="line muted">MediZon pharmacist</div>
     </td></tr>
 </table>
