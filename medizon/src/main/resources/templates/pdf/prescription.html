@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<!--
+  A digital prescription issued by a MediZon pharmacist (PrescriptionPdfService). Plain tables: the PDF renderer only
+  understands CSS 2.1, and the markup must be well-formed XML.
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Prescription</title>
+    <style>
+        @page { size: A4; margin: 14mm; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Figtree', 'Noto Sans', sans-serif; font-size: 11pt; line-height: 1.5; color: #17302A; }
+        table { border-collapse: collapse; width: 100%; }
+        td, th { vertical-align: top; padding: 0; }
+        p { margin: 0; }
+        .muted { color: #5B716A; }
+        .r { text-align: right; }
+        .brand { font-size: 15.6pt; font-weight: 800; letter-spacing: -0.3pt; }
+        .brand img { width: 24pt; height: 24pt; vertical-align: middle; margin-right: 6pt; }
+        .brand span { vertical-align: middle; }
+        .title { font-size: 18pt; font-weight: 800; letter-spacing: .6pt; text-transform: uppercase; }
+        .head { border-bottom: 1.5pt solid #17302A; }
+        .head td { padding-bottom: 12pt; }
+        h2 { margin: 0 0 4pt; font-size: 9.2pt; font-weight: 700; letter-spacing: .5pt; text-transform: uppercase; color: #5B716A; }
+        .who td { padding: 14pt 14pt 14pt 0; }
+        .rx { font-size: 26pt; font-weight: 800; color: #0E6B57; margin: 4pt 0 6pt; }
+        .lines th { padding: 6pt 7pt; background-color: #FAFCFB; border-bottom: .75pt solid #D3E3DB; font-size: 9.6pt;
+            font-weight: 600; color: #5B716A; text-align: left; }
+        .lines td { padding: 7pt; border-bottom: .75pt solid #D3E3DB; font-size: 10.4pt; }
+        .dose { font-weight: 700; font-size: 11.5pt; letter-spacing: .5pt; }
+        .advice { margin-top: 14pt; padding: 9pt 11pt; background-color: #F2F8F5; border: .75pt solid #D3E3DB; }
+        .sign { margin-top: 34pt; }
+        .sign td { padding-top: 4pt; }
+        .line { border-top: .75pt solid #17302A; width: 160pt; padding-top: 4pt; }
+        .foot { margin-top: 26pt; font-size: 8.6pt; color: #5B716A; }
+    </style>
+</head>
+<body>
+<table class="head">
+    <tr>
+        <td><div class="brand"><img th:src="${logo}" alt=""/><span>MediZon</span></div>
+            <p class="muted">Online pharmacy</p></td>
+        <td class="r"><div class="title">Prescription</div>
+            <p class="muted" th:text="${#temporals.format(rx.date, 'd MMM yyyy')}">17 Nov 2026</p></td>
+    </tr>
+</table>
+
+<table class="who">
+    <tr>
+        <td style="width: 50%;"><h2>Patient</h2><p style="font-weight: 700;" th:text="${rx.patient}">Asha Sharma</p>
+            <p class="muted" th:if="${rx.customer != rx.patient}" th:text="'Ordered by ' + ${rx.customer}"></p></td>
+        <td style="width: 50%;"><h2>Order</h2><p style="font-weight: 600;" th:text="${rx.orderNumbers}">MZ26111700001</p></td>
+    </tr>
+</table>
+
+<div class="rx">Rx</div>
+<table class="lines">
+    <thead><tr><th>Medicine</th><th>Dose (M-A-N)</th><th>When</th><th class="r">Packs</th></tr></thead>
+    <tbody>
+    <tr th:each="l : ${rx.lines}">
+        <td th:text="${l.medicine().name}">Acitrom 3</td>
+        <td class="dose" th:text="${l.dosage()}">1-0-1</td>
+        <td th:text="${l.instructions()}">After food · 5 days</td>
+        <td class="r" th:text="${l.packs()}">2</td>
+    </tr>
+    </tbody>
+</table>
+
+<div class="advice" th:if="${rx.advice != null and !#strings.isEmpty(rx.advice)}">
+    <h2>Advice</h2><p th:text="${rx.advice}"></p>
+</div>
+
+<table class="sign">
+    <tr><td>
+        <p style="font-weight: 700;" th:text="${rx.issuedBy}">Priya Shah</p>
+        <div class="line muted">MediZon pharmacist</div>
+    </td></tr>
+</table>
+
+<p class="foot">Digital prescription issued by MediZon after a consultation with the customer.</p>
+</body>
+</html>

@@ -35,7 +35,8 @@
                     <tbody>
                     <tr th:each="p : ${prescriptions}">
                         <td>
-                            <div class="fw-semibold" th:text="${p.doctorName != null and p.doctorName != ''} ? ('Dr. ' + ${p.doctorName}) : 'Prescription'"></div>
+                            <div class="fw-semibold" th:text="${p.digital} ? 'Digital prescription'
+                                : (${p.doctorName != null and p.doctorName != ''} ? ('Dr. ' + ${p.doctorName}) : 'Prescription')"></div>
                             <div class="small text-muted" th:text="'Uploaded ' + ${#temporals.format(p.uploadedAt, 'd MMM yyyy')}"></div>
                             <div th:if="${p.reviewerNote}" class="small" th:text="'Pharmacist: ' + ${p.reviewerNote}"></div>
                         </td>

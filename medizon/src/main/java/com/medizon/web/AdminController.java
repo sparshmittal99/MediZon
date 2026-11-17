@@ -473,7 +473,13 @@ public class AdminController {
     public String updateStatus(@PathVariable Long id, @RequestParam OrderStatus status,
                                @RequestHeader(value = "Referer", required = false) String referer,
                                RedirectAttributes ra) {
-        storeService.checkAccess(currentUser.get(), orderService.get(id));
+        User me = currentUser.get();
+        Order current = orderService.get(id);
+        storeService.checkAccess(me, current);
+        // Prescription still with the pharmacist: only the admin can confirm it before it's approved
+        if (status == OrderStatus.CONFIRMED && current.isAwaitingPrescription() && !me.isAdmin()) {
+            throw new BusinessException("This order can be confirmed once its prescription is approved.");
+        }
         Order o = orderService.updateStatus(id, status);
         ra.addFlashAttribute("success", "Order " + o.getOrderNumber() + " marked " + status.getLabel().toLowerCase() + ".");
         return "redirect:" + (referer != null ? referer : "/admin/orders");

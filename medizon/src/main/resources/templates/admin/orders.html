@@ -50,7 +50,8 @@
                 <tr th:each="o : ${orders}">
                     <td><a class="fw-semibold" th:href="@{/admin/orders/{id}(id=${o.id})}" th:text="${o.orderNumber}"></a>
                         <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Auto</span>
-                        <span th:if="${o.prescription != null}" class="mz-rx position-static ms-1">Rx</span></td>
+                        <span th:if="${o.prescription != null}" class="mz-rx position-static ms-1">Rx</span>
+                        <span th:if="${o.awaitingPrescription}" class="badge ms-1" th:classappend="${o.rxReview.badge}" th:text="${o.rxReview.label}"></span></td>
                     <td><span th:text="${o.user.fullName}"></span>
                         <div th:if="${o.deliverTo != o.user.fullName}" class="small" th:text="'For ' + ${o.deliverTo}"></div>
                         <div class="small text-muted" th:text="${o.contactPhone}"></div></td>
@@ -62,9 +63,9 @@
                         <a th:if="${o.invoiceAvailable}" th:href="@{/admin/orders/{id}/invoice(id=${o.id})}" class="d-block small mt-1">
                             <i class="bi bi-receipt"></i> Invoice</a></td>
                     <td th:if="${canManage}">
-                        <form th:unless="${#lists.isEmpty(o.status.nextStatuses)}" th:action="@{/admin/orders/{id}/status(id=${o.id})}" method="post" class="d-flex gap-1">
+                        <form th:unless="${#lists.isEmpty(o.nextStatusesFor(me.admin))}" th:action="@{/admin/orders/{id}/status(id=${o.id})}" method="post" class="d-flex gap-1">
                             <select name="status" class="form-select form-select-sm" aria-label="New status">
-                                <option th:each="s : ${o.status.nextStatuses}" th:value="${s}" th:text="${s.label}"></option>
+                                <option th:each="s : ${o.nextStatusesFor(me.admin)}" th:value="${s}" th:text="${s.label}"></option>
                             </select>
                             <button class="btn btn-sm btn-primary" type="submit">Save</button>
                         </form>

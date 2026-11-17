@@ -19,6 +19,7 @@ The web app can also use **Google Gemini** for reading prescriptions, and **Groq
 
 ### For customers
 - **Shopping:** browse by category, search by name or salt, view product details (including expiry), add to cart, check out.
+- **Partial checkout:** items that can't be ordered right now (out of stock, too few packs, not delivered to the address) stay in the cart, listed first under **Items unavailable** with the reason. Checkout goes ahead with the rest, and the bill counts only those.
 - **Same salt, other brands:** a product page lists other brands with the same ingredients, strength and form (salt forms like "hydrochloride", units and ingredient order don't matter; SR and plain tablets are kept apart) sold near you. They're compared by the price of one tablet or ml, and the cheapest in stock is highlighted with what it saves on a pack. Medicines whose salt doesn't give a strength are never matched.
 - **Out of stock:** the home page shows only what can be ordered now. In the shop, out-of-stock products show **Notify me** instead of Add; the customer is told (bell, desktop and email) as soon as a store delivering to them has it again.
 - **Shop before signing in:** visitors can fill a cart; it moves into their account when they sign in, and "Sign in to checkout" brings them straight back to checkout.
@@ -42,7 +43,9 @@ The web app can also use **Google Gemini** for reading prescriptions, and **Groq
   - **Check before sending:** each upload shows the medicines, patient and doctor the AI read, and which family member it goes to. Remove a wrong file, add the doctor's name, then send it to the pharmacist.
   - **Straight into the cart:** once a pharmacist approves it, its medicines go into the cart under the family member whose patient name is on it (or **Others**), in the quantities prescribed.
   - **Order part now, the rest later:** a prescription allows the packs prescribed, across any number of orders and automatic refills. When everything's ordered it's **Used up** and a new one is needed.
-  - **Several prescriptions in one cart:** checkout takes each medicine from whichever approved prescription has it; nothing to choose. Medicines no prescription covers are named and blocked.
+  - **Several prescriptions in one cart:** checkout takes each medicine from whichever approved prescription has it; nothing to choose.
+  - **No approved prescription at checkout:** choose **Upload prescription** (upload it right there) or **No prescription**, and place the order either way. The store can't confirm it until a pharmacist or the admin approves the prescription (the admin can confirm it anyway); if it's rejected, the order is cancelled and refunded as usual, and the notification, email and order page say the prescription wasn't approved. An approved checkout upload covers that order instead of filling the cart.
+  - **Digital prescription:** with **No prescription**, a consultation ticket goes to the pharmacists. A pharmacist or the admin starts a chat with the customer (the first message names the order and its prescription medicines), then either approves, choosing how to take each medicine (morning-afternoon-night such as 1-0-1, before or after food, for how many days), which builds a PDF prescription saved with the customer's prescriptions, or rejects, which cancels the order. The chat stays on the ticket.
   - **Remove** any prescription, approved or not.
   - **Files deleted after use:** a prescription's file is deleted as soon as it's used up, and a daily job (04:00) deletes files for prescriptions rejected or removed, returns rejected or refunded, and tickets closed more than a day ago. Pending and approved prescriptions, open returns and open tickets keep theirs; medicine images are never deleted. The record stays; once its file is gone the View/Open file link is hidden, and ticket and return photos show "Photo N was attached" without a link.
 - **Medication plans**, per family member:
@@ -92,7 +95,7 @@ Staff accounts run the shop only; they can't shop, order or set reminders.
 - **Stores and catalogues:** the admin keeps the master catalogue (medicines, images, HSN code, GST rate, MRP, prescription-only or not) and the stores. Each store lists products from it with its own stock, batch expiry and, for OTC medicines, its own price (never above MRP); prescription medicines sell at the master price everywhere. Low stock (under 50 packs) is listed, soon-to-expire stock is highlighted and expired stock can't be sold.
 - **Delivery areas:** the PIN codes MediZon delivers to (add one or paste a list, with area, city and state; pause or remove), which stores deliver to each and in how many days. Orders to any other PIN code are refused, including automatic refills. The dashboard warns while none are set up, because nobody can order until then.
 - **Users (admin):** create customer and staff accounts with a role, enable or disable them, force sign-out, and delete accounts. Customers sign up themselves; nobody can sign up as staff, and there's only ever one admin.
-- **Support tickets:** a ticket starts with support, who reply or pass it to the pharmacy, payments, the store that handled the order or the admin; the customer is told who has it and notified of every reply.
+- **Support tickets:** a ticket starts with support, who reply or pass it to the pharmacy, payments, the store that handled the order or the admin; the customer is told who has it and notified of every reply. Orders placed with **No prescription** open a prescription consultation with the pharmacy team, with **Chat with customer**, then **Approve & build prescription** or **Reject**.
 - **Monitoring (admin):** health of each part (database, disk, assistant, Groq, Gemini), errors grouped like an issue tracker (server, scheduled jobs and shoppers' browsers) and performance (slow requests, page load times, background jobs). `/actuator/prometheus` feeds Grafana.
 - **Reviews and feedback**, with a **"Get improvement ideas"** button. It groups complaints by topic and sentiment and ranks suggestions.
 
@@ -345,7 +348,8 @@ Uploads are limited to 5 MB per file and 26 MB per request (a return can carry 3
  Medicines go into the cart under the member whose patient name matches (else "Others") ──► customer notified
                                           │
  Checkout: each Rx medicine is taken from whichever approved prescription has packs left
-           (the patient's own first; split across two if needed); anything uncovered is named and blocked
+           (the patient's own first; split across two if needed); anything uncovered: Upload prescription
+           or No prescription (pharmacist chat ──► digital prescription); the store confirms once approved
                                           │
  Each order line records the prescription(s) it used ──► cancelled orders give the packs back
                                                        ──► fully ordered prescription = "Used up"

@@ -27,6 +27,14 @@ public class Cart {
     @Column(nullable = false)
     private CartStatus status = CartStatus.ACTIVE;
 
+    /**
+     * How the prescription medicines no approved prescription covers get one, as chosen at checkout; null until the
+     * customer chooses. Kept with the cart so a payment confirmed later places the orders the same way.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private RxCheck rxChoice;
+
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime checkedOutAt;
 

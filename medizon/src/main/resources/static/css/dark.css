@@ -259,6 +259,8 @@ html[data-theme="dark"] .mz-cart-del:hover, html[data-theme="dark"] .mz-cart-del
 html[data-theme="dark"] .mz-cart-rx { background-color: #3A1A1A; border-color: #5A2A2A; color: #F08A8A; }
 html[data-theme="dark"] .mz-cart-item.mz-cart-unavailable { border-color: #5A2A2A; }
 html[data-theme="dark"] .mz-cart-alert { background-color: #2E1818; color: #F0B0B0; }
+html[data-theme="dark"] .mz-order-note { background-color: #2E1818; color: #F0B0B0; }
+html[data-theme="dark"] .mz-co-unavailable { border-color: #5A2A2A; }
 html[data-theme="dark"] .mz-cart-save { border-color: rgba(111, 209, 174, .3); }
 html[data-theme="dark"] .mz-cart-item { box-shadow: none; }
 html[data-theme="dark"] .mz-check-box { border-color: #4E6A61; }

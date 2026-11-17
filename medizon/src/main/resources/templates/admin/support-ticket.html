@@ -35,8 +35,19 @@
                 <ol th:replace="~{support/thread :: thread(${t}, true)}"></ol>
             </section>
 
+            <!-- Prescription consultation: the pharmacist or admin opens the chat with the customer -->
+            <form th:if="${canConsult and !t.chatStarted}" th:action="@{/admin/support/{id}/consult/start(id=${t.id})}" method="post"
+                  class="mz-panel mz-consult-start">
+                <span class="mz-consult-ico" aria-hidden="true"><i class="bi bi-chat-dots"></i></span>
+                <div class="flex-grow-1 min-w-0">
+                    <h2 class="h6 mb-0">Prescription needed</h2>
+                    <div class="small text-muted" th:text="${t.user.fullName}"></div>
+                </div>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-chat-dots me-1" aria-hidden="true"></i>Chat with customer</button>
+            </form>
+
             <!-- Reply to the customer, or a note for staff -->
-            <form th:if="${canReply or canNote}" th:action="@{/admin/support/{id}/reply(id=${t.id})}" method="post"
+            <form th:if="${(canReply or canNote) and !(t.consult and !t.chatStarted)}" th:action="@{/admin/support/{id}/reply(id=${t.id})}" method="post"
                   enctype="multipart/form-data" class="mz-panel mz-reply" data-mz-reply>
                 <div class="mz-segmented mb-2" role="radiogroup" aria-label="Who sees this">
                     <th:block th:if="${canReply}">
@@ -62,6 +73,17 @@
                     <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Send</button>
                 </div>
             </form>
+
+            <!-- Prescription consultation: decided once, after talking to the customer -->
+            <div th:if="${canConsult and t.chatStarted}" class="mz-panel mz-consult-decide mt-3">
+                <a th:href="@{/admin/support/{id}/consult/prescription(id=${t.id})}" class="btn btn-success">
+                    <i class="bi bi-file-earmark-check me-1" aria-hidden="true"></i>Approve &amp; build prescription</a>
+                <form th:action="@{/admin/support/{id}/consult/reject(id=${t.id})}" method="post"
+                      data-mz-confirm="The order is cancelled and the customer is told their prescription wasn't approved."
+                      data-mz-confirm-title="Reject prescription?" data-mz-confirm-ok="Reject">
+                    <button class="btn btn-outline-danger w-100" type="submit"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Reject</button>
+                </form>
+            </div>
         </div>
 
         <!-- Customer, order and what can be done next -->
@@ -82,6 +104,24 @@
                     </p>
                     <p class="small text-muted mb-0" th:text="${#temporals.format(t.order.createdAt, 'd MMM yyyy')} + ' · ₹' + ${t.order.total}
                         + (${t.store != null} ? ' · ' + ${t.store.name} : '')"></p>
+                    <p th:each="o : ${consultOrders}" th:if="${consultOrders != null and o.id != t.order.id}" class="mb-0 mt-1">
+                        <a sec:authorize="hasAnyRole('ADMIN','STORE','SUPPORT','FINANCE')" th:href="@{/admin/orders/{id}(id=${o.id})}" th:text="${o.orderNumber}"></a>
+                        <span sec:authorize="hasRole('PHARMACIST')" th:text="${o.orderNumber}"></span>
+                        <span class="badge ms-1" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
+                    </p>
+                </th:block>
+                <th:block th:if="${t.consult}">
+                    <hr>
+                    <h2 class="h6 d-flex align-items-center justify-content-between gap-2">Prescription
+                        <span class="badge" th:if="${t.consultReview != null}" th:classappend="${t.consultReview.badge}"
+                              th:text="${t.consultReview.name() == 'PENDING'} ? 'Pending' : ${t.consultReview.label}"></span></h2>
+                    <ul th:unless="${#lists.isEmpty(consultItems)}" class="mz-rx-covers small mb-0">
+                        <li th:each="i : ${consultItems}"><span class="fw-semibold" th:text="${i.medicine().name}"></span>
+                            <span class="text-muted" th:text="'× ' + ${i.packs()}"></span></li>
+                    </ul>
+                    <p th:if="${t.consultPrescription != null}" class="small mb-0 mt-2">
+                        <i class="bi bi-file-earmark-medical me-1" aria-hidden="true"></i>
+                        <a th:href="@{/prescriptions/{id}/file(id=${t.consultPrescription.id})}" target="_blank" rel="noopener">Digital prescription</a></p>
                 </th:block>
                 <th:block th:if="${t.rating != null}">
                     <hr>

@@ -64,7 +64,7 @@ class PrescriptionCoverageTest {
         notifications = mock(NotificationService.class);
         service = new PrescriptionService(mock(PrescriptionRepository.class), mock(MedicineRepository.class),
                 mock(FileStorageService.class), notifications, mock(StaffAlerts.class), mock(ApplicationEventPublisher.class),
-                mock(CartItemRepository.class), mock(MemberService.class));
+                mock(CartItemRepository.class), mock(MemberService.class), mock(com.medizon.repository.OrderRepository.class));
     }
 
     @Test

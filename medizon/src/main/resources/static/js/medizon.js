@@ -557,14 +557,15 @@
         const rows = document.querySelectorAll('[data-mz-cart-row]');
         if (!rows.length) return;
         const ticks = document.querySelectorAll('[data-mz-select]');
-        const ticked = [...ticks].filter(t => t.checked).length;
+        // Lines that can't be ordered right now have no tick and stay in the cart: checkout takes the rest
+        const ticked = [...ticks].filter(t => t.checked && !t.closest('.mz-cart-unavailable')).length;
         rows.forEach(row => {
             const tick = row.querySelector('[data-mz-select]');
             row.classList.toggle('is-unticked', !!tick && !tick.checked);
         });
         if (ticks.length) {
             const none = document.querySelector('[data-mz-none-selected]');
-            if (none) none.hidden = ticked > 0;
+            if (none) none.hidden = ticked > 0 || !document.querySelector('[data-mz-cart-row]:not(.mz-cart-unavailable)');
             const n = document.querySelector('[data-mz-checkout-count]');
             if (n) n.textContent = `${ticked} ${ticked === 1 ? 'item' : 'items'}`;   // "Checkout 2 items"
         }
@@ -632,20 +633,17 @@
         const box = summary.querySelector('[data-mz-min-order]');
         if (!box || data.minOrderShort == null) return;
         const short = Number(data.minOrderShort), min = Number(data.minOrderValue);
-        // Nothing ticked for checkout: no "add ₹X more", just "select items" (refreshCartExtras) and checkout waits
-        const none = data.selectedCount === 0;
-        // A ticked item that can't be ordered right now: checkout waits until it's unticked or removed
-        const blocked = (data.blockedCount || 0) > 0;
-        const blockedNote = summary.querySelector('[data-mz-blocked]');
-        if (blockedNote) blockedNote.hidden = !blocked;
-        box.hidden = short <= 0 || none || data.blockedCount === data.selectedCount;
+        // Nothing that can be ordered is ticked: no "add ₹X more", just "select items" (refreshCartExtras) and checkout
+        // waits. Lines that can't be ordered right now stay in the cart and don't hold checkout up.
+        const none = (data.checkoutCount ?? data.selectedCount) === 0;
+        box.hidden = short <= 0 || none;
         box.querySelector('[data-mz-min-order-text]').textContent = `Add ${rupees(short)} more to place your order`;
         const bar = box.querySelector('[data-mz-min-order-bar]');
         if (bar) bar.style.width = (min > 0 ? Math.min(100, Math.floor(Number(data.subtotal) * 100 / min)) : 100) + '%';
         const link = summary.querySelector('[data-mz-checkout-link]');
         if (link) {
-            link.classList.toggle('disabled', short > 0 || none || blocked);
-            link.setAttribute('aria-disabled', String(short > 0 || none || blocked));
+            link.classList.toggle('disabled', short > 0 || none);
+            link.setAttribute('aria-disabled', String(short > 0 || none));
         }
     }
 
@@ -1998,4 +1996,28 @@
         window.print();
         setTimeout(() => document.body.classList.remove('mz-print-codes'), 500);
     });
+
+    // ---- Checkout: Upload prescription or No prescription ----
+    // Each option shows its own part below; "Pay now" waits for a choice, and for an upload with "Upload prescription".
+    // The choice is remembered with the cart, so it's still there after uploading and coming back.
+    (function () {
+        const box = document.querySelector('[data-mz-rx-choice]');
+        if (!box) return;
+        const pay = document.querySelector('[data-mz-pay]');
+        const sync = () => {
+            const picked = box.querySelector('input[name="rx"]:checked')?.value || '';
+            box.querySelectorAll('[data-mz-rx-pane]').forEach(p => { p.hidden = p.dataset.mzRxPane !== picked; });
+            if (pay) {
+                const ready = picked === 'CONSULT' || (picked === 'UPLOAD' && box.dataset.uploaded === 'true');
+                pay.disabled = pay.dataset.blocked === 'true' || !ready;
+            }
+            return picked;
+        };
+        box.addEventListener('change', (e) => {
+            if (!e.target.matches('input[name="rx"]')) return;
+            const picked = sync();
+            mzFetch('/checkout/prescription?rx=' + encodeURIComponent(picked), { method: 'POST' }).catch(() => {});
+        });
+        sync();
+    })();
 })();

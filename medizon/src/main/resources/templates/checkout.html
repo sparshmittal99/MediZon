@@ -40,34 +40,52 @@
                 </div>
             </section>
 
-            <!-- Prescription upload lives outside the order form (forms can't nest) -->
-            <section th:if="${cart.prescriptionRequired}" class="mz-panel mb-4">
-                <h2 class="h5">Prescription</h2>
-                <p class="small text-muted">Your cart has prescription medicines. Each comes from your approved prescriptions
-                    automatically, even if they're from different prescriptions. Missing one? Upload it now; a pharmacist
-                    approves it, usually within a few hours.</p>
-                <div th:if="${#lists.isEmpty(prescriptions)}" class="alert alert-warning small">
-                    You have no prescription that can be used for orders: none is approved yet, or yours have expired or been
-                    used up. Upload a new one; once a pharmacist approves it, its medicines go into your cart.
+            <!-- Prescription medicines no approved prescription covers: upload it now, or order without one and a
+                 pharmacist gets in touch. The order is placed either way and confirmed once the prescription is
+                 approved. The choice belongs to the order form (form=); the upload form lives outside it (forms can't nest). -->
+            <section th:if="${rxNeeded}" class="mz-panel mb-4" data-mz-rx-choice
+                     th:attr="data-uploaded=${!#lists.isEmpty(rxUploads)}">
+                <h2 class="h5 mb-3">Prescription</h2>
+                <div class="mz-rx-options" role="radiogroup" aria-label="Prescription">
+                    <label class="mz-rx-option">
+                        <input type="radio" name="rx" value="UPLOAD" form="placeOrder" th:checked="${rxChoice == 'UPLOAD'}" required>
+                        <span><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>Upload prescription</span>
+                    </label>
+                    <label class="mz-rx-option">
+                        <input type="radio" name="rx" value="CONSULT" form="placeOrder" th:checked="${rxChoice == 'CONSULT'}">
+                        <span><i class="bi bi-file-earmark-x" aria-hidden="true"></i>No prescription</span>
+                    </label>
                 </div>
-                <form th:action="@{/prescriptions}" method="post" enctype="multipart/form-data" class="row g-2 align-items-end" data-mz-ai-busy>
-                    <input type="hidden" name="returnTo" value="checkout">
-                    <div class="col-sm-9">
-                        <label class="form-label small" for="rxFile">Upload prescriptions (JPG, PNG or PDF, one file each; several at once is fine)</label>
-                        <input class="form-control form-control-sm" id="rxFile" type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" multiple required>
-                    </div>
-                    <div class="col-sm-3"><button class="btn btn-sm btn-outline-primary w-100" type="submit">Upload</button></div>
-                </form>
+                <div class="mz-rx-pane" data-mz-rx-pane="UPLOAD" th:hidden="${rxChoice != 'UPLOAD'}">
+                    <ul class="mz-rx-files" th:unless="${#lists.isEmpty(rxUploads)}">
+                        <li th:each="p : ${rxUploads}">
+                            <i class="bi bi-file-earmark-medical" aria-hidden="true"></i>
+                            <a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener"
+                               th:text="${#strings.isEmpty(p.originalFileName)} ? 'Prescription' : ${p.originalFileName}">rx.jpg</a>
+                            <span class="badge" th:classappend="${p.status.badge}" th:text="${p.status.label}">Awaiting review</span>
+                        </li>
+                    </ul>
+                    <form th:action="@{/prescriptions}" method="post" enctype="multipart/form-data" class="mz-rx-upload" data-mz-ai-busy>
+                        <input type="hidden" name="returnTo" value="checkout">
+                        <input class="form-control" type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" multiple required
+                               aria-label="Prescription files">
+                        <button class="btn btn-outline-primary" type="submit">Upload</button>
+                    </form>
+                </div>
+                <div class="mz-rx-pane" data-mz-rx-pane="CONSULT" th:hidden="${rxChoice != 'CONSULT'}">
+                    <p class="mz-rx-consult"><i class="bi bi-person-badge" aria-hidden="true"></i>
+                        <span>Our pharmacist will reach you shortly and provide you a digital prescription.</span></p>
+                </div>
             </section>
 
             <!-- "Pay now" sends the chosen address on to the payment page, where the customer picks how to pay -->
             <form id="placeOrder" th:action="@{/checkout/payment}" method="get">
                 <!-- Each prescription medicine comes from whichever approved prescription has it (the one for its patient
-                     first, several if needed); nothing to choose. Anything none of them covers is named here. -->
-                <div th:if="${cart.prescriptionRequired}" class="mz-panel mb-4">
+                     first, several if needed); nothing to choose. -->
+                <div th:if="${cart.prescriptionRequired and !rxNeeded}" class="mz-panel mb-4">
                     <h2 class="h5 mb-2">Prescriptions used</h2>
                     <ul class="mz-rx-covers small">
-                        <li th:each="i : ${cart.items}" th:if="${i.medicine.prescriptionRequired}"
+                        <li th:each="i : ${cart.orderable}" th:if="${i.medicine.prescriptionRequired}"
                             th:with="src=${rxCoverage.sourceOf(i.medicine.id)}">
                             <span><span class="fw-semibold" th:text="${i.medicine.name}">Acitrom 3</span>
                                 <span class="text-muted" th:text="' × ' + ${i.quantity}"></span></span>
@@ -75,10 +93,6 @@
                             <span th:if="${#strings.isEmpty(src)}" class="text-danger text-end"><i class="bi bi-x-circle me-1"></i>Not covered</span>
                         </li>
                     </ul>
-                    <div th:unless="${rxCoverage.complete}" class="alert alert-warning small mt-2 mb-0">
-                        <span th:text="${#strings.listJoin(rxCoverage.problems, ' ')}"></span>
-                        Remove those items or change the quantity, or upload a prescription that includes them.
-                    </div>
                 </div>
             </form>
         </div>
@@ -151,8 +165,14 @@
                         <span th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></span>
                     </div>
                 </div>
-                <div th:unless="${#lists.isEmpty(cart.unavailable)}" class="alert alert-warning small">
-                    <span th:text="${#strings.listJoin(cart.unavailable.![medicine.name], ', ')} + ' can’t be delivered to this address. Remove them from the cart or choose another address.'"></span>
+                <!-- Can't be ordered to this address right now: stays in the cart, the rest is ordered -->
+                <div th:unless="${#lists.isEmpty(cart.unavailable)}" class="mz-co-unavailable mb-3">
+                    <div class="mz-co-unavailable-head"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>Items unavailable</div>
+                    <div th:each="i : ${cart.unavailable}" class="d-flex justify-content-between gap-2 small">
+                        <span th:text="${i.quantity} + ' × ' + ${i.medicine.name}"></span>
+                        <span class="text-nowrap" th:text="${i.product.unavailable} ? 'Not delivered here'
+                            : (${i.product.stock > 0} ? 'Only ' + ${i.product.stock} + ' left' : 'Out of stock')"></span>
+                    </div>
                 </div>
                 <a th:href="@{/cart}" class="small">Change who medicines are for</a>
                 <hr>
@@ -179,8 +199,10 @@
                 </div>
                 <!-- Phones and tablets: pinned to the bottom of the screen, so it never scrolls away (medizon.css) -->
                 <div class="mz-checkout-go">
-                    <button form="placeOrder" class="btn btn-primary w-100" type="submit"
-                            th:disabled="${selectedAddress == null or (cart.prescriptionRequired and !rxCoverage.complete) or minShort.signum() > 0}">
+                    <button form="placeOrder" class="btn btn-primary w-100" type="submit" data-mz-pay
+                            th:attr="data-blocked=${selectedAddress == null or minShort.signum() > 0 or cart.checkoutCount == 0}"
+                            th:disabled="${selectedAddress == null or minShort.signum() > 0 or cart.checkoutCount == 0
+                                or (rxNeeded and (rxChoice == '' or (rxChoice == 'UPLOAD' and #lists.isEmpty(rxUploads))))}">
                         Pay now</button>
                 </div>
                 <p class="small text-muted text-center mt-2 mb-0">Choose UPI, card, net banking, MediZon Money or pay on delivery next</p>

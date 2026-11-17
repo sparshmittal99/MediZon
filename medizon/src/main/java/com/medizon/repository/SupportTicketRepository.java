@@ -26,6 +26,9 @@ public interface SupportTicketRepository extends JpaRepository<SupportTicket, Lo
 
     List<SupportTicket> findTop300ByOrderByUpdatedAtDesc();
 
+    /** Prescription consultations about any of these orders. */
+    List<SupportTicket> findByOrderInAndConsultTrue(Collection<Order> orders);
+
     @Query("select avg(t.rating) from SupportTicket t where t.rating is not null")
     Double averageRating();
 

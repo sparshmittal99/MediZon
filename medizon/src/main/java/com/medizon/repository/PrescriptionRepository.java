@@ -21,9 +21,12 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, Long
     @Query("select count(u) from PrescriptionUse u where u.prescriptionItem.prescription = :p")
     long countOrderLinesWith(@Param("p") Prescription p);
 
-    /** Some order was placed against it (as the order's prescription, or a line's). */
+    @Query("select count(o) from CustomerOrder o join o.awaitedPrescriptions a where a = :p")
+    long countOrdersAwaiting(@Param("p") Prescription p);
+
+    /** Some order was placed against it (as the order's prescription, a line's, or uploaded at checkout for it). */
     default boolean usedForOrders(Prescription p) {
-        return countOrdersWith(p) > 0 || countOrderLinesWith(p) > 0;
+        return countOrdersWith(p) > 0 || countOrderLinesWith(p) > 0 || countOrdersAwaiting(p) > 0;
     }
     List<Prescription> findByUserAndStatusOrderByReviewedAtDesc(User user, PrescriptionStatus status);
     Optional<Prescription> findByIdAndUser(Long id, User user);

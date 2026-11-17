@@ -2,6 +2,7 @@ package com.medizon.service;
 
 import com.medizon.domain.*;
 import com.medizon.repository.CartItemRepository;
+import com.medizon.repository.OrderRepository;
 import com.medizon.repository.PrescriptionRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
@@ -32,17 +33,19 @@ public class PrescriptionCartFiller {
     private final NotificationService notifications;
     private final MemberService memberService;
     private final CartItemRepository cartItems;
+    private final OrderRepository orders;
     private final TransactionTemplate tx;
 
     public PrescriptionCartFiller(PrescriptionRepository prescriptions, CartService cartService, AddressService addressService,
                                   NotificationService notifications, MemberService memberService, CartItemRepository cartItems,
-                                  PlatformTransactionManager txManager) {
+                                  OrderRepository orders, PlatformTransactionManager txManager) {
         this.prescriptions = prescriptions;
         this.cartService = cartService;
         this.addressService = addressService;
         this.notifications = notifications;
         this.memberService = memberService;
         this.cartItems = cartItems;
+        this.orders = orders;
         this.tx = new TransactionTemplate(txManager);
         this.tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -55,6 +58,9 @@ public class PrescriptionCartFiller {
     /** After the approval is saved. */
     @TransactionalEventListener
     public void onApproved(PrescriptionService.Approved e) {
+        // Uploaded at checkout for an order already placed: its medicines are on that order, not for the cart
+        Boolean forOrder = tx.execute(s -> !orders.findAwaiting(e.prescriptionId(), OrderStatus.CANCELLED).isEmpty());
+        if (Boolean.TRUE.equals(forOrder)) return;
         try {
             Result r = addRemainingToCart(e.prescriptionId());
             Prescription p = r.prescription();

@@ -57,6 +57,8 @@ public class SupportService {
     /** Whose turn it is to answer the customer: support while it's with support, the team while it's with them. */
     public static boolean canReply(User staff, SupportTicket t) {
         if (t.getStatus().isClosed() || !canView(staff, t)) return false;
+        // A prescription consultation: the pharmacist or admin talks to the customer once they've started the chat
+        if (t.isConsult()) return t.isChatStarted() && (staff.isAdmin() || staff.is(Role.PHARMACIST));
         if (staff.isAdmin()) return true;
         if (t.getStatus() == TicketStatus.WITH_TEAM) return staff.is(t.getTeam());
         return staff.is(Role.SUPPORT);
@@ -74,14 +76,19 @@ public class SupportService {
 
     /** The team (or the admin) hands a solved ticket back to support. */
     public static boolean canHandBack(User staff, SupportTicket t) {
-        return t.getStatus() == TicketStatus.WITH_TEAM && canView(staff, t) && (staff.isAdmin() || staff.is(t.getTeam()));
+        return !t.isConsult() && t.getStatus() == TicketStatus.WITH_TEAM && canView(staff, t) && (staff.isAdmin() || staff.is(t.getTeam()));
     }
 
     /** Support closes tickets it holds; the admin can close any ticket that's still open. */
     public static boolean canClose(User staff, SupportTicket t) {
-        if (t.getStatus().isClosed()) return false;
+        if (t.getStatus().isClosed() || t.isConsultOpen()) return false;
         if (staff.isAdmin()) return true;
         return staff.is(Role.SUPPORT) && t.getStatus() != TicketStatus.WITH_TEAM;
+    }
+
+    /** A consultation still waiting for the pharmacist: the pharmacists and the admin chat, then approve or reject. */
+    public static boolean canConsult(User staff, SupportTicket t) {
+        return t.isConsultOpen() && !t.getStatus().isClosed() && (staff.isAdmin() || staff.is(Role.PHARMACIST)) && canView(staff, t);
     }
 
     /** The teams this ticket can go to: the store team only when it's about an order a store handled. */
@@ -326,7 +333,7 @@ public class SupportService {
         return m;
     }
 
-    private static TicketMessage system(String body) {
+    static TicketMessage system(String body) {
         TicketMessage m = new TicketMessage();
         m.setKind(TicketMessageKind.SYSTEM);
         m.setBody(body);

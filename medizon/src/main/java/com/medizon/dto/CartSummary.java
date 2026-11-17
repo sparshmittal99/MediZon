@@ -95,10 +95,23 @@ public class CartSummary {
     public long getSelectedCount() { return items.stream().filter(CartItem::isSelected).count(); }
 
     /**
-     * Ticked lines that can't be ordered right now (out of stock, too few packs, or not sold here): checkout waits until
-     * they're unticked or removed, as placing the order would stop on them.
+     * Ticked lines that can be ordered right now: what checkout places. Lines that can't (out of stock, too few packs,
+     * or not sold here) stay in the cart for later.
      */
-    public long getBlockedCount() { return items.stream().filter(i -> i.isSelected() && !i.isAvailable()).count(); }
+    public long getCheckoutCount() { return items.stream().filter(CartItem::isCounted).count(); }
+
+    /** The lines checkout orders: ticked and deliverable, in cart order. */
+    public List<CartItem> getOrderable() { return items.stream().filter(CartItem::isCounted).toList(); }
+
+    /** Every line for the cart page: the ones that can't be ordered right now first, then the rest, each in cart order. */
+    public List<CartItem> getDisplayItems() {
+        List<CartItem> out = new ArrayList<>(getUnavailable());
+        out.addAll(getAvailable());
+        return out;
+    }
+
+    /** Every deliverable line, ticked or not, in cart order; the cart lists these below the unavailable ones. */
+    public List<CartItem> getAvailable() { return items.stream().filter(CartItem::isAvailable).toList(); }
 
     /** Every line is ticked (true for an empty cart). */
     public boolean isAllSelected() { return items.stream().allMatch(CartItem::isSelected); }

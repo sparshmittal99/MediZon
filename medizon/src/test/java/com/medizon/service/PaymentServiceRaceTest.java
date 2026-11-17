@@ -122,7 +122,7 @@ class PaymentServiceRaceTest {
         when(orders.findByGatewayOrderIdOrderByIdAsc("order_ABC")).thenReturn(List.of());
         CartSummary cart = mock(CartSummary.class);
         when(cart.getTotal()).thenReturn(new BigDecimal("120.00"));
-        when(orderService.ready(any(), any(), any())).thenReturn(new OrderService.Ready(null, cart, null, null));
+        when(orderService.ready(any(), any(), any())).thenReturn(new OrderService.Ready(null, cart, null, null, null, List.of()));
         when(orderService.due(any(), any(), anyBoolean())).thenReturn(new OrderService.Due(BigDecimal.ZERO, new BigDecimal("120.00")));
         when(orderService.checkout(any(), any(), any(), any(), anyBoolean(), any(), any(), any(), any())).thenReturn(List.of(order));
 

@@ -61,8 +61,15 @@ public class OrderService {
 
     // ------------------------------------------------------------------ customer checkout
 
-    /** A cart checked as checkout would check it: deliverable to {@code ship}, prescriptions covered, promo valid. */
-    public record Ready(Address ship, CartSummary cart, PrescriptionService.Coverage coverage, CouponService.Applied promo) {}
+    /**
+     * A cart checked as checkout would check it: something deliverable to {@code ship}, prescriptions covered (or how
+     * the rest get one: {@code rxCheck}, with the prescriptions uploaded at checkout), promo valid.
+     */
+    public record Ready(Address ship, CartSummary cart, PrescriptionService.Coverage coverage, CouponService.Applied promo,
+                        RxCheck rxCheck, List<Prescription> uploads) {}
+
+    /** Published once orders are placed waiting for their prescription: a consultation is opened for "No prescription". */
+    public record AwaitingPrescription(List<Long> orderIds, RxCheck rxCheck) {}
 
     /**
      * Checks the cart can be ordered to {@code addressId}, before anything is paid for, the same way placing it does.
@@ -78,46 +85,35 @@ public class OrderService {
         if (cart.isEmpty()) {
             throw new BusinessException(cartService.count(user) > 0 ? "Tick at least one item in your cart to check out." : "Your cart is empty.");
         }
-        if (!cart.getUnavailable().isEmpty()) throw new BusinessException(unavailableReason(cart.getUnavailable(), ship.getPincode()));
+        // Lines that can't be ordered right now (out of stock, too few packs, not sold here) stay in the cart; the
+        // rest is ordered
+        if (cart.getCheckoutCount() == 0) {
+            throw new BusinessException("None of the items you selected can be delivered to this address right now.");
+        }
 
         // The admin's minimum order value, on the medicines before any promo or delivery fee
         orderSettings.requireMinimum(cart.getSubtotal());
 
         // Each prescription medicine comes from the customer's approved prescriptions: the one written for its
-        // patient first, several if one hasn't enough. Anything none of them covers stops the checkout.
+        // patient first, several if one hasn't enough. The rest get one as the customer chose: uploaded now for the
+        // pharmacist to approve, or a digital prescription from a pharmacist who talks to them.
         PrescriptionService.Coverage coverage = prescriptionService.cover(user, rxLines(cart));
-        coverage.require();
+        RxCheck rxCheck = null;
+        List<Prescription> uploads = List.of();
+        if (!coverage.isComplete()) {
+            rxCheck = cartService.rxChoice(user)
+                    .orElseThrow(() -> new BusinessException("Choose Upload prescription or No prescription."));
+            if (rxCheck == RxCheck.UPLOAD) {
+                uploads = prescriptionService.checkoutUploads(user);
+                if (uploads.isEmpty()) throw new BusinessException("Upload your prescription to place the order.");
+            }
+        }
 
         CouponService.Applied promo = coupons.require(user, couponCode, cart.getSubtotal());
-        for (CartItem i : cart.getItems()) {
+        for (CartItem i : cart.getOrderable()) {
             if (i.getMembers().isEmpty()) throw new BusinessException("Choose who " + i.getMedicine().getName() + " is for.");
         }
-        return new Ready(ship, cart, coverage, promo);
-    }
-
-    /**
-     * Why ticked lines can't be ordered, as the cart shows them: out of stock, fewer packs than wanted, or not sold to
-     * this PIN code at all. "Dolo 650 is out of stock right now. Untick or remove it to check out."
-     */
-    static String unavailableReason(List<CartItem> unavailable, String pincode) {
-        List<String> gone = new ArrayList<>(), notSold = new ArrayList<>(), parts = new ArrayList<>();
-        for (CartItem i : unavailable) {
-            String name = i.getMedicine().getName();
-            int left = i.getProduct().getStock();
-            if (i.getProduct().isUnavailable()) notSold.add(name);
-            else if (left <= 0) gone.add(name);
-            else parts.add(left == 1 ? "Only 1 pack of " + name + " is available right now."
-                    : "Only " + left + " packs of " + name + " are available right now.");
-        }
-        if (!gone.isEmpty()) {
-            parts.add(0, String.join(", ", gone) + (gone.size() == 1 ? " is" : " are") + " out of stock right now.");
-        }
-        if (!notSold.isEmpty()) {
-            parts.add(String.join(", ", notSold) + (notSold.size() == 1 ? " isn't" : " aren't") + " sold for delivery to " + pincode + ".");
-        }
-        int n = unavailable.size();
-        return String.join(" ", parts) + " Untick or remove " + (n == 1 ? "it" : "them") + " to check out"
-                + (notSold.isEmpty() ? "." : ", or choose another address.");
+        return new Ready(ship, cart, coverage, promo, rxCheck, uploads);
     }
 
     /** What MediZon Money pays of {@code total} (as far as the balance goes, if it's used) and what's left to pay. */
@@ -166,12 +162,23 @@ public class OrderService {
         }
 
         List<Line> lines = new ArrayList<>();
-        for (CartItem i : cart.getItems()) {
+        for (CartItem i : cart.getOrderable()) {
             lines.add(new Line(i.getMedicine().getId(), i.getQuantity(), i.getAllocation(), i.getOthersPatientName()));
         }
 
         List<Order> placed = createOrders(user, lines, paymentMethod == null ? PaymentMethod.UPI : paymentMethod,
                 coverage, OrderSource.CUSTOMER, ship, promo);
+        // Prescription medicines no approved prescription covered: the order waits for its prescription
+        List<Long> awaiting = new ArrayList<>();
+        if (ready.rxCheck() != null) {
+            for (Order o : placed) {
+                if (!hasUncoveredRx(o)) continue;
+                o.setRxCheck(ready.rxCheck());
+                o.setRxReview(RxReview.PENDING);
+                o.getAwaitedPrescriptions().addAll(ready.uploads());
+                awaiting.add(o.getId());
+            }
+        }
         if (charge != null && !charge.isFree() && !placed.isEmpty()) {
             Order biggest = placed.get(0);              // createOrders puts the biggest first, with the delivery fee
             biggest.setPaymentFee(charge.amount());
@@ -208,7 +215,7 @@ public class OrderService {
         }
         prescriptionService.finishUse(coverage.prescriptions());
         stockHolds.releaseFor(user.getId());                        // what was held for them is now sold to them
-        Cart from = cartService.checkOut(user, cart.getItems());   // only what was ordered; unticked lines stay in the cart
+        Cart from = cartService.checkOut(user, cart.getOrderable());   // only what was ordered; the rest stays in the cart
         placed.forEach(o -> o.setCart(from));
         if (placed.size() == 1) {
             Order o = placed.get(0);
@@ -223,7 +230,19 @@ public class OrderService {
         }
         placed.forEach(this::alertStore);
         placed.forEach(o -> events.publishEvent(new OrderEmailService.Placed(o.getId())));
+        if (!awaiting.isEmpty()) events.publishEvent(new AwaitingPrescription(awaiting, ready.rxCheck()));
         return placed;
+    }
+
+    /** A prescription medicine on it isn't (fully) taken from an approved prescription. */
+    public static boolean hasUncoveredRx(Order o) {
+        return o.getItems().stream().anyMatch(OrderService::uncoveredPacks);
+    }
+
+    /** A prescription medicine line with packs no prescription covers yet. */
+    public static boolean uncoveredPacks(OrderItem i) {
+        if (!i.getMedicine().isPrescriptionRequired()) return false;
+        return i.getPrescriptionUses().stream().mapToInt(PrescriptionUse::getPacks).sum() < i.getQuantity();
     }
 
     /**
@@ -242,7 +261,7 @@ public class OrderService {
     /** The cart's prescription medicines, with the packs and the patients each is for, to cover from prescriptions. */
     public static List<PrescriptionService.RxLine> rxLines(CartSummary cart) {
         List<PrescriptionService.RxLine> out = new ArrayList<>();
-        for (CartItem i : cart.getItems()) {
+        for (CartItem i : cart.getOrderable()) {
             if (!i.getMedicine().isPrescriptionRequired()) continue;
             Set<String> patients = new LinkedHashSet<>();
             i.getAllocation().keySet().forEach(m -> {
@@ -263,7 +282,8 @@ public class OrderService {
 
     private void alertStore(Order o) {
         staffAlerts.notifyStore(o.getStore(), false, NotificationType.ORDER_UPDATE, "New order " + o.getOrderNumber(),
-                o.getItemCount() + " pack(s), ₹" + o.getTotal() + (o.isAutoReorder() ? " (automatic refill)." : "."),
+                o.getItemCount() + " pack(s), ₹" + o.getTotal() + (o.isAutoReorder() ? " (automatic refill)." : ".")
+                        + (o.isAwaitingPrescription() ? " Its prescription is with the pharmacist; confirm it once approved." : ""),
                 "/admin/orders/" + o.getId());
     }
 
@@ -536,6 +556,7 @@ public class OrderService {
                 "Order " + next.getLabel().toLowerCase(),
                 (next == OrderStatus.CANCELLED
                         ? "Order " + o.getOrderNumber() + " for ₹" + o.getTotal() + " is cancelled."
+                                + (o.getCancelReason() != null ? " " + o.getCancelReason() : "")
                         : "Order " + o.getOrderNumber() + " is now " + next.getLabel().toLowerCase() + ".")
                         + (next == OrderStatus.SHIPPED ? " Your tax invoice " + o.getInvoiceNumber() + " is ready on the order page." : "")
                         + (next == OrderStatus.OUT_FOR_DELIVERY ? " Our delivery partner is out for delivery with your package." : "")

@@ -107,7 +107,9 @@ public class OrderEmailService {
             case SHIPPED -> "Great news! Your order #" + order.getOrderNumber() + " has been packed and shipped. Your tax invoice is now ready.";
             case OUT_FOR_DELIVERY -> "Our delivery partner is out for delivery with your package and will reach your address shortly.";
             case DELIVERED -> "Your order #" + order.getOrderNumber() + " has been delivered. We hope everything arrived in good shape!";
-            case CANCELLED -> "Your order #" + order.getOrderNumber() + " has been cancelled. Any applicable refund has been processed.";
+            case CANCELLED -> "Your order #" + order.getOrderNumber() + " has been cancelled."
+                    + (order.getCancelReason() != null ? " " + order.getCancelReason() : "")
+                    + " Any applicable refund has been processed.";
             default -> "Your order #" + order.getOrderNumber() + " status is now " + nextStatus.getLabel() + ".";
         };
 

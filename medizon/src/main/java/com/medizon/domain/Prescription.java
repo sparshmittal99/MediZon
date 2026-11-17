@@ -75,6 +75,18 @@ public class Prescription {
     @Column(columnDefinition = "boolean default false not null")
     private boolean removed;
 
+    /** Uploaded at checkout, for an order placed before it's approved: approving it doesn't fill the cart. */
+    @Column(columnDefinition = "boolean default false not null")
+    private boolean checkoutUpload;
+
+    /** Issued by a MediZon pharmacist after talking to the customer, for an order placed without a prescription. */
+    @Column(columnDefinition = "boolean default false not null")
+    private boolean digital;
+
+    /** The pharmacist (or admin) who issued a digital prescription. */
+    @Column(length = 100)
+    private String issuedBy;
+
     /**
      * The medicines it covers and how many packs, as the pharmacist approved. Empty only on prescriptions approved
      * before quantities were recorded, which can no longer be ordered with ({@link #isLegacy()}).
@@ -125,7 +137,14 @@ public class Prescription {
 
     public boolean isImage() { return contentType != null && contentType.startsWith("image/"); }
 
+    /** Who it's from: "Dr. Ambrose", "MediZon pharmacist Priya Shah"; null when unknown. */
+    public String getPrescriber() {
+        if (digital) return "MediZon pharmacist" + (issuedBy == null || issuedBy.isBlank() ? "" : " " + issuedBy.trim());
+        return doctorName == null || doctorName.isBlank() ? null : "Dr. " + doctorName.trim();
+    }
+
     public String getLabel() {
+        if (digital) return "Digital prescription (" + (prescribedOn != null ? prescribedOn : uploadedAt.toLocalDate()) + ")";
         String d = doctorName == null || doctorName.isBlank() ? "Prescription" : "Dr. " + doctorName;
         return d + " (uploaded " + uploadedAt.toLocalDate() + ")";
     }

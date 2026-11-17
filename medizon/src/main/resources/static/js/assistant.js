@@ -321,6 +321,25 @@
     });
     panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { close(); launcher.focus(); } });
 
+    // ---------------------------------------------------------------- front page on phones and in the app
+    // The round chat button only at the top of the front page. Scrolled down, or with a popup open (the location
+    // picker), it's the slim tab on the edge as on every other page; back at the top, the round button returns.
+    if (root.dataset.front === '1') {
+        const phone = window.matchMedia('(max-width: 767.98px)');
+        let popup = false;
+        const tuck = () => {
+            if (root.classList.contains('is-open')) return;          // never moves while the chat is open
+            root.classList.toggle('is-tucked', phone.matches && (popup || window.scrollY > 24));
+        };
+        window.addEventListener('scroll', tuck, { passive: true });
+        document.addEventListener('show.bs.modal', () => { popup = true; tuck(); });
+        document.addEventListener('hidden.bs.modal', () => { popup = !!document.querySelector('.modal.show'); tuck(); });
+        if (phone.addEventListener) phone.addEventListener('change', tuck);
+        // After closing the chat, catch up with where the page is now
+        [launcher, root.querySelector('[data-mz-bot-close]')].forEach(b => b.addEventListener('click', () => setTimeout(tuck, 250)));
+        tuck();
+    }
+
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         const text = input.value;

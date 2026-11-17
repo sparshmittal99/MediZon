@@ -33,6 +33,10 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     List<Order> findByGatewayOrderIdOrderByIdAsc(String gatewayOrderId);
     Optional<Order> findByOrderNumberIgnoreCase(String orderNumber);
 
+    /** Orders placed with this prescription uploaded at checkout, cancelled ones left out. */
+    @Query("select o from CustomerOrder o join o.awaitedPrescriptions a where a.id = :id and o.status <> :cancelled order by o.id")
+    List<Order> findAwaiting(@Param("id") Long prescriptionId, @Param("cancelled") OrderStatus cancelled);
+
     /** When the first order was placed, for the years the Orders filter offers. */
     @Query("select min(o.createdAt) from CustomerOrder o")
     LocalDateTime firstCreatedAt();

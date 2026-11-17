@@ -23,16 +23,21 @@
     <div class="row g-4" th:unless="${cart.empty}">
         <div class="col-lg-8">
             <div class="mz-cart-list">
-                <!-- One card per line. data-mrp / data-unit feed the struck MRP and "You save" figures (medizon.js). -->
-                <article th:each="i : ${cart.items}" class="mz-cart-item" data-mz-cart-row
-                         th:classappend="(${!i.available} ? 'mz-cart-unavailable ' : '') + (${!guest and !i.selected} ? 'is-unticked' : '')"
+                <!-- One card per line, the ones that can't be ordered right now first. data-mrp / data-unit feed the
+                     struck MRP and "You save" figures (medizon.js). -->
+                <th:block th:each="i, s : ${cart.displayItems}">
+                <h2 th:if="${s.first and !i.available}" class="mz-cart-group">
+                    <i class="bi bi-exclamation-circle" aria-hidden="true"></i>Items unavailable</h2>
+                <article class="mz-cart-item" data-mz-cart-row
+                         th:classappend="(${!i.available} ? 'mz-cart-unavailable ' : '') + (${!guest and i.available and !i.selected} ? 'is-unticked ' : '')
+                                         + (${i.available and s.index > 0 and s.index == #lists.size(cart.unavailable)} ? 'mz-cart-after-group' : '')"
                          th:with="oos=${!i.product.unavailable and i.product.stock <= 0},
                                   mrp=${i.medicine.mrp},
                                   off=${i.medicine.mrp != null and i.medicine.mrp.compareTo(i.unitPrice) > 0
                                         ? i.medicine.mrp.subtract(i.unitPrice).multiply(100).divide(i.medicine.mrp, 0, T(java.math.RoundingMode).HALF_UP) : 0}"
                          th:attr="data-mrp=${mrp},data-unit=${i.unitPrice}">
                     <div class="mz-cart-main">
-                        <label th:unless="${guest}" class="mz-check mz-cart-check">
+                        <label th:unless="${guest or !i.available}" class="mz-check mz-cart-check">
                             <input type="checkbox" th:checked="${i.selected}"
                                    th:attr="data-mz-select=${i.medicine.id},aria-label='Select ' + ${i.medicine.name} + ' for checkout'">
                             <span class="mz-check-box" aria-hidden="true"></span>
@@ -101,6 +106,7 @@
                         <div class="mz-qty-error small" role="alert" hidden></div>
                     </div>
                 </article>
+                </th:block>
 
             </div>
         </div>
@@ -128,16 +134,13 @@
                 </div>
 
                 <!-- Nothing ticked: say so, and checkout waits (medizon.js keeps it current) -->
-                <div th:unless="${guest}" class="mz-cart-none" role="status" data-mz-none-selected th:hidden="${cart.selectedCount > 0}">
+                <div th:unless="${guest}" class="mz-cart-none" role="status" data-mz-none-selected th:hidden="${cart.checkoutCount > 0 or #lists.isEmpty(cart.available)}">
                     <i class="bi bi-check2-square" aria-hidden="true"></i><span>Select the items you want to check out.</span></div>
-                <!-- A ticked item that can't be ordered right now: checkout waits until it's unticked or removed -->
-                <div th:unless="${guest}" class="mz-cart-none" role="status" data-mz-blocked th:hidden="${cart.blockedCount == 0}">
-                    <i class="bi bi-exclamation-circle" aria-hidden="true"></i><span>Untick or remove items that can't be ordered right now to check out.</span></div>
                 <div class="mz-rx-note small" data-mz-rx-note th:hidden="${!cart.prescriptionRequired}">
                     <i class="bi bi-file-earmark-medical me-1" aria-hidden="true"></i>Some items need a prescription. You'll choose or upload one at checkout.
                 </div>
                 <!-- The admin's minimum order value: below it, how much more to add (kept current by the page script) -->
-                <div class="mz-min-order" role="status" data-mz-min-order th:hidden="${minShort.signum() == 0 or cart.selectedCount == 0 or cart.blockedCount == cart.selectedCount}"
+                <div class="mz-min-order" role="status" data-mz-min-order th:hidden="${minShort.signum() == 0 or cart.checkoutCount == 0}"
                      th:attr="data-min=${minOrder}">
                     <div class="d-flex gap-2 align-items-start">
                         <i class="bi bi-basket2 text-warning" aria-hidden="true"></i>
@@ -158,10 +161,10 @@
                      fixed above the tab bar (app.css). -->
                 <div class="mz-cart-pay">
                     <a th:unless="${guest}" th:href="@{/checkout}" class="btn btn-primary mz-cart-go" data-mz-checkout-link
-                       th:classappend="${minShort.signum() > 0 or cart.selectedCount == 0 or cart.blockedCount > 0} ? 'disabled'"
-                       th:attr="aria-disabled=${minShort.signum() > 0 or cart.selectedCount == 0 or cart.blockedCount > 0}">
+                       th:classappend="${minShort.signum() > 0 or cart.checkoutCount == 0} ? 'disabled'"
+                       th:attr="aria-disabled=${minShort.signum() > 0 or cart.checkoutCount == 0}">
                         Checkout<span class="mz-cart-go-n" data-mz-checkout-count
-                              th:text="${cart.selectedCount} + (${cart.selectedCount == 1} ? ' item' : ' items')">3 items</span><i class="bi bi-arrow-right ms-2" aria-hidden="true"></i></a>
+                              th:text="${cart.checkoutCount} + (${cart.checkoutCount == 1} ? ' item' : ' items')">3 items</span><i class="bi bi-arrow-right ms-2" aria-hidden="true"></i></a>
                     <!-- /checkout needs a signed-in customer: Spring Security sends visitors to sign in, then back to checkout. -->
                     <a th:if="${guest}" th:href="@{/checkout}" class="btn btn-primary mz-cart-go">
                         <i class="bi bi-box-arrow-in-right me-2" aria-hidden="true"></i>Sign in to checkout</a>

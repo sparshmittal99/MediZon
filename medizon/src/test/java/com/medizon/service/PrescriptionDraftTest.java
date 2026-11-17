@@ -62,7 +62,8 @@ class PrescriptionDraftTest {
         members = mock(MemberService.class);
         staffAlerts = mock(StaffAlerts.class);
         service = new PrescriptionService(prescriptions, mock(MedicineRepository.class), mock(FileStorageService.class),
-                mock(NotificationService.class), staffAlerts, mock(ApplicationEventPublisher.class), cartItems, members);
+                mock(NotificationService.class), staffAlerts, mock(ApplicationEventPublisher.class), cartItems, members,
+                mock(com.medizon.repository.OrderRepository.class));
         me = member(1, MemberKind.SELF, "Sparsh");
         mom = member(2, MemberKind.FAMILY, "Mummy");
         others = member(3, MemberKind.OTHERS, "Others");

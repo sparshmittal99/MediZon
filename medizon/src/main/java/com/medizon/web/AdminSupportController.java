@@ -5,6 +5,7 @@ import com.medizon.domain.SupportTicket;
 import com.medizon.domain.TicketTopic;
 import com.medizon.domain.User;
 import com.medizon.service.CurrentUser;
+import com.medizon.service.PrescriptionCheckService;
 import com.medizon.service.SupportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +29,7 @@ import java.util.Map;
 public class AdminSupportController {
 
     private final SupportService support;
+    private final PrescriptionCheckService rxCheck;
     private final CurrentUser currentUser;
 
     /** A team in the "Pass to a team" list. */
@@ -65,8 +68,74 @@ public class AdminSupportController {
         model.addAttribute("teams", SupportService.teamsFor(t).stream().map(r -> new TeamOption(r, SupportTicket.teamLabel(r))).toList());
         model.addAttribute("closingMessage", SupportService.CLOSING_MESSAGE);
         model.addAttribute("maxImages", SupportService.MAX_IMAGES);
+        // A prescription consultation: chat with the customer, then approve (and build the prescription) or reject
+        model.addAttribute("canConsult", SupportService.canConsult(me, t));
+        if (t.isConsult()) {
+            model.addAttribute("consultOrders", rxCheck.consultOrders(t));
+            model.addAttribute("consultItems", rxCheck.rxItems(t));
+        }
         model.addAttribute("active", "support");
         return "admin/support-ticket";
+    }
+
+    /** "Chat with customer": the first message introduces the pharmacist and lists the prescription medicines. */
+    @PostMapping("/{id}/consult/start")
+    public String startChat(@PathVariable Long id) {
+        rxCheck.startChat(id, currentUser.get());
+        return "redirect:/admin/support/" + id + "#latest";
+    }
+
+    /** Approve: the screen for how to take each medicine, which then builds the digital prescription. */
+    @GetMapping("/{id}/consult/prescription")
+    public String prescriptionForm(@PathVariable Long id, Model model, RedirectAttributes ra) {
+        User me = currentUser.get();
+        SupportTicket t = support.getForStaff(id, me);
+        if (!SupportService.canConsult(me, t) || !t.isChatStarted()) {
+            ra.addFlashAttribute("error", t.isConsultOpen() ? "Start the chat with the customer first." : "This prescription has already been decided.");
+            return "redirect:/admin/support/" + id;
+        }
+        List<PrescriptionCheckService.RxItem> items = rxCheck.rxItems(t);
+        model.addAttribute("t", t);
+        model.addAttribute("items", items);
+        model.addAttribute("patient", rxCheck.patientFor(t, items));
+        model.addAttribute("orders", rxCheck.consultOrders(t));
+        model.addAttribute("doses", PrescriptionCheckService.DOSES);
+        model.addAttribute("food", PrescriptionCheckService.FOOD);
+        model.addAttribute("maxDays", PrescriptionCheckService.MAX_DAYS);
+        model.addAttribute("active", "support");
+        return "admin/consult-prescription";
+    }
+
+    @PostMapping("/{id}/consult/prescription")
+    public String approve(@PathVariable Long id, @RequestParam(required = false) String patientName,
+                          @RequestParam(required = false) String advice,
+                          @RequestParam(name = "medicineId", required = false) List<Long> medicineIds,
+                          @RequestParam Map<String, String> form, RedirectAttributes ra) {
+        List<PrescriptionCheckService.Dose> doses = new ArrayList<>();
+        if (medicineIds != null) {
+            for (Long m : medicineIds) {
+                doses.add(new PrescriptionCheckService.Dose(m, form.get("morning_" + m), form.get("noon_" + m),
+                        form.get("night_" + m), form.get("food_" + m), days(form.get("days_" + m))));
+            }
+        }
+        rxCheck.approve(id, currentUser.get(), patientName, advice, doses);
+        ra.addFlashAttribute("success", "Digital prescription issued and saved to the customer's prescriptions.");
+        return "redirect:/admin/support/" + id;
+    }
+
+    @PostMapping("/{id}/consult/reject")
+    public String reject(@PathVariable Long id, RedirectAttributes ra) {
+        rxCheck.reject(id, currentUser.get());
+        ra.addFlashAttribute("success", "Prescription rejected. The order is cancelled and the customer has been told.");
+        return "redirect:/admin/support/" + id;
+    }
+
+    private static Integer days(String v) {
+        try {
+            return v == null || v.isBlank() ? null : Integer.valueOf(v.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     @GetMapping("/{id}/latest")

@@ -35,7 +35,7 @@ public class InvoicePdfService {
 
     private static final String FONT = "Figtree";
     private static final String FALLBACK_FONT = "Noto Sans";
-    private static final String LOGO = logoDataUri();
+    static final String LOGO = logoDataUri();
 
     private final InvoiceService invoiceService;
     private final TemplateEngine templateEngine;
@@ -69,7 +69,7 @@ public class InvoicePdfService {
         return "MediZon-invoice-" + number.replaceAll("[^A-Za-z0-9-]+", "-") + ".pdf";
     }
 
-    private static InputStream font(String file) {
+    static InputStream font(String file) {
         InputStream in = InvoicePdfService.class.getResourceAsStream("/fonts/" + file);
         if (in == null) throw new IllegalStateException("Missing font /fonts/" + file);
         return in;

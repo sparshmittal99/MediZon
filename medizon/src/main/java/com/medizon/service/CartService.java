@@ -5,6 +5,7 @@ import com.medizon.domain.CartItem;
 import com.medizon.domain.CartStatus;
 import com.medizon.domain.Medicine;
 import com.medizon.domain.Member;
+import com.medizon.domain.RxCheck;
 import com.medizon.domain.Shares;
 import com.medizon.domain.User;
 import com.medizon.dto.CartSummary;
@@ -172,6 +173,17 @@ public class CartService {
         return carts.findFirstByUserAndStatusOrderByIdAsc(user, CartStatus.ACTIVE);
     }
 
+    /** How the customer chose to get a prescription at checkout, kept with their open cart. */
+    @Transactional(readOnly = true)
+    public Optional<RxCheck> rxChoice(User user) {
+        return activeCart(user).map(Cart::getRxChoice);
+    }
+
+    @Transactional
+    public void setRxChoice(User user, RxCheck choice) {
+        activeCart(user).ifPresent(c -> c.setRxChoice(choice));
+    }
+
     private Cart openCart(User user) {
         return activeCart(user).orElseGet(() -> carts.save(new Cart(user)));
     }
@@ -266,7 +278,7 @@ public class CartService {
         BigDecimal subtotal = items.stream().filter(CartItem::isCounted).map(CartItem::getLineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal fee = deliveryFeeFor(subtotal);
-        boolean rx = items.stream().anyMatch(i -> i.isSelected() && i.getMedicine().isPrescriptionRequired());
+        boolean rx = items.stream().anyMatch(i -> i.isCounted() && i.getMedicine().isPrescriptionRequired());
         return new CartSummary(items, subtotal, fee, rx, couponCode == null ? null : coupons.evaluate(user, couponCode, subtotal));
     }
 

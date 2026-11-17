@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Digital prescription')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: adminNav}"></div>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<!-- A pharmacist (or the admin) approves a prescription consultation: how to take each prescription medicine of the
+     order, M-A-N ("1-0-1"), when and for how long. Building it saves the PDF to the customer's prescriptions. -->
+<main class="container mz-page">
+    <a th:href="@{/admin/support/{id}(id=${t.id})}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> <span th:text="${t.number}"></span></a>
+    <h1 class="mz-page-title mt-2 mb-1">Digital prescription</h1>
+    <p class="text-muted mb-4">
+        <span th:text="'Order ' + ${#strings.listJoin(orders.![orderNumber], ', ')}"></span> · <span th:text="${t.user.fullName}"></span>
+    </p>
+
+    <form th:action="@{/admin/support/{id}/consult/prescription(id=${t.id})}" method="post" class="row g-4">
+        <div class="col-lg-8">
+            <section class="mz-panel">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="patientName">Patient</label>
+                    <input class="form-control" id="patientName" name="patientName" th:value="${patient}" maxlength="100" required>
+                </div>
+                <h2 class="h6 mb-0">Medicines</h2>
+                <div th:each="i : ${items}" class="mz-dose-row" th:with="id=${i.medicine().id}">
+                    <input type="hidden" name="medicineId" th:value="${id}">
+                    <div class="d-flex justify-content-between align-items-baseline gap-2 mb-2">
+                        <span class="fw-semibold" th:text="${i.medicine().name}">Acitrom 3</span>
+                        <span class="small text-muted text-nowrap" th:text="${i.packs()} + (${i.packs() == 1} ? ' pack' : ' packs')">2 packs</span>
+                    </div>
+                    <div class="mz-dose-grid">
+                        <div>
+                            <label class="form-label" th:for="'morning' + ${id}">Morning</label>
+                            <select class="form-select" th:id="'morning' + ${id}" th:name="'morning_' + ${id}">
+                                <option th:each="d : ${doses}" th:value="${d}" th:text="${d}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" th:for="'noon' + ${id}">Afternoon</label>
+                            <select class="form-select" th:id="'noon' + ${id}" th:name="'noon_' + ${id}">
+                                <option th:each="d : ${doses}" th:value="${d}" th:text="${d}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" th:for="'night' + ${id}">Night</label>
+                            <select class="form-select" th:id="'night' + ${id}" th:name="'night_' + ${id}">
+                                <option th:each="d : ${doses}" th:value="${d}" th:text="${d}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" th:for="'food' + ${id}">When</label>
+                            <select class="form-select" th:id="'food' + ${id}" th:name="'food_' + ${id}">
+                                <option th:each="f : ${food}" th:value="${f}" th:text="${f}"></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" th:for="'days' + ${id}">Days</label>
+                            <input class="form-control" type="number" inputmode="numeric" min="1" th:max="${maxDays}"
+                                   th:id="'days' + ${id}" th:name="'days_' + ${id}" required>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <div class="col-lg-4">
+            <section class="mz-panel">
+                <label class="form-label fw-semibold" for="advice">Advice <span class="text-muted fw-normal">(optional)</span></label>
+                <textarea class="form-control" id="advice" name="advice" rows="4" maxlength="1000"></textarea>
+                <button class="btn btn-success w-100 mt-3" type="submit">
+                    <i class="bi bi-file-earmark-check me-1" aria-hidden="true"></i>Build prescription</button>
+            </section>
+        </div>
+    </form>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

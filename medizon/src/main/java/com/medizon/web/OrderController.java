@@ -78,9 +78,15 @@ public class OrderController {
         model.addAttribute("minOrder", orderSettings.minOrderValue());
         model.addAttribute("minShort", OrderSettingsService.shortBy(cart.getSubtotal(), orderSettings.minOrderValue()));
         addPromos(user, cart, model);
-        model.addAttribute("prescriptions", prescriptionService.validForUser(user));
-        // Which prescription(s) each prescription medicine comes from, and anything none of them covers
-        model.addAttribute("rxCoverage", prescriptionService.cover(user, OrderService.rxLines(cart)));
+        // Which prescription(s) each prescription medicine comes from
+        PrescriptionService.Coverage coverage = prescriptionService.cover(user, OrderService.rxLines(cart));
+        model.addAttribute("rxCoverage", coverage);
+        // What none of them covers: uploaded now for the pharmacist, or "No prescription" and a pharmacist gets in touch
+        List<Prescription> uploads = prescriptionService.checkoutUploads(user);
+        RxCheck rxChoice = cartService.rxChoice(user).orElse(uploads.isEmpty() ? null : RxCheck.UPLOAD);
+        model.addAttribute("rxNeeded", cart.isPrescriptionRequired() && !coverage.isComplete());
+        model.addAttribute("rxUploads", uploads);
+        model.addAttribute("rxChoice", rxChoice == null ? "" : rxChoice.name());
         model.addAttribute("addresses", addresses);
         model.addAttribute("serviceable", serviceable);
         model.addAttribute("selectedAddress", selected);
@@ -101,6 +107,14 @@ public class OrderController {
         addPromos(user, cart, model);
         model.addAttribute("selectedAddress", address);
         return "checkout-coupons";
+    }
+
+    /** Remembers Upload prescription or No prescription as the customer switches between them at checkout. */
+    @PostMapping("/checkout/prescription")
+    @ResponseBody
+    public Map<String, String> choosePrescription(@RequestParam RxCheck rx) {
+        cartService.setRxChoice(currentUser.get(), rx);
+        return Map.of("rx", rx.name());
     }
 
     /** The coupons on offer, biggest saving first, and which of them this customer already used today. */
@@ -164,10 +178,12 @@ public class OrderController {
      * (CheckoutApi).
      */
     @GetMapping("/checkout/payment")
-    public String payment(@RequestParam(required = false) Long addressId, HttpSession session, Model model, RedirectAttributes ra) {
+    public String payment(@RequestParam(required = false) Long addressId, @RequestParam(required = false) RxCheck rx,
+                          HttpSession session, Model model, RedirectAttributes ra) {
         User user = currentUser.get();
         String recovered = recovered(user, session, ra);
         if (recovered != null) return recovered;
+        if (rx != null) cartService.setRxChoice(user, rx);     // kept with the cart for when the order is placed
         String coupon = (String) session.getAttribute(COUPON);
         OrderService.Ready ready;
         try {

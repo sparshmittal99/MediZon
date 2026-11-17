@@ -818,7 +818,8 @@
 
     <!-- MediZon Assistant: floating chat for signed-in users -->
     <th:block sec:authorize="hasAnyRole('CUSTOMER','ADMIN')">
-        <div class="mz-bot" id="mzBot" th:classappend="${frontPage == true} ? '' : 'is-tucked'" th:attr="data-first-name=${me != null} ? ${me.firstName} : '',
+        <div class="mz-bot" id="mzBot" th:classappend="${frontPage == true} ? '' : 'is-tucked'" th:attr="data-front=${frontPage == true} ? '1' : '0',
+             data-first-name=${me != null} ? ${me.firstName} : '',
              data-role=${me != null and me.admin} ? 'admin' : 'customer'">
             <div class="mz-bot-teaser" hidden>
                 <button type="button" class="mz-bot-teaser-text" data-mz-bot-open></button>

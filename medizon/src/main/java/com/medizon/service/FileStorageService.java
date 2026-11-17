@@ -136,6 +136,13 @@ public class FileStorageService {
         return name;
     }
 
+    /** Saves a file MediZon made (a digital prescription's PDF) privately and returns its stored name. */
+    public String storeGenerated(byte[] bytes, String ext) {
+        String name = UUID.randomUUID() + ext;
+        write(root.resolve(name), bytes, "The file couldn't be saved. Try again.");
+        return name;
+    }
+
     /** Deletes a private upload (prescription or return photo); a missing file is fine. */
     public void delete(String name) {
         if (name == null || name.isBlank()) return;

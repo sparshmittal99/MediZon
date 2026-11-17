@@ -10,32 +10,36 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Ticked items that can't be ordered right now: checkout waits, and says why in the cart's own words. */
+/** Lines that can't be ordered right now stay in the cart, listed first; checkout goes ahead with the rest. */
 class CartUnavailableTest {
 
     @Test
-    void anOutOfStockItemIsCalledOutOfStockNotUndeliverable() {
-        assertThat(OrderService.unavailableReason(List.of(line("Acitrom 3", 0, 1)), "400050"))
-                .isEqualTo("Acitrom 3 is out of stock right now. Untick or remove it to check out.");
+    void checkoutTakesTheRestAndLeavesUnavailableLinesInTheCart() {
+        CartItem ok = line("Dolo 650", 10, 1), out = line("Acitrom 3", 0, 1), few = line("Pan 40", 2, 5);
+        CartSummary cart = new CartSummary(List.of(ok, out, few), new BigDecimal("30.00"), BigDecimal.ZERO, false);
+
+        assertThat(cart.getSelectedCount()).isEqualTo(3);
+        assertThat(cart.getCheckoutCount()).isEqualTo(1);
+        assertThat(cart.getOrderable()).containsExactly(ok);
+        assertThat(cart.getUnavailable()).containsExactly(out, few);
     }
 
     @Test
-    void eachKindOfProblemIsNamed() {
-        String why = OrderService.unavailableReason(List.of(line("Dolo 650", 2, 5), line("Acitrom 3", 0, 1),
-                notSold("Azithral 500")), "400050");
-        assertThat(why).isEqualTo("Acitrom 3 is out of stock right now. Only 2 packs of Dolo 650 are available right now."
-                + " Azithral 500 isn't sold for delivery to 400050. Untick or remove them to check out, or choose another address.");
+    void unavailableLinesAreListedFirst() {
+        CartItem ok = line("Dolo 650", 10, 1), out = line("Acitrom 3", 0, 1), notSold = notSold("Azithral 500");
+        CartSummary cart = new CartSummary(List.of(ok, out, notSold), new BigDecimal("30.00"), BigDecimal.ZERO, false);
+
+        assertThat(cart.getDisplayItems()).containsExactly(out, notSold, ok);
     }
 
     @Test
-    void checkoutWaitsWhileATickedItemCantBeOrdered() {
-        CartItem ok = line("Dolo 650", 10, 1), out = line("Acitrom 3", 0, 1);
-        CartSummary cart = new CartSummary(List.of(ok, out), BigDecimal.TEN, BigDecimal.ZERO, false);
-        assertThat(cart.getSelectedCount()).isEqualTo(2);
-        assertThat(cart.getBlockedCount()).isEqualTo(1);
+    void anUntickedLineIsNotOrdered() {
+        CartItem ok = line("Dolo 650", 10, 1), later = line("Pan 40", 10, 1);
+        later.setSelected(false);
+        CartSummary cart = new CartSummary(List.of(ok, later), new BigDecimal("30.00"), BigDecimal.ZERO, false);
 
-        out.setSelected(false);                                  // unticked: checkout can go ahead with the rest
-        assertThat(cart.getBlockedCount()).isZero();
+        assertThat(cart.getOrderable()).containsExactly(ok);
+        assertThat(cart.getAvailable()).containsExactly(ok, later);
     }
 
     private static CartItem line(String name, int stock, int qty) {

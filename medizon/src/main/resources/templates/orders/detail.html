@@ -34,8 +34,14 @@
                 <input type="hidden" name="from" value="order">
                 <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-envelope me-1"></i>Email invoice</button>
             </form>
+            <span th:if="${o.awaitingPrescription}" class="badge fs-6" th:classappend="${o.rxReview.badge}" th:text="${o.rxReview.label}"></span>
             <span class="badge fs-6" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
         </div>
+    </div>
+
+    <!-- Cancelled by MediZon for a reason the customer is told: its prescription wasn't approved -->
+    <div th:if="${o.status.name() == 'CANCELLED' and o.cancelReason != null}" class="mz-order-note mb-4" role="status">
+        <i class="bi bi-file-earmark-x" aria-hidden="true"></i><span th:text="${o.cancelReason}"></span>
     </div>
 
     <div class="mz-panel mb-4" th:if="${o.status.name() != 'CANCELLED'}">
@@ -228,12 +234,12 @@
             </div>
 
             <!-- Admin actions -->
-            <form th:if="${adminView and canManage and !#lists.isEmpty(o.status.nextStatuses)}"
+            <form th:if="${adminView and canManage and !#lists.isEmpty(o.nextStatusesFor(me.admin))}"
                   th:action="@{/admin/orders/{id}/status(id=${o.id})}" method="post" class="mz-panel">
                 <label class="form-label" for="status">Update status</label>
                 <div class="d-flex gap-2">
                     <select class="form-select" id="status" name="status">
-                        <option th:each="s : ${o.status.nextStatuses}" th:value="${s}" th:text="${s.label}"></option>
+                        <option th:each="s : ${o.nextStatusesFor(me.admin)}" th:value="${s}" th:text="${s.label}"></option>
                     </select>
                     <button class="btn btn-primary" type="submit">Save</button>
                 </div>

@@ -9,7 +9,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity(name = "CustomerOrder")   // "Order" is a JPQL keyword
 @Table(name = "orders")
@@ -140,6 +142,39 @@ public class Order {
 
     @ManyToOne(fetch = FetchType.LAZY)
     private Prescription prescription;
+
+    /**
+     * Placed with prescription medicines no approved prescription covered: how they get one (uploaded at checkout, or
+     * a pharmacist's digital prescription), and where that stands. Null on every other order.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private RxCheck rxCheck;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private RxReview rxReview;
+
+    /** The prescriptions uploaded at checkout for this order, waiting for the pharmacist. */
+    @ManyToMany
+    @JoinTable(name = "order_awaited_prescriptions",
+            joinColumns = @JoinColumn(name = "order_id"), inverseJoinColumns = @JoinColumn(name = "prescription_id"))
+    private Set<Prescription> awaitedPrescriptions = new LinkedHashSet<>();
+
+    /** Why it was cancelled, when MediZon cancelled it for a reason the customer is told (its prescription). */
+    @Column(length = 300)
+    private String cancelReason;
+
+    /** Its prescription is still with the pharmacist: only the admin can confirm it until then. */
+    public boolean isAwaitingPrescription() {
+        return rxReview == RxReview.PENDING && status != OrderStatus.CANCELLED;
+    }
+
+    /** The statuses this account can move it to: a store can't confirm it while its prescription is pending. */
+    public List<OrderStatus> nextStatusesFor(boolean admin) {
+        if (admin || !isAwaitingPrescription()) return status.getNextStatuses();
+        return status.getNextStatuses().stream().filter(s -> s != OrderStatus.CONFIRMED).toList();
+    }
 
     /** Every prescription its lines used (the order's own one for orders from before lines recorded theirs). */
     public List<Prescription> getPrescriptionsUsed() {

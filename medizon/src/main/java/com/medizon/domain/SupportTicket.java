@@ -67,6 +67,29 @@ public class SupportTicket {
     @Column(nullable = false, columnDefinition = "integer not null default 0")
     private int reopenCount;
 
+    /**
+     * Opened by MediZon for an order placed without a prescription: a pharmacist chats with the customer, then issues
+     * a digital prescription or rejects it ({@link #consultReview}).
+     */
+    @Column(columnDefinition = "boolean default false not null")
+    private boolean consult;
+
+    /** When the pharmacist (or admin) started the chat with the customer. */
+    private LocalDateTime chatStartedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private RxReview consultReview;
+
+    /** The digital prescription issued from this consultation. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Prescription consultPrescription;
+
+    public boolean isChatStarted() { return chatStartedAt != null; }
+
+    /** Waiting for the pharmacist's decision. */
+    public boolean isConsultOpen() { return consult && consultReview == RxReview.PENDING; }
+
     /** 1 to 5, given after it closes; cleared if it's reopened. */
     private Integer rating;
 
@@ -99,7 +122,7 @@ public class SupportTicket {
     }
 
     public boolean canReopen(LocalDateTime now) {
-        return status.isClosed() && closedAt != null && closedAt.plusDays(REOPEN_DAYS).isAfter(now);
+        return !consult && status.isClosed() && closedAt != null && closedAt.plusDays(REOPEN_DAYS).isAfter(now);
     }
 
     /** Last moment the customer can reopen it; null while it's open. */

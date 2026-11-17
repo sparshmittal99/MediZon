@@ -63,7 +63,8 @@ public class PrescriptionController {
             throw new BusinessException("Upload up to " + PrescriptionService.MAX_FILES + " prescriptions at a time.");
         }
         User user = currentUser.get();
-        List<Long> ids = chosen.stream().map(f -> prescriptionService.upload(user, f).getId()).toList();
+        boolean atCheckout = "checkout".equals(returnTo);
+        List<Long> ids = chosen.stream().map(f -> prescriptionService.upload(user, f, atCheckout).getId()).toList();
         scanService.scanAll(ids);              // a no-op when the AI is off; never fails the upload
         return "redirect:/prescriptions/review" + ("checkout".equals(returnTo) ? "?returnTo=checkout" : "");
     }
@@ -99,9 +100,12 @@ public class PrescriptionController {
         Map<Long, PrescriptionService.Note> notes = new LinkedHashMap<>();
         ids.forEach(id -> notes.put(id, new PrescriptionService.Note(form.get("doctorName_" + id), form.get("notes_" + id))));
         List<Prescription> sent = prescriptionService.submit(currentUser.get(), notes);
+        if ("checkout".equals(returnTo)) {
+            ra.addFlashAttribute("success", (sent.size() == 1 ? "Prescription uploaded." : sent.size() + " prescriptions uploaded."));
+            return "redirect:/checkout";
+        }
         ra.addFlashAttribute("success", (sent.size() == 1 ? "Prescription sent" : sent.size() + " prescriptions sent")
                 + " to the pharmacist. Once approved, the medicines go into your cart and we'll let you know.");
-        if ("checkout".equals(returnTo)) return "redirect:/checkout";
         return sent.size() == 1 ? "redirect:/prescriptions/" + sent.get(0).getId() : "redirect:/prescriptions";
     }
 

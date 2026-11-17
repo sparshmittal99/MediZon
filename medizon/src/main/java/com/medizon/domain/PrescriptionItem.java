@@ -29,6 +29,14 @@ public class PrescriptionItem {
     /** Packs ordered against this prescription; cancelled orders give theirs back. */
     private int packsOrdered;
 
+    /** On a digital prescription: how many to take morning, afternoon and night, "1-0-1". */
+    @Column(length = 20)
+    private String dosage;
+
+    /** On a digital prescription: when and for how long, "After food · 5 days". */
+    @Column(length = 120)
+    private String instructions;
+
     public PrescriptionItem(Prescription prescription, Medicine medicine, int packs) {
         this.prescription = prescription;
         this.medicine = medicine;

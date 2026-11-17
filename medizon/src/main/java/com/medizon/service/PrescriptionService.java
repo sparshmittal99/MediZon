@@ -3,6 +3,7 @@ package com.medizon.service;
 import com.medizon.domain.*;
 import com.medizon.repository.CartItemRepository;
 import com.medizon.repository.MedicineRepository;
+import com.medizon.repository.OrderRepository;
 import com.medizon.repository.PrescriptionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -41,6 +42,7 @@ public class PrescriptionService {
     private final ApplicationEventPublisher events;
     private final CartItemRepository cartItems;
     private final MemberService memberService;
+    private final OrderRepository orders;
 
     /** Most files in one upload: one prescription each, e.g. for several family members. */
     public static final int MAX_FILES = 5;
@@ -48,11 +50,21 @@ public class PrescriptionService {
     /** Published when a pharmacist approves a prescription, to put its medicines in the customer's cart. */
     public record Approved(Long prescriptionId) {}
 
+    /** Published when a pharmacist rejects a prescription: orders placed with it uploaded at checkout are cancelled. */
+    public record Rejected(Long prescriptionId, String note) {}
+
     /** Saves an uploaded file as a draft: the customer checks it before it goes to the pharmacist. */
     @Transactional
     public Prescription upload(User user, MultipartFile file) {
+        return upload(user, file, false);
+    }
+
+    /** As above; {@code atCheckout} when it's uploaded at checkout, for the order about to be placed. */
+    @Transactional
+    public Prescription upload(User user, MultipartFile file, boolean atCheckout) {
         Prescription p = new Prescription();
         p.setUser(user);
+        p.setCheckoutUpload(atCheckout);
         p.setStoredFileName(storage.store(file));
         p.setOriginalFileName(file.getOriginalFilename());
         p.setContentType(storage.typeOf(file));   // what it really is, not what the browser said
@@ -166,6 +178,18 @@ public class PrescriptionService {
         return prescriptions.findByUserOrderByUploadedAtDesc(user).stream().filter(p -> !p.isRemoved()).toList();
     }
 
+    /**
+     * Uploaded at checkout and sent to the pharmacist, but not yet placed with an order: the next order placed with
+     * "Upload prescription" waits for these. Newest first.
+     */
+    @Transactional(readOnly = true)
+    public List<Prescription> checkoutUploads(User user) {
+        return forUser(user).stream()
+                .filter(p -> p.isCheckoutUpload() && p.getStatus() == PrescriptionStatus.PENDING)
+                .filter(p -> prescriptions.countOrdersAwaiting(p) == 0)
+                .toList();
+    }
+
     /** Approved, in date and not used up. */
     public List<Prescription> validForUser(User user) {
         return prescriptions.findByUserAndStatusOrderByReviewedAtDesc(user, PrescriptionStatus.APPROVED)
@@ -231,9 +255,13 @@ public class PrescriptionService {
         if (approve) {
             events.publishEvent(new Approved(p.getId()));       // fills the cart and tells the customer
         } else {
-            notifications.notify(p.getUser(), NotificationType.PRESCRIPTION_UPDATE, "Prescription needs attention",
-                    "Your prescription couldn't be approved" + (note == null || note.isBlank() ? "." : ": " + note)
-                            + " Upload a clearer copy to continue.", "/prescriptions");
+            // One uploaded at checkout cancels its order instead, and the cancellation tells the customer why
+            if (orders.findAwaiting(p.getId(), OrderStatus.CANCELLED).isEmpty()) {
+                notifications.notify(p.getUser(), NotificationType.PRESCRIPTION_UPDATE, "Prescription needs attention",
+                        "Your prescription couldn't be approved" + (note == null || note.isBlank() ? "." : ": " + note)
+                                + " Upload a clearer copy to continue.", "/prescriptions");
+            }
+            events.publishEvent(new Rejected(p.getId(), note));
         }
     }
 
@@ -278,10 +306,15 @@ public class PrescriptionService {
         }
 
         private static String label(Prescription p) {
-            String doctor = p.getDoctorName() == null || p.getDoctorName().isBlank() ? "Prescription" : "Dr. " + p.getDoctorName().trim();
+            String doctor = p.getPrescriber() == null ? "Prescription" : p.getPrescriber();
             LocalDate when = p.getPrescribedOn() != null ? p.getPrescribedOn() : p.getUploadedAt().toLocalDate();
             return doctor + ", " + when.format(DAY);
         }
+    }
+
+    /** Covers the lines from these prescriptions only (those still valid). */
+    public static Coverage coverFrom(Collection<Prescription> from, List<RxLine> lines) {
+        return lines.isEmpty() ? Coverage.NONE : cover(from.stream().filter(Prescription::isValid).toList(), lines);
     }
 
     /** Covers the lines from the customer's valid prescriptions. */
@@ -345,7 +378,7 @@ public class PrescriptionService {
             t.item().setPacksOrdered(t.item().getPacksOrdered() + t.packs());
         }
         String by = takes.stream().map(t -> t.item().getPrescription()).distinct().map(p ->
-                        (p.getDoctorName() == null || p.getDoctorName().isBlank() ? "" : "Dr. " + p.getDoctorName().trim())
+                        (p.getPrescriber() == null ? "" : p.getPrescriber())
                         + (p.getPrescribedOn() == null ? "" : ", " + p.getPrescribedOn().format(DAY)))
                 .filter(s -> !s.isBlank()).collect(Collectors.joining("; "));
         line.setPrescribedBy(by.isEmpty() ? null : by.length() > 300 ? by.substring(0, 299) + "…" : by);
@@ -358,6 +391,7 @@ public class PrescriptionService {
     @Transactional
     public void finishUse(Collection<Prescription> used) {
         for (Prescription rx : used) {
+            if (rx.isDigital()) continue;     // MediZon's own: kept, with its file, like the customer's other prescriptions
             if (rx.getStatus() == PrescriptionStatus.APPROVED && rx.isFullyOrdered()) {
                 rx.setStatus(PrescriptionStatus.USED_UP);
                 deleteFileAfterCommit(rx.getStoredFileName());
@@ -406,8 +440,44 @@ public class PrescriptionService {
     }
 
     static String describe(Prescription p) {
-        String doctor = p.getDoctorName() == null || p.getDoctorName().isBlank() ? "" : "from Dr. " + p.getDoctorName().trim() + " ";
+        String doctor = p.getPrescriber() == null ? "" : "from " + p.getPrescriber() + " ";
         return doctor + "(uploaded " + p.getUploadedAt().format(DAY) + ")";
+    }
+
+    // ------------------------------------------------------------------ digital prescriptions
+
+    /** A medicine on a digital prescription: packs, and how to take it ("1-0-1", "After food · 5 days"). */
+    public record DigitalLine(Medicine medicine, int packs, String dosage, String instructions) {}
+
+    /**
+     * Saves a digital prescription a pharmacist issued: approved at once, with its PDF ({@code pdf}) as the file, so it
+     * sits with the customer's other prescriptions.
+     */
+    @Transactional
+    public Prescription issueDigital(User customer, String patientName, String issuedBy, String advice,
+                                     List<DigitalLine> lines, byte[] pdf) {
+        if (lines.isEmpty()) throw new BusinessException("There are no prescription medicines to prescribe.");
+        Prescription p = new Prescription();
+        p.setUser(customer);
+        p.setDigital(true);
+        p.setIssuedBy(issuedBy);
+        p.setPatientName(patientName);
+        p.setPrescribedOn(LocalDate.now());
+        p.setNotes(advice == null || advice.isBlank() ? null : advice.trim());
+        p.setStatus(PrescriptionStatus.APPROVED);
+        p.setUploadedAt(LocalDateTime.now());
+        p.setReviewedAt(LocalDateTime.now());
+        p.setValidUntil(LocalDate.now().plusMonths(6));
+        p.setStoredFileName(storage.storeGenerated(pdf, ".pdf"));
+        p.setOriginalFileName("MediZon-prescription.pdf");
+        p.setContentType("application/pdf");
+        for (DigitalLine l : lines) {
+            PrescriptionItem i = new PrescriptionItem(p, l.medicine(), l.packs());
+            i.setDosage(l.dosage());
+            i.setInstructions(l.instructions());
+            p.getItems().add(i);
+        }
+        return prescriptions.save(p);
     }
 
     /** Owners and admins can view a file; anyone else gets "not found". */
