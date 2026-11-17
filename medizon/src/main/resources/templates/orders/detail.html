@@ -53,21 +53,24 @@
 
     <div class="row g-4">
         <div class="col-lg-8">
-            <div class="mz-panel-flush table-responsive">
-                <table class="table align-middle mb-0">
+            <!-- Phones and the app: each line is the medicine with "₹price × packs" under it and the amount on the right
+                 (medizon.css, .mz-order-lines), so nothing runs off the screen -->
+            <div class="mz-panel-flush">
+                <table class="table align-middle mb-0 mz-order-lines">
                     <thead><tr><th>Medicine</th><th>Price</th><th>Packs</th><th class="text-end">Amount</th></tr></thead>
                     <tbody>
                     <tr th:each="i : ${o.items}">
-                        <td>
+                        <td class="mz-ol-name">
                             <span th:text="${i.medicineName}"></span>
                             <span th:unless="${i.returnable}" class="badge text-bg-light border ms-1">Non-returnable</span>
+                            <div class="mz-ol-sub small text-muted" th:text="'₹' + ${i.unitPrice} + ' × ' + ${i.quantity}">₹30.00 × 2</div>
                             <!-- Who it's for is the customer's business; admins only see the medicines -->
                             <div th:if="${!adminView and !#lists.isEmpty(i.sortedMembers)}" class="small text-muted"
                                  th:text="'For ' + ${i.membersLabel}"></div>
                         </td>
-                        <td th:text="'₹' + ${i.unitPrice}"></td>
-                        <td th:text="${i.quantity}"></td>
-                        <td class="text-end" th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></td>
+                        <td class="mz-ol-col" th:text="'₹' + ${i.unitPrice}"></td>
+                        <td class="mz-ol-col" th:text="${i.quantity}"></td>
+                        <td class="text-end text-nowrap" th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></td>
                     </tr>
                     </tbody>
                     <tfoot>
@@ -214,7 +217,7 @@
                 <p class="small text-muted mb-0" th:if="${o.gatewayPaymentId != null}" th:text="'Payment id ' + ${o.gatewayPaymentId}"></p>
                 <p class="small text-muted mb-0" th:if="${o.gatewayRefundId != null}" th:text="'Refund id ' + ${o.gatewayRefundId}"></p>
                 <p class="small text-success mb-0" th:if="${o.discounted}" th:text="'You saved ₹' + ${o.discount} + ' with ' + ${o.couponCode}"></p>
-                <p th:each="rx : ${o.prescriptionsUsed}" th:if="${@fileStorageService.exists(rx.storedFileName)}" sec:authorize="hasAnyRole('CUSTOMER','ADMIN','PHARMACIST')" class="small mt-3 mb-0">
+                <p th:each="rx : ${o.prescriptionsUsed}" th:if="${!rx.digital and @fileStorageService.exists(rx.storedFileName)}" sec:authorize="hasAnyRole('CUSTOMER','ADMIN','PHARMACIST')" class="small mt-3 mb-0">
                     <i class="bi bi-file-earmark-medical"></i>
                     <a th:href="@{/prescriptions/{id}/file(id=${rx.id})}" target="_blank" rel="noopener"
                        th:text="'View prescription' + (${rx.doctorName != null} ? ' (Dr. ' + ${rx.doctorName} + ')' : '')">View prescription</a>

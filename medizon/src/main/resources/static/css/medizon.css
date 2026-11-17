@@ -291,6 +291,24 @@ body *::-webkit-scrollbar { display: none; }
 @media (max-width: 575.98px) { .mz-dose-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .mz-dose-grid > :nth-child(4) { grid-column: span 2; } }
 
+/* Order page: the medicines. Wide screens: a table. Phones and the app: each row is the medicine, with "₹price × packs"
+   under it, and the amount on the right; the totals below line up with the amounts. */
+.mz-ol-sub { display: none; }
+.mz-order-lines .mz-ol-name { overflow-wrap: anywhere; }
+@media (max-width: 575.98px) {
+    .mz-order-lines thead, .mz-order-lines .mz-ol-col { display: none; }
+    .mz-order-lines .mz-ol-sub { display: block; margin-top: .1rem; }
+    .mz-order-lines tr { display: flex; align-items: baseline; gap: .75rem; }
+    .mz-order-lines td { padding: .65rem .9rem; }
+    .mz-order-lines tbody td:first-child { flex: 1; min-width: 0; }
+    .mz-order-lines tfoot tr { border: 0; }
+    .mz-order-lines tfoot td { padding-top: .35rem; padding-bottom: .35rem; border-bottom: 0; }
+    .mz-order-lines tfoot td:first-child { flex: 1; min-width: 0; text-align: right; }
+    .mz-order-lines tfoot tr:first-child td { padding-top: .75rem; }
+    .mz-order-lines tfoot tr:last-child td { padding-bottom: .75rem; }
+    .mz-order-lines tfoot td:last-child { white-space: nowrap; }
+}
+
 /* Order page: why MediZon cancelled it */
 .mz-order-note { display: flex; align-items: flex-start; gap: .6rem; padding: .8rem 1rem; border-radius: .9rem;
     background: #FBEFEF; color: #7A2424; font-weight: 500; }
