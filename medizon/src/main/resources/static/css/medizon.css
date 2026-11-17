@@ -291,22 +291,18 @@ body *::-webkit-scrollbar { display: none; }
 @media (max-width: 575.98px) { .mz-dose-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .mz-dose-grid > :nth-child(4) { grid-column: span 2; } }
 
-/* Order page: the medicines. Wide screens: a table. Phones and the app: each row is the medicine, with "₹price × packs"
-   under it, and the amount on the right; the totals below line up with the amounts. */
-.mz-ol-sub { display: none; }
+/* Order page: the medicines table. Phones and the app: the same table with smaller text and tighter padding, and long
+   medicine names wrapping, so all four columns fit the screen. */
 .mz-order-lines .mz-ol-name { overflow-wrap: anywhere; }
 @media (max-width: 575.98px) {
-    .mz-order-lines thead, .mz-order-lines .mz-ol-col { display: none; }
-    .mz-order-lines .mz-ol-sub { display: block; margin-top: .1rem; }
-    .mz-order-lines tr { display: flex; align-items: baseline; gap: .75rem; }
-    .mz-order-lines td { padding: .65rem .9rem; }
-    .mz-order-lines tbody td:first-child { flex: 1; min-width: 0; }
-    .mz-order-lines tfoot tr { border: 0; }
-    .mz-order-lines tfoot td { padding-top: .35rem; padding-bottom: .35rem; border-bottom: 0; }
-    .mz-order-lines tfoot td:first-child { flex: 1; min-width: 0; text-align: right; }
-    .mz-order-lines tfoot tr:first-child td { padding-top: .75rem; }
-    .mz-order-lines tfoot tr:last-child td { padding-bottom: .75rem; }
-    .mz-order-lines tfoot td:last-child { white-space: nowrap; }
+    .mz-order-lines { font-size: .8rem; }
+    .mz-order-lines > :not(caption) > * > * { padding: .5rem .4rem; }
+    .mz-order-lines > :not(caption) > * > :first-child { padding-left: .75rem; }
+    .mz-order-lines > :not(caption) > * > :last-child { padding-right: .75rem; }
+    .mz-order-lines .mz-ol-name { min-width: 7rem; }
+    .mz-order-lines .small { font-size: .72rem; }
+    .mz-order-lines .badge { font-size: .62rem; }
+    .mz-order-lines tfoot .fw-bold { font-size: .9rem; }
 }
 
 /* Order page: why MediZon cancelled it */
