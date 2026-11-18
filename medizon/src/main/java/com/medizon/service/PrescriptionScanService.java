@@ -110,10 +110,20 @@ public class PrescriptionScanService {
         });
     }
 
+    /** What the AI read, untouched by the customer's corrections. */
     public Optional<PrescriptionReading> reading(Prescription p) {
-        if (p.getAiReading() == null) return Optional.empty();
+        return parse(p.getAiReading());
+    }
+
+    /** The details as they stand: the customer's corrections when they made any, else what the AI read. */
+    public Optional<PrescriptionReading> current(Prescription p) {
+        return p.getCustomerReading() != null ? parse(p.getCustomerReading()) : reading(p);
+    }
+
+    private Optional<PrescriptionReading> parse(String text) {
+        if (text == null) return Optional.empty();
         try {
-            return Optional.of(json.readValue(p.getAiReading(), PrescriptionReading.class));
+            return Optional.of(json.readValue(text, PrescriptionReading.class));
         } catch (Exception e) {
             return Optional.empty();
         }
@@ -164,7 +174,7 @@ public class PrescriptionScanService {
      */
     public List<CoverRow> suggestedCover(Prescription p) {
         Map<Long, Integer> ai = new LinkedHashMap<>();
-        reading(p).ifPresent(r -> {
+        current(p).ifPresent(r -> {
             Map<Long, Medicine> found = medicines.findAllById(r.medicines().stream().map(PrescriptionReading.Line::catalogId)
                             .filter(Objects::nonNull).toList()).stream().filter(Medicine::isActive)
                     .collect(Collectors.toMap(Medicine::getId, m -> m));
@@ -205,7 +215,7 @@ public class PrescriptionScanService {
         }
     }
 
-    private String write(PrescriptionReading r) {
+    String write(PrescriptionReading r) {
         try {
             return json.writeValueAsString(r);
         } catch (Exception e) {
@@ -213,7 +223,7 @@ public class PrescriptionScanService {
         }
     }
 
-    private static String summary(PrescriptionReading r) {
+    static String summary(PrescriptionReading r) {
         if (!r.legible() || r.medicines().isEmpty()) return "AI couldn't read any medicines.";
         return trim(r.medicines().stream().map(PrescriptionReading.Line::getSummary).collect(Collectors.joining("; ")), 1000);
     }

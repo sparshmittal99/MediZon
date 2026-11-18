@@ -19,7 +19,7 @@
                th:href="'#help-' + ${t}" th:attr="data-mz-help-topic=${t}"
                th:text="${t == 'start'} ? 'Getting started' : (${t == 'orders'} ? 'Orders & delivery' : (${t == 'rx'} ? 'Prescriptions'
                    : (${t == 'medicines'} ? 'Reminders' : (${t == 'refills'} ? 'Refills' : (${t == 'family'} ? 'Family'
-                   : (${t == 'returns'} ? 'Returns & refunds' : (${t == 'payments'} ? 'Payments & invoices'
+                   : (${t == 'returns'} ? 'Returns & exchanges' : (${t == 'payments'} ? 'Payments & invoices'
                    : (${t == 'account'} ? 'Account & alerts' : 'Running the store'))))))))">Topic</a>
         </nav>
     </div>
@@ -57,9 +57,10 @@
                         </details>
                         <details class="mz-faq-item">
                             <summary>What is the MediZon Assistant?</summary>
-                            <div>A chat helper for signed-in users (the chat button at the bottom right). Ask it to find a medicine, add
-                                it to your cart, check today's doses or track an order. Its answers are general guidance and don't
-                                replace advice from your doctor or pharmacist.</div>
+                            <div>A chat helper for signed-in customers (the chat button at the bottom right). Ask it to find a medicine
+                                or a cheaper substitute, check two medicines for interactions, add to your cart, check or mark today's
+                                doses, set a reminder or track an order. You can also speak to it. Its answers are general guidance and
+                                don't replace advice from your doctor or pharmacist.</div>
                         </details>
                     </div>
                 </section>
@@ -69,7 +70,12 @@
                     <div class="mz-faq">
                         <details class="mz-faq-item">
                             <summary>How much is delivery?</summary>
-                            <div th:text="'Delivery is free on orders of ₹' + ${freeAbove} + ' or more. Smaller orders have a ₹' + ${deliveryFee} + ' delivery charge.'"></div>
+                            <div>
+                                <span th:if="${deliveryAlwaysFree}">Delivery is free on every order right now.</span>
+                                <span th:unless="${deliveryAlwaysFree}"
+                                      th:text="'Delivery is free when the medicines in your cart come to ₹' + ${freeAbove} + ' or more (before any promo). Smaller orders pay a ₹' + ${deliveryFee} + ' delivery charge, once per checkout even if it becomes several orders.'"></span>
+                                <span th:if="${minOrder != '0'}" th:text="'The smallest order you can place is ₹' + ${minOrder} + ' of medicines; the cart tells you how much more to add. Automatic refills aren\'t held to it.'"></span>
+                                The cart and checkout always show the current charge.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>When will my order arrive?</summary>
@@ -92,15 +98,18 @@
                         </details>
                         <details class="mz-faq-item">
                             <summary>How do I track my order?</summary>
-                            <div>Open <strong>Orders</strong>. Pending shows everything placed, confirmed or shipped; open an order to see
-                                each step. You also get a notification each time the status changes.</div>
+                            <div>Open <strong>Orders</strong>. Pending shows everything placed, confirmed, shipped or out for delivery;
+                                open an order to see each step. Each time the status changes you get a notification and an email.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>Can I cancel an order?</summary>
-                            <div>Yes, until it ships. Open the order from <strong>Orders</strong> and choose Cancel. Once it has shipped,
-                                you can request a return after delivery instead. If you paid online, the amount goes back to the same
-                                account (banks take up to 5-7 working days) and MediZon Money comes back at once. Payment method charges
-                                aren't refunded.</div>
+                            <div>Yes, until it ships (while it's <em>Placed</em> or <em>Confirmed</em>). Open the order from
+                                <strong>Orders</strong> and choose <strong>Cancel order</strong>. Once it has shipped, you can exchange or
+                                return items after delivery instead. If you paid online, the amount goes back to the same account (banks
+                                take up to 5-7 working days) and MediZon Money comes back at once. Payment method charges aren't refunded,
+                                and pay-on-delivery orders have nothing to refund. An order waiting for its prescription is cancelled
+                                automatically if the prescription can't be approved. Replacement orders for an exchange can't be cancelled
+                                by you; contact support if you need to.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>Can I send medicines to someone else's address?</summary>
@@ -128,21 +137,30 @@
                             <div>Tap <strong>Upload prescription</strong> in the category bar on the home page and choose the file. You can
                                 also upload from <strong>Prescriptions</strong> in your account menu, or at checkout. JPG, PNG or PDF up
                                 to 5 MB; the doctor's name, the patient's name, the date and the signature must be visible.
-                                You can choose up to 5 files at once, one per prescription, for example for different family members.
-                                Before anything is sent, you see each one with the medicines we read: remove a wrong file, add the
-                                doctor's name if needed, then tap <strong>Send for review</strong>.</div>
+                                <span th:text="'You can choose up to ' + ${maxRxFiles} + ' files at once, one per prescription, for example for different family members.'"></span>
+                                Before anything is sent, you see each one with the medicines we read. Remove a wrong file, or tap
+                                <strong>Edit</strong> to correct anything: the patient, doctor, date, the medicines and their doses, or
+                                add a note. Then tap <strong>Send for review</strong>.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Something on my prescription was read wrongly. Can I correct it?</summary>
+                            <div>Yes, until the pharmacist reviews it. Tap <strong>Edit</strong> on the prescription (on the review page
+                                before sending, or on its page while it's waiting) and change any field. The pharmacist always checks
+                                the file itself and sees what you changed next to what we read.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>Do you read my prescription automatically?</summary>
-                            <div>Yes. As soon as you upload it, we read the medicines, doses, patient's name, doctor and date, and
-                                match the medicines to our shop. You can see what we found on the prescription's page. A pharmacist
+                            <div>Usually, yes. As soon as you upload it, we read the medicines, doses, patient's name, doctor and date,
+                                and match the medicines to our shop. You can see what we found on the prescription's page. A pharmacist
                                 still checks every prescription before anything is ordered; if it can't be read automatically, the
                                 pharmacist simply reads it instead.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>How long does approval take?</summary>
                             <div>A pharmacist reviews each upload, usually within a few hours. You get a notification when it's approved
-                                or if anything needs fixing, with the pharmacist's note.</div>
+                                or if anything needs fixing, with the pharmacist's note. If the pharmacist approves a different number of
+                                packs than you had in your cart, the note says <em>Quantity adjusted according to the prescription</em>
+                                and lists what changed. The note is also on the prescription's page.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>What happens when my prescription is approved?</summary>
@@ -153,10 +171,12 @@
                         </details>
                         <details class="mz-faq-item">
                             <summary>Can I order prescription medicines that aren't on my prescription?</summary>
-                            <div>No. Every <span class="mz-rx position-static">Rx</span> medicine in your cart must be on one of your
-                                approved prescriptions. If one isn't, checkout tells you which, e.g. "Alprazolam is not on any of your
-                                approved prescriptions." Remove it, or upload a prescription that includes it. Medicines that don't
-                                need a prescription are never affected.</div>
+                            <div>Every <span class="mz-rx position-static">Rx</span> medicine needs a prescription. If your approved
+                                prescriptions don't cover one, checkout asks you to choose: <strong>Upload prescription</strong>, or
+                                <strong>No prescription</strong>, and a MediZon pharmacist contacts you and can issue a digital
+                                prescription. The order is placed, and the store confirms it once the prescription is approved. If it
+                                can't be approved, the order is cancelled and anything you paid is refunded. Medicines that don't need
+                                a prescription are never affected.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>My cart has medicines from different prescriptions. Which one do I choose?</summary>
@@ -203,7 +223,8 @@
                             <summary>How do dose reminders work?</summary>
                             <div>Add a medicine in <strong>My medicines</strong> with the dose and the times you take it: every day,
                                 on chosen days of the week, or on specific dates. When a dose is due you get a reminder on this site,
-                                as a desktop alert and by email.</div>
+                                as a desktop alert, and as a ringing alarm in the MediZon Android app. Mark it taken or skipped.
+                                Dose reminders aren't emailed.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>How does MediZon know how much is left at home?</summary>
@@ -222,8 +243,8 @@
                         </details>
                         <details class="mz-faq-item">
                             <summary>Will I be told when a medicine is about to expire?</summary>
-                            <div>Yes. Each medicine shows its expiry date, and you get an alert when stock at home expires within 30
-                                days or has expired.</div>
+                            <div>Yes. Each medicine shows its expiry date, highlighted once it's within 30 days. On the day it expires
+                                you get an alert, and the expired units come off the count at home so a refill can follow.</div>
                         </details>
                     </div>
                 </section>
@@ -239,7 +260,9 @@
                         <details class="mz-faq-item">
                             <summary>Where do automatic refills go?</summary>
                             <div>To your default address, or to the address you picked for that medicine (for example, a parent's
-                                home). The order shows <em>Placed by auto refill</em> and you can cancel it until it ships.</div>
+                                home). Automatic refills are paid on delivery, and the usual delivery charge applies. The order shows
+                                <em>Placed by auto refill</em> and you can cancel it until it ships. If a refill can't be placed (no
+                                address, out of stock, or no valid prescription) you get an alert and it's tried again later.</div>
                         </details>
                     </div>
                 </section>
@@ -267,23 +290,38 @@
                 </section>
 
                 <section class="mz-faq-group" id="help-returns">
-                    <h2 class="mz-faq-title"><i class="bi bi-arrow-return-left" aria-hidden="true"></i>Returns &amp; refunds</h2>
+                    <h2 class="mz-faq-title"><i class="bi bi-arrow-return-left" aria-hidden="true"></i>Returns, exchanges &amp; refunds</h2>
                     <div class="mz-faq">
                         <details class="mz-faq-item">
-                            <summary>How do I return a medicine?</summary>
-                            <div th:text="'Open the delivered order from Orders and choose Return items within ' + ${returnDays} + ' days of delivery. Pick the packs, give a reason and add 1 to ' + ${maxReturnImages} + ' clear photos showing the medicine and its batch / expiry label.'"></div>
+                            <summary>How do I exchange or return a medicine?</summary>
+                            <div th:text="'Open the delivered order from Orders and, within ' + ${returnDays} + ' days of delivery, choose Exchange (the same medicine again, free) or Return (a refund). Pick the packs, give a reason, add 1 to ' + ${maxReturnImages} + ' clear photos showing the medicine and its batch / expiry label, and choose where we collect the packs from. Only one exchange or return can be open on an order at a time.'"></div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How does an exchange work?</summary>
+                            <div>An exchange is for packs that arrived damaged, leaking, wrong, expired or faulty. Once we approve it, we
+                                send a <strong>replacement order</strong> with the same medicines and packs from the same store, free of
+                                charge. It starts as <em>Confirmed</em>, so there's nothing to place or pay, and shows its expected
+                                delivery date. It then ships and is tracked like any order, marked <em>Exchange</em>. Our delivery partner
+                                collects the old packs on the pickup day. You get a notification and an email at each step. If the
+                                medicine is out of stock we'll tell you, and you can return it for a refund instead.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>What can be returned?</summary>
                             <div>Each product page says whether the medicine is <strong>Returnable</strong> or <strong>Non-returnable</strong>.
-                                Only returnable items can be sent back, and an order with only non-returnable items has no return option.
-                                Returnable items can come back if they're damaged, wrong or expired. Opened strips and medicines kept in the fridge can only be returned
-                                if they were damaged, wrong or expired on arrival.</div>
+                                Only returnable items can be exchanged or returned, and an order with only non-returnable items has
+                                neither option. Returns can be for any listed reason (damaged or leaking, wrong item, expired, a quality
+                                problem, ordered by mistake or something else); exchanges are for problems with the packs. The store
+                                reviews each request and its photos.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>When will I get my refund?</summary>
-                            <div>A pharmacist reviews each request. Once approved we pick the packs up and refund the medicines' price.
-                                Delivery charges and payment method charges aren't refunded. Follow progress in <strong>Orders → Returns</strong>.</div>
+                            <div>
+                                <span th:text="'We review each return, usually within a day. Once it\'s approved, our delivery partner picks the packs up from the address you chose, usually ' + ${pickupMin} + ' to ' + ${pickupMax} + ' days after you ask.'"></span>
+                                You get back what you paid for those packs (after any promo). MediZon Money refunds arrive as soon as the
+                                packs are picked up; <span th:text="'UPI refunds ' + ${upiRefundDays} + ' days after pickup, card refunds ' + ${cardRefundDays} + ' days after, and bank account refunds ' + ${bankRefundDays} + ' days after.'"></span>
+                                For pay-on-delivery orders you choose MediZon Money, a UPI ID or a bank account. Delivery and payment
+                                method charges aren't refunded. Exchanges have no refund: you get the replacement instead. Follow
+                                progress in <strong>Orders → Returns</strong>.</div>
                         </details>
                     </div>
                 </section>
@@ -293,7 +331,15 @@
                     <div class="mz-faq">
                         <details class="mz-faq-item">
                             <summary>How can I pay?</summary>
-                            <div>UPI, a debit / credit card, net banking, MediZon Money, or pay on delivery (cash, UPI and more).</div>
+                            <div>The payment page shows the ways to pay that are on: usually UPI, a debit / credit card or net banking,
+                                or pay on delivery (cash, UPI and more). Any MediZon Money balance can pay all or part of an order.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>What is MediZon Money?</summary>
+                            <div>Your MediZon balance. Refunds for cancelled orders and returns can go into it, and it's ready to use at
+                                once on your next order, on its own or together with another way to pay. You can't add money to it
+                                directly. See the balance and every credit and spend in <strong>MediZon Money</strong> in your account
+                                menu.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>Is there a charge for how I pay?</summary>
@@ -306,14 +352,16 @@
                         </details>
                         <details class="mz-faq-item">
                             <summary>Where do I find my tax invoice?</summary>
-                            <div>Open the order from <strong>Orders</strong> and choose <strong>Invoice</strong>. Prices include GST and the
+                            <div>Once your order ships, open it from <strong>Orders</strong> and choose <strong>Tax invoice</strong>, or
+                                <strong>Email invoice</strong> to get it as a PDF. Replacement orders for an exchange have no invoice of
+                                their own: the original order's invoice covers them. Prices include GST and the
                                 invoice shows the tax inside each price. Each medicine shows the patient it's for, and orders with
                                 prescription medicines show the prescribing doctor and the prescription date. Print it or save it as a PDF.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>What is the billing address for?</summary>
                             <div>The name, address and GSTIN (for business purchases) printed on your invoices. It isn't used for
-                                delivery. Without one, orders are billed to the address they're delivered to.</div>
+                                delivery. Without one, orders are billed to you at the address they're delivered to.</div>
                         </details>
                     </div>
                 </section>
@@ -324,12 +372,16 @@
                         <details class="mz-faq-item">
                             <summary>How do I change my password?</summary>
                             <div>Open <strong>Account settings → Change password</strong>, confirm your current password, then choose a new
-                                one. You stay signed in on this device and are signed out everywhere else.</div>
+                                one. You stay signed in on this device and are signed out everywhere else. If you sign in with Google,
+                                there's no MediZon password to change. Forgot it? Use <strong>Forgot password</strong> on the sign-in page
+                                and we email you a code that works for 15 minutes.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>I'm not getting desktop alerts. What should I check?</summary>
                             <div>Desktop alerts need your browser's permission for this site. Check the site settings in your browser and
-                                allow notifications. Dose reminder emails go to the account's email address for everyone in the family.</div>
+                                allow notifications. Order, prescription, return, exchange, refill, expiry and support updates are also
+                                emailed to the account's email address, for everyone in the family. Dose reminders aren't emailed: use the
+                                Android app for alarms on your phone.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>Can I change the language?</summary>
@@ -338,9 +390,11 @@
                         </details>
                         <details class="mz-faq-item" id="help-delete">
                             <summary>How do I delete my account, and what happens to my data?</summary>
-                            <div>Open <strong>Account settings → Delete account</strong> and confirm with your password. It can't be undone.
-                                We delete your profile, saved addresses, family members, medicines and reminders, prescriptions and their
-                                files, cart, reviews, feedback, alerts and devices, and sign you out everywhere.
+                            <div>Open <strong>Account settings → Delete account</strong> and confirm with your password (if you sign in with
+                                Google, type DELETE instead). It can't be undone. Any unspent <strong>MediZon Money is lost</strong>, so use
+                                it first. We delete your profile, saved addresses, family members, medicines and reminders, prescriptions and
+                                their files, cart, reviews, feedback, support tickets, return photos, alerts and devices, and sign you out
+                                everywhere.
                                 <br><br>
                                 The law requires us to keep tax records, so your past orders, their tax invoices and any refunds stay in
                                 our accounts: amounts, GST, invoice numbers and the state each order went to, without your name, phone
@@ -364,15 +418,18 @@
                         <details class="mz-faq-item">
                             <summary>Who can do what?</summary>
                             <div>There's one <strong>admin</strong>, whose email and password are set on the server; the admin can do
-                                everything and creates every other account. <strong>Pharmacists</strong> review prescriptions.
-                                <strong>Support</strong> reads feedback and reviews and can look orders up. <strong>Finance</strong> has the
-                                sales and GST reports. <strong>Store</strong> accounts run one store: its catalogue, orders, deliveries and
+                                everything and creates every other account. <strong>Pharmacists</strong> review prescriptions and handle
+                                "No prescription" consultations, issuing digital prescriptions. <strong>Support</strong> runs support
+                                tickets, reads feedback and reviews and can look orders up. <strong>Finance</strong> has the sales and GST
+                                reports and can view orders. <strong>Store</strong> accounts run one store: its catalogue, orders, deliveries and
                                 returns. Each account only sees its own pages.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>How do I process customer orders?</summary>
-                            <div>Open <strong>Orders</strong>, filter by status and move each order along as it's confirmed, shipped and
-                                delivered. Store accounts see their own store's orders. Marking an order delivered adds its packs to the
+                            <div>Open <strong>Orders</strong>, filter by status and move each order along as it's confirmed, shipped, out
+                                for delivery and delivered. Store accounts see their own store's orders. An order whose prescription is
+                                still with the pharmacist can only be confirmed by the admin. Orders marked <em>Exchange</em> are free
+                                replacements: they start confirmed and have no invoice. Marking an order delivered adds its packs to the
                                 customer's supply at home.</div>
                         </details>
                         <details class="mz-faq-item">
@@ -385,7 +442,28 @@
                         <details class="mz-faq-item">
                             <summary>How do returns work?</summary>
                             <div>Review each request and its photos in <strong>Returns</strong>, then move approved returns through pickup
-                                and refund. Marking a return picked up also takes the packs out of the customer's supply count.</div>
+                                and refund. Card, UPI and bank refunds are paid automatically on their due day. Marking a return picked up
+                                also takes the packs out of the customer's supply count. Staff can raise a return for a customer, cancel one
+                                before pickup, or move the pickup day.
+                                <br><br>
+                                <strong>Exchanges</strong> are listed with returns and marked <em>Exchange</em>. Approving one takes the packs
+                                from your stock and creates a confirmed, free replacement order. Ship it like any order. When the old packs
+                                are collected, mark the exchange picked up and it's complete. If the packs are out of stock, approval stops:
+                                reject it so the customer can return it instead.</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>How do I review prescriptions?</summary>
+                            <div>Open each file before approving: <strong>Approve</strong> unlocks once you've opened it (the admin can
+                                approve without). Confirm the patient, doctor, date and the medicines with their packs. If the customer
+                                corrected anything, their changes and an <strong>Edit history</strong> (field, what the AI read, what they
+                                changed it to) are on the card. If you approve different packs than the customer asked for, they're told
+                                automatically: "Quantity adjusted according to the prescription".</div>
+                        </details>
+                        <details class="mz-faq-item">
+                            <summary>Where are delivery charges and the minimum order set?</summary>
+                            <div>The admin sets them in <strong>Orders → Order settings</strong>: the minimum order value, the order value
+                                for free delivery and the delivery charge below it, and each payment method's charge. The home page,
+                                cart, checkout and this help page show the new values as soon as they're saved.</div>
                         </details>
                         <details class="mz-faq-item">
                             <summary>How are sales and revenue counted?</summary>
@@ -438,7 +516,7 @@
                         <i class="bi bi-headset" aria-hidden="true"></i>
                         <span><span class="d-block small text-muted">Support ticket</span><strong>Raise a ticket</strong></span>
                     </a>
-                    <button sec:authorize="isAuthenticated()" type="button" class="mz-contact-row" data-mz-ask="I need help">
+                    <button sec:authorize="hasAnyRole('CUSTOMER','ADMIN')" type="button" class="mz-contact-row" data-mz-ask="I need help">
                         <i class="bi bi-chat-dots" aria-hidden="true"></i>
                         <span><span class="d-block small text-muted">Chat</span><strong>Ask the MediZon Assistant</strong></span>
                     </button>

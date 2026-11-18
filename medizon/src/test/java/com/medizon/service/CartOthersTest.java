@@ -40,7 +40,8 @@ class CartOthersTest {
         medicines = mock(MedicineRepository.class);
         MemberService members = mock(MemberService.class);
         catalog = mock(CatalogService.class);
-        service = new CartService(lines, mock(CartRepository.class), medicines, members, catalog, mock(CouponService.class));
+        service = new CartService(lines, mock(CartRepository.class), medicines, members, catalog, mock(CouponService.class),
+                new OrderSettingsService(mock(com.medizon.repository.OrderSettingsRepository.class)));
 
         acitrom = new Medicine();
         acitrom.setId(3L);

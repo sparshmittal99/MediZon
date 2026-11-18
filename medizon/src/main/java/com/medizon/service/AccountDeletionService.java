@@ -144,6 +144,8 @@ public class AccountDeletionService {
                 + "join prescription p on p.id = i.prescription_id where p.user_id = ?)", id);
         jdbc.update("delete from prescription_items where prescription_id in (select id from prescription where user_id = ?)", id);
         jdbc.update("delete from prescription_requested where prescription_id in (select id from prescription where user_id = ?)", id);
+        jdbc.update("delete from prescription_file_opened where prescription_id in (select id from prescription where user_id = ?)", id);
+        jdbc.update("delete from prescription_edits where prescription_id in (select id from prescription where user_id = ?)", id);
         jdbc.update("delete from prescription where user_id = ?", id);
         jdbc.update("delete from notification where user_id = ?", id);
         jdbc.update("delete from notification_device_members where device_id in (select id from notification_devices where user_id = ?)", id);

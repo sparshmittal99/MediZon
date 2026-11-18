@@ -58,7 +58,10 @@ public class PrescriptionCheckService {
             cover(o, o.getAwaitedPrescriptions());
             approved(o);
             notifications.notify(o.getUser(), NotificationType.ORDER_UPDATE, "Prescription approved",
-                    "Your prescription for order " + o.getOrderNumber() + " is approved. The store will confirm your order shortly.",
+                    "Your prescription for order " + o.getOrderNumber() + " is approved. The store will confirm your order shortly."
+                            + o.getAwaitedPrescriptions().stream().map(Prescription::getReviewerNote)
+                                    .filter(n -> n != null && !n.isBlank()).map(n -> " Pharmacist's note: " + n.trim())
+                                    .distinct().collect(java.util.stream.Collectors.joining()),
                     o.getCustomerPath());
         }
     }

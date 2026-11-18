@@ -74,7 +74,7 @@ public class SalesExcelService {
         List<Order> placed = orders.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(start, end);
         if (store != null) placed = placed.stream().filter(o -> inStore(o, storeId)).toList();
         Map<Long, Invoice> tax = new HashMap<>();
-        placed.stream().filter(o -> o.getStatus() != OrderStatus.CANCELLED).forEach(o -> tax.put(o.getId(), invoices.breakdown(o)));
+        placed.stream().filter(o -> o.getStatus() != OrderStatus.CANCELLED && !o.isExchange()).forEach(o -> tax.put(o.getId(), invoices.breakdown(o)));
         List<SalesDay> days = report.daily(period.getFrom(), period.getTo(), storeId);
 
         try (SXSSFWorkbook wb = new SXSSFWorkbook(200)) {

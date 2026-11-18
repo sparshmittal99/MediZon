@@ -23,7 +23,9 @@
                 <span th:if="${p.digital}" th:text="' · ' + ${p.prescriber}"></span>
             </p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
+            <a th:if="${p.editable}" th:href="@{/prescriptions/{id}/edit(id=${p.id}, returnTo='detail')}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-pencil me-1" aria-hidden="true"></i>Edit</a>
             <a th:if="${!p.digital and @fileStorageService.exists(p.storedFileName)}" th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">
                 <i class="bi bi-file-earmark-medical me-1"></i>View file</a>
             <form th:action="@{/prescriptions/{id}/remove(id=${p.id})}" method="post"
@@ -73,6 +75,12 @@
         <span class="flex-grow-1">This prescription was approved before we recorded the medicines on each prescription, so it's
             kept for your records but can't be used for orders. Upload a new prescription to order prescription medicines.</span>
         <a th:href="@{/prescriptions}" class="btn btn-sm btn-primary">Upload a new prescription</a>
+    </div>
+
+    <!-- The pharmacist's note: includes "Quantity adjusted according to the prescription" when they changed packs -->
+    <div th:if="${p.status.name() != 'REJECTED' and p.reviewerNote != null and p.reviewerNote != ''}" class="mz-panel mb-4">
+        <h2 class="h6 mb-1"><i class="bi bi-person-badge me-1 text-success" aria-hidden="true"></i>Pharmacist's note</h2>
+        <p class="mb-0 mz-review-text" th:text="${p.reviewerNote}"></p>
     </div>
 
     <div th:if="${p.status.name() == 'REJECTED'}" class="alert alert-danger">

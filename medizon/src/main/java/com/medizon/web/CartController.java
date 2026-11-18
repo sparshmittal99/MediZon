@@ -43,7 +43,7 @@ public class CartController {
         Optional<User> signedIn = currentUser.find();
         if (signedIn.isPresent() && signedIn.get().isStaff()) return "redirect:/admin";
         String pin = deliveryLocations.pincode(request);
-        model.addAttribute("freeAbove", CartService.FREE_DELIVERY_ABOVE);
+        model.addAttribute("freeAbove", OrderSettingsService.plain(orderSettings.freeDeliveryAbove()));
         if (signedIn.isEmpty()) {
             addCart(model, cartService.guestSummary(session, pin));
             model.addAttribute("guest", true);

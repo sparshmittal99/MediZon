@@ -21,6 +21,9 @@ public class OrderSettingsService {
     /** Highest charge for a way to pay, so a typo can't make paying that way absurdly expensive. */
     public static final BigDecimal MAX_PAYMENT_FEE = new BigDecimal("500");
     public static final BigDecimal MAX_GST_RATE = new BigDecimal("28");
+    /** Highest free-delivery threshold and delivery fee the admin can set. */
+    public static final BigDecimal MAX_FREE_DELIVERY_ABOVE = new BigDecimal("10000");
+    public static final BigDecimal MAX_DELIVERY_FEE = new BigDecimal("500");
 
     /**
      * What paying a certain way adds: {@code amount} includes GST at {@code gstRate} percent.
@@ -39,6 +42,34 @@ public class OrderSettingsService {
 
     /** The smallest medicines total that can be checked out; zero when any amount can. */
     public BigDecimal minOrderValue() { return get().getMinOrderValue(); }
+
+    /** Delivery charge for medicines worth {@code subtotal}, by the admin's free-delivery threshold and fee. */
+    public BigDecimal deliveryFee(BigDecimal subtotal) { return get().deliveryFeeFor(subtotal); }
+
+    /** Carts worth this much or more ship free. */
+    public BigDecimal freeDeliveryAbove() { return get().getFreeDeliveryAbove(); }
+
+    /** "₹499" for showing the free-delivery threshold, "₹1,250.50" with paise. */
+    public String freeDeliveryAboveLabel() { return "₹" + plain(freeDeliveryAbove()); }
+
+    /** Saves the free-delivery threshold and the fee smaller carts pay. */
+    @Transactional
+    public OrderSettings saveDelivery(BigDecimal freeAbove, BigDecimal fee, String by) {
+        if (freeAbove == null) throw new BusinessException("Enter the order value for free delivery, or 0 to make every delivery free.");
+        if (freeAbove.signum() < 0 || freeAbove.compareTo(MAX_FREE_DELIVERY_ABOVE) > 0) {
+            throw new BusinessException("Free delivery must start at ₹0 to ₹" + MAX_FREE_DELIVERY_ABOVE.toPlainString() + ".");
+        }
+        if (fee == null) throw new BusinessException("Enter the delivery charge, or 0 for free delivery.");
+        if (fee.signum() < 0 || fee.compareTo(MAX_DELIVERY_FEE) > 0) {
+            throw new BusinessException("The delivery charge must be ₹0 to ₹" + MAX_DELIVERY_FEE.toPlainString() + ".");
+        }
+        OrderSettings s = get();
+        s.setFreeDeliveryAbove(freeAbove.setScale(2, RoundingMode.HALF_UP));
+        s.setDeliveryFee(fee.setScale(2, RoundingMode.HALF_UP));
+        s.setUpdatedAt(LocalDateTime.now());
+        s.setUpdatedBy(by);
+        return settings.save(s);
+    }
 
     /** The admin's charge for paying this way, before GST; zero when it's free (and for MediZon Money). */
     public BigDecimal paymentFeeBase(PaymentMethod method) {

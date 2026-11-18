@@ -68,6 +68,8 @@ public class PrescriptionCartFiller {
                     + " is approved and valid until " + p.getValidUntil() + ".");
             if (!r.added().isEmpty()) msg.append(" Added to your cart: ").append(String.join(", ", r.added())).append(".");
             if (!r.skipped().isEmpty()) msg.append(" Couldn't add: ").append(String.join(" ", r.skipped()));
+            // The pharmacist's note, with the automatic "Quantity adjusted according to the prescription" when they changed packs
+            if (p.getReviewerNote() != null && !p.getReviewerNote().isBlank()) msg.append(" Pharmacist's note: ").append(p.getReviewerNote().trim());
             tx.executeWithoutResult(s -> notifications.notify(p.getUser(), NotificationType.PRESCRIPTION_UPDATE,
                     r.added().isEmpty() ? "Prescription approved" : "Prescription approved, medicines in your cart",
                     msg.toString(), r.added().isEmpty() ? "/prescriptions/" + p.getId() : "/cart"));

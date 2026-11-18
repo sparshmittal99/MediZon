@@ -53,6 +53,9 @@
                             <td>
                                 <span class="fw-semibold" th:text="${o.orderNumber}"></span>
                                 <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Auto refill</span>
+                                <span th:if="${o.exchange}" class="badge text-bg-info ms-1">Exchange</span>
+                                <div th:if="${o.exchange and o.expectedBy != null and tab == 'pending'}" class="small text-success"
+                                     th:text="'Expected by ' + ${#temporals.format(o.expectedBy, 'EEE, d MMM')}"></div>
                                 <div class="small text-muted" th:text="${o.itemCount} + ' pack(s)'" th:unless="${tab == 'pending'}"></div>
                             </td>
                             <td data-label="Placed" th:text="${#temporals.format(o.createdAt, 'd MMM yyyy')}"></td>
@@ -61,11 +64,12 @@
                                 <span th:case="'cancelled'" th:text="${#temporals.format(o.updatedAt, 'd MMM yyyy')}"></span>
                                 <span th:case="*" th:text="${o.itemCount} + ' pack(s)'"></span>
                             </td>
-                            <td data-label="Total" th:text="'₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td>
+                            <td data-label="Total" th:text="${o.exchange} ? 'Free' : '₹' + ${#numbers.formatDecimal(o.total, 1, 'COMMA', 2, 'POINT')}"></td>
                             <td data-label="Status">
                                 <span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
                                 <a th:if="${ret != null}" th:href="@{/orders(tab='returns', year=${ret.createdAt.year})}" class="d-block small mt-1"
-                                   th:text="${ret.status.name() == 'REFUNDED'} ? 'Returned, refunded' : (${ret.open} ? 'Return in progress' : 'Return ' + ${#strings.toLowerCase(ret.status.label)})"></a>
+                                   th:text="${ret.status.name() == 'REFUNDED'} ? 'Returned, refunded' : (${ret.status.name() == 'EXCHANGED'} ? 'Exchanged'
+                                       : (${ret.open} ? ${ret.kind.label} + ' in progress' : ${ret.kind.label} + ' ' + ${#strings.toLowerCase(ret.status.label)}))"></a>
                             </td>
                             <td class="text-end text-nowrap mz-td-actions">
                                 <a th:if="${o.invoiceAvailable}" th:href="@{/orders/{id}/invoice(id=${o.ref})}" class="btn btn-sm btn-link">Invoice</a>
@@ -87,11 +91,12 @@
             <div th:unless="${#lists.isEmpty(returns)}" class="mz-panel-flush">
                 <div class="table-responsive">
                     <table class="table align-middle mb-0 mz-table-stack">
-                        <thead><tr><th>Return</th><th>Order</th><th>Items</th><th>Requested</th><th>Refund</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Return / exchange</th><th>Order</th><th>Items</th><th>Requested</th><th>Refund</th><th>Status</th></tr></thead>
                         <tbody>
                         <tr th:each="r : ${returns}">
                             <td>
                                 <span class="fw-semibold" th:text="${r.returnNumber}"></span>
+                                <span th:if="${r.exchange}" class="badge text-bg-info ms-1">Exchange</span>
                                 <div class="small text-muted" th:text="${r.reason.label}"></div>
                             </td>
                             <td data-label="Order"><a th:href="@{/orders/{id}(id=${r.order.ref})}" th:text="${r.order.orderNumber}"></a></td>
@@ -99,8 +104,12 @@
                                 <div th:each="ri : ${r.items}" th:text="${ri.quantity} + ' × ' + ${ri.orderItem.medicineName}"></div>
                             </td>
                             <td data-label="Requested" th:text="${#temporals.format(r.createdAt, 'd MMM yyyy')}"></td>
-                            <td data-label="Refund" th:text="'₹' + ${r.refundAmount}"></td>
-                            <td data-label="Status"><span class="badge" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span>
+                            <td data-label="Refund" th:if="${r.exchange}">
+                                <a th:if="${r.replacementOrder != null}" th:href="@{/orders/{id}(id=${r.replacementOrder.ref})}"
+                                   th:text="'Replacement ' + ${r.replacementOrder.orderNumber}"></a>
+                                <span th:if="${r.replacementOrder == null}" class="text-muted">Replacement after approval</span></td>
+                            <td data-label="Refund" th:unless="${r.exchange}" th:text="'₹' + ${r.refundAmount}"></td>
+                            <td data-label="Status"><span class="badge" th:classappend="${r.status.badge}" th:text="${r.statusLabel}"></span>
                                 <div th:if="${r.adminNote}" class="small text-muted mt-1" th:text="${r.adminNote}"></div></td>
                         </tr>
                         </tbody>

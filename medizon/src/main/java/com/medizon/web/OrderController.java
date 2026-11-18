@@ -332,8 +332,10 @@ public class OrderController {
     // ---------------------------------------------------------------- returns
 
     @GetMapping("/orders/{ref}/return")
-    public String returnForm(@PathVariable String ref, Model model, RedirectAttributes ra) {
+    public String returnForm(@PathVariable String ref, @RequestParam(required = false) String kind, Model model, RedirectAttributes ra) {
         if (OrderRef.isPlainId(ref)) return "redirect:/orders/" + OrderRef.encode(orderId(ref)) + "/return";
+        ReturnKind k = ReturnKind.of(kind);
+        model.addAttribute("kind", k);
         Order o = orderService.getForUser(orderId(ref), currentUser.get());
         String blocker = returnService.blocker(o).orElse(null);
         if (blocker != null) {
@@ -343,7 +345,7 @@ public class OrderController {
         model.addAttribute("o", o);
         model.addAttribute("returnable", returnService.returnable(o));
         model.addAttribute("returnBy", returnService.returnBy(o));
-        model.addAttribute("reasons", ReturnReason.values());
+        model.addAttribute("reasons", java.util.Arrays.stream(ReturnReason.values()).filter(k::allows).toList());
         model.addAttribute("maxImages", ReturnService.MAX_IMAGES);
         // Step 2: pickup from where it was delivered (or another address we serve), and where cash orders are refunded
         List<Address> addresses = addressService.list(currentUser.get());
@@ -374,15 +376,16 @@ public class OrderController {
                                 @RequestParam(required = false) List<Long> itemId,
                                 @RequestParam(required = false) List<Integer> qty,
                                 @RequestParam(required = false) ReturnReason reason,
+                                @RequestParam(required = false) String kind,
                                 @RequestParam(required = false) String details,
                                 @RequestParam(required = false) List<MultipartFile> images,
                                 @ModelAttribute ReturnPickupForm pickup,
                                 RedirectAttributes ra) {
         Long id = orderId(ref);
-        ReturnRequest r = returnService.request(currentUser.get(), id, itemId, qty, reason, details, images, pickup);
-        ra.addFlashAttribute("success", "Return " + r.getReturnNumber() + " requested. Pickup is planned for "
-                + r.getPickupDate().format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH))
-                + "; we'll let you know once it's reviewed.");
+        ReturnRequest r = returnService.request(currentUser.get(), id, ReturnKind.of(kind), itemId, qty, reason, details, images, pickup);
+        ra.addFlashAttribute("success", r.getTitle() + " requested. " + (r.isExchange() ? "Collection of the old packs" : "Pickup")
+                + " is planned for " + r.getPickupDate().format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH))
+                + (r.isExchange() ? "; once it's approved we send the replacement free of charge." : "; we'll let you know once it's reviewed."));
         return "redirect:/orders/" + OrderRef.encode(id);
     }
 

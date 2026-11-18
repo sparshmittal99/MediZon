@@ -50,6 +50,7 @@
                 <tr th:each="o : ${orders}">
                     <td><a class="fw-semibold" th:href="@{/admin/orders/{id}(id=${o.id})}" th:text="${o.orderNumber}"></a>
                         <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Auto</span>
+                        <span th:if="${o.exchange}" class="badge text-bg-info ms-1" th:title="${o.exchangeNumber}">Exchange</span>
                         <span th:if="${o.prescription != null}" class="mz-rx position-static ms-1">Rx</span>
                         <span th:if="${o.awaitingPrescription}" class="badge ms-1" th:classappend="${o.rxReview.badge}" th:text="${o.rxReview.label}"></span></td>
                     <td><span th:text="${o.user.fullName}"></span>
@@ -57,7 +58,7 @@
                         <div class="small text-muted" th:text="${o.contactPhone}"></div></td>
                     <td th:if="${store == null}" class="small" th:text="${o.store != null} ? ${o.store.name} : '–'"></td>
                     <td class="text-nowrap" th:text="${#temporals.format(o.createdAt, 'd MMM, h:mm a')}"></td>
-                    <td th:text="'₹' + ${o.total}"></td>
+                    <td th:text="${o.exchange} ? 'Free' : '₹' + ${o.total}"></td>
                     <td class="small" th:text="${o.paymentMethod.name()} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></td>
                     <td><span class="badge" th:classappend="${o.status.badge}" th:text="${o.status.label}"></span>
                         <a th:if="${o.invoiceAvailable}" th:href="@{/admin/orders/{id}/invoice(id=${o.id})}" class="d-block small mt-1">

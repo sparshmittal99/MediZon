@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/layout :: head('Return ' + ${r.returnNumber})}"></head>
+<head th:replace="~{fragments/layout :: head(${r.title})}"></head>
 <body>
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: adminNav}"></div>
@@ -10,14 +10,15 @@
     <a th:href="@{/admin/returns}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> All returns</a>
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mt-2 mb-4">
         <div>
-            <h1 class="mz-page-title" th:text="'Return ' + ${r.returnNumber}">Return</h1>
+            <h1 class="mz-page-title" th:text="${r.title}">Return</h1>
+            <span th:if="${r.exchange}" class="badge text-bg-info mb-2"><i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i>Exchange: send the same packs, no refund</span>
             <p class="text-muted mb-0">
                 <span th:text="'Requested ' + ${#temporals.format(r.createdAt, 'd MMM yyyy, h:mm a')} + ' by ' + ${r.user.fullName}"></span>
                 · <a th:href="@{/admin/orders/{id}(id=${r.order.id})}" th:text="'Order ' + ${r.order.orderNumber}"></a>
                 <span th:if="${r.order.deliveredAt != null}" th:text="', delivered ' + ${#temporals.format(r.order.deliveredAt, 'd MMM')}"></span>
             </p>
         </div>
-        <span class="badge fs-6" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span>
+        <span class="badge fs-6" th:classappend="${r.status.badge}" th:text="${r.statusLabel}"></span>
     </div>
 
     <div class="mz-panel mb-4" th:unless="${r.status.closedWithoutReturn}">
@@ -31,7 +32,8 @@
         <div class="col-lg-8">
             <div class="mz-panel-flush table-responsive mb-4">
                 <table class="table align-middle mb-0">
-                    <thead><tr><th>Medicine</th><th>Ordered</th><th>Returning</th><th class="text-end">Refund</th></tr></thead>
+                    <thead><tr><th>Medicine</th><th>Ordered</th><th th:text="${r.exchange} ? 'Exchanging' : 'Returning'">Returning</th>
+                        <th class="text-end" th:text="${r.exchange} ? 'Value' : 'Refund'">Refund</th></tr></thead>
                     <tbody>
                     <tr th:each="ri : ${r.items}">
                         <td th:text="${ri.orderItem.medicineName}"></td>
@@ -40,7 +42,8 @@
                         <td class="text-end" th:text="'₹' + ${ri.amount}"></td>
                     </tr>
                     </tbody>
-                    <tfoot><tr><td colspan="3" class="text-end fw-bold">Refund</td>
+                    <tfoot th:if="${r.exchange}"><tr><td colspan="4" class="text-end small text-muted">An exchange sends the same packs again: nothing is refunded.</td></tr></tfoot>
+                    <tfoot th:unless="${r.exchange}"><tr><td colspan="3" class="text-end fw-bold">Refund</td>
                         <td class="text-end fw-bold" th:text="'₹' + ${r.refundAmount}"></td></tr></tfoot>
                 </table>
             </div>
@@ -78,6 +81,19 @@
                            th:value="${r.pickupDate}" th:min="${#temporals.format(#temporals.createToday(), 'yyyy-MM-dd')}">
                     <button class="btn btn-sm btn-outline-primary text-nowrap" type="submit">Move pickup</button>
                 </form>
+            </div>
+
+            <!-- Exchange: the replacement order, which the store packs and ships like any other -->
+            <div class="mz-panel mb-3" th:if="${r.exchange}">
+                <h2 class="h6"><i class="bi bi-box-seam me-1" aria-hidden="true"></i>Replacement</h2>
+                <th:block th:if="${r.replacementOrder != null}">
+                    <p class="small mb-1"><a th:href="@{/admin/orders/{id}(id=${r.replacementOrder.id})}" th:text="'Order ' + ${r.replacementOrder.orderNumber}"></a>
+                        <span class="badge ms-1" th:classappend="${r.replacementOrder.status.badge}" th:text="${r.replacementOrder.status.label}"></span></p>
+                    <p class="small text-muted mb-0" th:if="${r.replacementOrder.expectedBy != null}"
+                       th:text="'Expected by ' + ${#temporals.format(r.replacementOrder.expectedBy, 'EEE, d MMM')}"></p>
+                </th:block>
+                <p class="small text-muted mb-0" th:if="${r.replacementOrder == null and r.status.name() == 'REQUESTED'}">
+                    Approving creates a confirmed, free replacement order from this store's stock. Make sure the packs are in stock.</p>
             </div>
 
             <div class="mz-panel mb-3" th:if="${r.refundMode != null}">
@@ -141,6 +157,7 @@
                     <input class="form-check-input" type="checkbox" name="restock" value="true" id="restock">
                     <label class="form-check-label small" for="restock">Packs are sealed and fit to sell: add them back to stock</label>
                 </div>
+                <p class="small text-muted" th:if="${r.exchange}">This completes the exchange; the replacement order carries on by itself.</p>
                 <button class="btn btn-primary w-100" type="submit">Mark picked up</button>
             </form>
 
@@ -157,13 +174,14 @@
 
             <!-- Before pickup: call it off -->
             <form th:if="${r.status.cancellable}" th:action="@{/admin/returns/{id}/cancel(id=${r.id})}" method="post" class="mz-panel mt-3"
-                  data-mz-confirm="Cancel this return? Nothing will be picked up or refunded, and the customer is told."
-                  data-mz-confirm-title="Cancel return" data-mz-confirm-ok="Cancel return">
-                <h2 class="h6">Cancel return</h2>
+                  th:attr="data-mz-confirm=${r.exchange} ? 'Cancel this exchange? Nothing will be picked up, its replacement order is cancelled if it has not shipped yet, and the customer is told.' : 'Cancel this return? Nothing will be picked up or refunded, and the customer is told.',
+                           data-mz-confirm-title=${r.exchange} ? 'Cancel exchange' : 'Cancel return',
+                           data-mz-confirm-ok=${r.exchange} ? 'Cancel exchange' : 'Cancel return'">
+                <h2 class="h6" th:text="${r.exchange} ? 'Cancel exchange' : 'Cancel return'">Cancel return</h2>
                 <label class="form-label small" for="cancelReason">Reason, shown to the customer</label>
                 <textarea class="form-control mb-3" id="cancelReason" name="reason" rows="2" maxlength="1000" required
                           placeholder="e.g. Raised by mistake, or the customer no longer wants to return it"></textarea>
-                <button class="btn btn-outline-danger w-100" type="submit">Cancel return</button>
+                <button class="btn btn-outline-danger w-100" type="submit" th:text="${r.exchange} ? 'Cancel exchange' : 'Cancel return'">Cancel return</button>
             </form>
         </div>
     </div>

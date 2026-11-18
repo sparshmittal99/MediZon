@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Edit prescription')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: flash}"></div>
+
+<main class="container mz-page mz-w-page">
+    <a th:href="${backTo}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> Back</a>
+    <h1 class="mz-page-title mt-2 mb-1">Edit prescription</h1>
+    <p class="text-muted mb-4">Correct anything we read wrongly. The pharmacist checks the file and sees what you changed.</p>
+
+    <!-- The file, to check against while editing -->
+    <section class="mz-panel mb-4 mz-rx-edit-file">
+        <a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="mz-rx-thumb"
+           th:attr="aria-label='Open ' + ${p.originalFileName}">
+            <img th:if="${p.image}" th:src="@{/prescriptions/{id}/file(id=${p.id})}" alt="">
+            <i th:unless="${p.image}" class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
+        </a>
+        <div class="min-w-0">
+            <div class="fw-semibold text-truncate" th:text="${p.originalFileName != null} ? ${p.originalFileName} : 'Prescription'">file.jpg</div>
+            <a class="small" th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener">
+                <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>Open the file</a>
+        </div>
+    </section>
+
+    <form th:action="@{/prescriptions/{id}/edit(id=${p.id})}" method="post" class="mz-rx-edit">
+        <input type="hidden" name="returnTo" th:value="${returnTo}">
+
+        <section class="mz-panel mb-4">
+            <h2 class="h5 mb-3">Details</h2>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small" for="patientName">Patient's name</label>
+                    <input class="form-control" id="patientName" name="patientName" maxlength="100" th:value="${form.patientName}"
+                           placeholder="As written on the prescription" autocomplete="off">
+                    <div class="form-text" th:if="${ai != null and ai.patientName != null and ai.patientName != ''}"
+                         th:text="'AI read: ' + ${ai.patientName}"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small" for="doctorName">Doctor's name</label>
+                    <div class="input-group">
+                        <span class="input-group-text">Dr.</span>
+                        <input class="form-control" id="doctorName" name="doctorName" maxlength="255" th:value="${form.doctorName}" autocomplete="off">
+                    </div>
+                    <div class="form-text" th:if="${ai != null and ai.doctorName != null and ai.doctorName != ''}"
+                         th:text="'AI read: ' + ${ai.doctorName}"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small" for="prescribedOn">Prescription date</label>
+                    <input class="form-control" type="date" id="prescribedOn" name="prescribedOn" th:value="${form.prescribedOn}"
+                           th:max="${#temporals.format(#temporals.createToday(), 'yyyy-MM-dd')}">
+                    <div class="form-text" th:if="${ai != null and ai.prescribedOn != null and ai.prescribedOn != ''}"
+                         th:text="'AI read: ' + ${ai.prescribedOn}"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mz-panel mb-4" data-mz-med-list th:attr="data-max=${maxMedicines}">
+            <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-1">
+                <h2 class="h5 mb-0">Medicines</h2>
+                <span class="small text-muted" th:text="'Up to ' + ${maxMedicines}"></span>
+            </div>
+            <p class="small text-muted mb-3">As written on the prescription. Remove anything that isn't on it.</p>
+            <div data-mz-med-rows>
+                <div class="mz-med-row" th:each="m, s : ${form.medicines}" data-mz-med-row>
+                    <div class="mz-med-name">
+                        <label class="form-label small" th:for="'mn' + ${s.index}">Medicine</label>
+                        <input class="form-control" th:id="'mn' + ${s.index}" name="medName" maxlength="120" th:value="${m.name}" required>
+                    </div>
+                    <div>
+                        <label class="form-label small" th:for="'ms' + ${s.index}">Strength</label>
+                        <input class="form-control" th:id="'ms' + ${s.index}" name="medStrength" maxlength="60" th:value="${m.strength}" placeholder="650 mg">
+                    </div>
+                    <div>
+                        <label class="form-label small" th:for="'md' + ${s.index}">Dose</label>
+                        <input class="form-control" th:id="'md' + ${s.index}" name="medDosage" maxlength="60" th:value="${m.dosage}" placeholder="1-0-1">
+                    </div>
+                    <div>
+                        <label class="form-label small" th:for="'mu' + ${s.index}">Duration</label>
+                        <input class="form-control" th:id="'mu' + ${s.index}" name="medDuration" maxlength="60" th:value="${m.duration}" placeholder="5 days">
+                    </div>
+                    <button type="button" class="btn btn-outline-danger mz-med-remove" data-mz-med-remove aria-label="Remove this medicine">
+                        <i class="bi bi-trash" aria-hidden="true"></i><span class="mz-med-remove-text">Remove</span></button>
+                </div>
+            </div>
+            <p class="small text-muted mb-2" data-mz-med-empty th:hidden="${!#lists.isEmpty(form.medicines)}">No medicines yet. Add the ones on the prescription.</p>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-mz-med-add><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Add medicine</button>
+
+            <!-- A blank row for "Add medicine" -->
+            <template data-mz-med-template>
+                <div class="mz-med-row" data-mz-med-row>
+                    <div class="mz-med-name"><label class="form-label small">Medicine</label>
+                        <input class="form-control" name="medName" maxlength="120" required></div>
+                    <div><label class="form-label small">Strength</label>
+                        <input class="form-control" name="medStrength" maxlength="60" placeholder="650 mg"></div>
+                    <div><label class="form-label small">Dose</label>
+                        <input class="form-control" name="medDosage" maxlength="60" placeholder="1-0-1"></div>
+                    <div><label class="form-label small">Duration</label>
+                        <input class="form-control" name="medDuration" maxlength="60" placeholder="5 days"></div>
+                    <button type="button" class="btn btn-outline-danger mz-med-remove" data-mz-med-remove aria-label="Remove this medicine">
+                        <i class="bi bi-trash" aria-hidden="true"></i><span class="mz-med-remove-text">Remove</span></button>
+                </div>
+            </template>
+        </section>
+
+        <section class="mz-panel mb-4">
+            <label class="h5 form-label" for="notes">Note for the pharmacist <span class="small text-muted fw-normal">(optional)</span></label>
+            <textarea class="form-control" id="notes" name="notes" rows="3" maxlength="1000" th:text="${form.notes}"
+                      placeholder="Anything the pharmacist should know"></textarea>
+        </section>
+
+        <div class="mz-rx-edit-actions">
+            <a th:href="${backTo}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save changes</button>
+        </div>
+    </form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

@@ -17,7 +17,7 @@
             <div class="col-lg-6" th:each="p, s : ${drafts}" th:with="r=${readings[p.id]}">
                 <article class="mz-panel h-100">
                     <input type="hidden" name="id" th:value="${p.id}">
-                    <div class="d-flex align-items-start gap-3 mb-3">
+                    <div class="mz-rx-card-head mb-3">
                         <a th:href="@{/prescriptions/{id}/file(id=${p.id})}" target="_blank" rel="noopener" class="mz-rx-thumb"
                            th:attr="aria-label='Open ' + ${p.originalFileName}">
                             <img th:if="${p.image}" th:src="@{/prescriptions/{id}/file(id=${p.id})}" alt="">
@@ -32,14 +32,20 @@
                             </div>
                             <div class="small text-muted" th:if="${p.prescribedOn != null}" th:text="'Dated ' + ${#temporals.format(p.prescribedOn, 'd MMM yyyy')}"></div>
                         </div>
-                        <button type="submit" class="btn btn-sm btn-outline-danger" formnovalidate data-mz-no-spinner
-                                th:formaction="@{/prescriptions/{id}/discard(id=${p.id}, returnTo=${returnTo})}"
-                                th:attr="aria-label='Remove ' + ${p.originalFileName}"><i class="bi bi-trash me-1"></i>Remove</button>
+                        <!-- Edit opens its own screen with every field; Remove posts to its own address (formaction) -->
+                        <div class="mz-rx-card-actions">
+                            <a class="btn btn-sm btn-outline-primary" th:href="@{/prescriptions/{id}/edit(id=${p.id}, returnTo=${returnTo != null} ? ${returnTo} : 'review')}"
+                               th:attr="aria-label='Edit ' + ${p.originalFileName}"><i class="bi bi-pencil me-1" aria-hidden="true"></i>Edit</a>
+                            <button type="submit" class="btn btn-sm btn-outline-danger" formnovalidate data-mz-no-spinner
+                                    th:formaction="@{/prescriptions/{id}/discard(id=${p.id}, returnTo=${returnTo})}"
+                                    th:attr="aria-label='Remove ' + ${p.originalFileName}"><i class="bi bi-trash me-1" aria-hidden="true"></i>Remove</button>
+                        </div>
                     </div>
 
                     <!-- What we read, so the customer can tell it's the right file -->
                     <div th:if="${r != null and r.legible and !#lists.isEmpty(r.medicines)}" class="mb-3">
-                        <div class="small fw-semibold mb-1"><i class="bi bi-stars me-1 mz-ai-hint"></i>Medicines we read</div>
+                        <div class="small fw-semibold mb-1"><i class="bi bi-stars me-1 mz-ai-hint"></i><span
+                                th:text="${p.customerReading != null} ? 'Medicines (as you corrected them)' : 'Medicines we read'">Medicines we read</span></div>
                         <ul class="small mb-0 ps-3">
                             <li th:each="l : ${r.medicines}" th:text="${l.summary}">Dolo 650, 1-0-1 for 5 days</li>
                         </ul>
@@ -50,18 +56,11 @@
                     <p th:if="${r == null and aiEnabled}" class="small text-muted mb-3">We couldn't read it automatically just now;
                         the pharmacist will read it.</p>
 
-                    <div class="row g-2">
-                        <div class="col-sm-6">
-                            <label class="form-label small" th:for="'doc' + ${p.id}">Doctor's name</label>
-                            <input class="form-control form-control-sm" th:id="'doc' + ${p.id}" th:name="'doctorName_' + ${p.id}"
-                                   th:value="${p.doctorName}" maxlength="255" placeholder="As on the prescription">
-                        </div>
-                        <div class="col-sm-6">
-                            <label class="form-label small" th:for="'note' + ${p.id}">Note for the pharmacist <span class="text-muted">(optional)</span></label>
-                            <input class="form-control form-control-sm" th:id="'note' + ${p.id}" th:name="'notes_' + ${p.id}"
-                                   th:value="${p.notes}" maxlength="1000">
-                        </div>
-                    </div>
+                    <dl class="mz-rx-facts small mb-0">
+                        <dt>Doctor</dt><dd th:text="${p.doctorName != null and p.doctorName != ''} ? 'Dr. ' + ${p.doctorName} : 'Not read yet'"></dd>
+                        <dt>Note</dt><dd th:text="${p.notes != null} ? ${p.notes} : 'None'"></dd>
+                    </dl>
+                    <p class="small text-muted mt-2 mb-0">Something read wrongly? Tap <strong>Edit</strong> to change any detail.</p>
                 </article>
             </div>
         </div>

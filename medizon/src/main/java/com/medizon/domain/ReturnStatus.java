@@ -8,6 +8,8 @@ public enum ReturnStatus {
     REJECTED("Rejected", "text-bg-danger"),
     PICKED_UP("Picked up", "text-bg-primary"),
     REFUNDED("Refunded", "text-bg-success"),
+    /** An exchange whose old packs were collected; its replacement ships as its own order. */
+    EXCHANGED("Exchanged", "text-bg-success"),
     /** Called off by the store or the admin before the packs were collected: nothing is picked up or refunded. */
     CANCELLED("Cancelled", "text-bg-secondary");
 
@@ -36,6 +38,16 @@ public enum ReturnStatus {
 
     /** Can staff still call it off? Only before the packs are collected. */
     public boolean isCancellable() { return canMoveTo(CANCELLED); }
+
+    /** Approved and waiting for pickup, with labels for a return or an exchange. */
+    public String labelFor(ReturnKind kind) {
+        if (kind != ReturnKind.EXCHANGE) return label;
+        return switch (this) {
+            case APPROVED -> "Approved, replacement on its way";
+            case PICKED_UP -> "Picked up";
+            default -> label;
+        };
+    }
 
     /** Ended without anything coming back: rejected or cancelled. Shows no tracker. */
     public boolean isClosedWithoutReturn() { return this == REJECTED || this == CANCELLED; }

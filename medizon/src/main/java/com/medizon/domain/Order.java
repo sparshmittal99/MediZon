@@ -186,6 +186,23 @@ public class Order {
         return out;
     }
 
+    /** The order whose packs this one replaces, for an exchange's replacement order; null otherwise. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Order exchangeFor;
+
+    /** The exchange request (EX…) this replacement settles. */
+    @Column(length = 20)
+    private String exchangeNumber;
+
+    /** When a replacement order should arrive, worked out from the store's delivery days when it's created. */
+    private LocalDate expectedBy;
+
+    /** A free replacement for packs sent back on an exchange: nothing to pay, no tax invoice, can't be cancelled. */
+    public boolean isExchange() { return source == OrderSource.EXCHANGE; }
+
+    /** "Replacement order" or "Order", for titles and messages. */
+    public String getKindLabel() { return isExchange() ? "Replacement order" : "Order"; }
+
     /** The prescribing doctor and the prescription's date when ordered, printed on the invoice. */
     @Column(length = 255)
     private String doctorName;
@@ -215,6 +232,7 @@ public class Order {
     }
 
     public boolean isCancellable() {
+        if (isExchange()) return false;   // the customer asked for it; staff can still cancel it from the back office
         return status == OrderStatus.PLACED || status == OrderStatus.CONFIRMED;
     }
 
@@ -225,11 +243,14 @@ public class Order {
 
     /** Progress steps shown on the order page (cancelled orders don't show the tracker). */
     public List<OrderStatus> getTrackSteps() {
+        // A replacement starts confirmed: there's nothing to place or pay for
+        if (isExchange()) return List.of(OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED);
         return List.of(OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED);
     }
 
     /** The tax invoice is issued when the order ships. */
     public boolean isInvoiceAvailable() {
+        if (isExchange()) return false;   // the sale was invoiced on the original order
         return status == OrderStatus.SHIPPED || status == OrderStatus.OUT_FOR_DELIVERY || status == OrderStatus.DELIVERED;
     }
 
@@ -259,6 +280,7 @@ public class Order {
 
     /** "MediZon Money ₹120.00 + UPI ₹80.00", "MediZon Money" or "UPI". */
     public String getPaymentLabel() {
+        if (isExchange()) return "Exchange, nothing to pay";
         if (!isPaidWithWallet() || paymentMethod == PaymentMethod.WALLET) return paymentMethod.getLabel();
         return PaymentMethod.WALLET.getLabel() + " ₹" + walletUsed + " + " + paymentMethod.getLabel() + " ₹" + getAmountDue();
     }

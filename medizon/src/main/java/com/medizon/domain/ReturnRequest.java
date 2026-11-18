@@ -36,6 +36,15 @@ public class ReturnRequest {
     @Enumerated(EnumType.STRING)
     private ReturnStatus status = ReturnStatus.REQUESTED;
 
+    /** A return (refund) or an exchange (the same packs again). Older rows are returns. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10, nullable = false, columnDefinition = "varchar(10) not null default 'RETURN'")
+    private ReturnKind kind = ReturnKind.RETURN;
+
+    /** An exchange's free replacement order, created when it's approved. */
+    @OneToOne(fetch = FetchType.LAZY)
+    private Order replacementOrder;
+
     @Enumerated(EnumType.STRING)
     private ReturnReason reason;
 
@@ -133,6 +142,14 @@ public class ReturnRequest {
 
     public boolean isOpen() { return status.isOpen(); }
 
+    public boolean isExchange() { return kind == ReturnKind.EXCHANGE; }
+
+    /** "Return RT…" / "Exchange EX…". */
+    public String getTitle() { return (kind == null ? ReturnKind.RETURN : kind).getLabel() + " " + returnNumber; }
+
+    /** The status as this kind of request words it. */
+    public String getStatusLabel() { return status.labelFor(kind); }
+
     /** Raised by staff on the customer's behalf rather than by the customer. */
     public boolean isRaisedByStaff() { return raisedBy != null; }
 
@@ -140,6 +157,7 @@ public class ReturnRequest {
 
     /** "your UPI", "UPI ID name@bank" or "bank account ••••6789 (HDFC0001234)"; null for a cash order from before refunds had a mode. */
     public String getRefundTo() {
+        if (isExchange()) return null;
         RefundMode mode = refundMode != null ? refundMode
                 : order.getPaymentMethod().isOnDelivery() ? null : RefundMode.ORIGINAL;
         if (mode == null) return null;
@@ -171,6 +189,7 @@ public class ReturnRequest {
 
     /** Progress steps shown on the return (rejected returns don't show the tracker). */
     public List<ReturnStatus> getTrackSteps() {
+        if (isExchange()) return List.of(ReturnStatus.REQUESTED, ReturnStatus.APPROVED, ReturnStatus.PICKED_UP, ReturnStatus.EXCHANGED);
         return List.of(ReturnStatus.REQUESTED, ReturnStatus.APPROVED, ReturnStatus.PICKED_UP, ReturnStatus.REFUNDED);
     }
 

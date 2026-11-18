@@ -49,7 +49,8 @@ class CartSelectionTest {
         lines = mock(CartItemRepository.class);
         carts = mock(CartRepository.class);
         CatalogService catalog = mock(CatalogService.class);
-        service = new CartService(lines, carts, mock(MedicineRepository.class), mock(MemberService.class), catalog, mock(CouponService.class));
+        service = new CartService(lines, carts, mock(MedicineRepository.class), mock(MemberService.class), catalog, mock(CouponService.class),
+                new OrderSettingsService(mock(com.medizon.repository.OrderSettingsRepository.class)));
 
         Store store = new Store();
         store.setId(1L);

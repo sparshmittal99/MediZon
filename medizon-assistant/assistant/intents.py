@@ -137,6 +137,8 @@ CUSTOMER = {
     "policy": [
         "what is your return policy", "return policy", "can i return medicines", "how do i return an item",
         "how do refunds work", "when will i get my refund", "refund policy", "where is my refund",
+        "can i exchange a medicine", "exchange a damaged strip", "how do exchanges work", "exchange policy",
+        "i want a replacement", "replace a damaged medicine", "can i get a replacement", "exchange my order",
         "what are the delivery charges", "is delivery free", "delivery fee", "how much is shipping",
         "how can i pay", "payment options", "do you accept upi", "can i pay cash on delivery", "do you take cards",
         "can i cancel my order", "how do i cancel an order", "cancel my order", "cancellation policy",

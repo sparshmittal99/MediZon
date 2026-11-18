@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/layout :: head('Order ' + ${o.orderNumber})}"></head>
+<head th:replace="~{fragments/layout :: head(${o.kindLabel} + ' ' + ${o.orderNumber})}"></head>
 <body>
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <th:block th:if="${adminView}"><div th:replace="~{fragments/layout :: adminNav}"></div></th:block>
@@ -11,10 +11,21 @@
        class="mz-back-link small"><i class="bi bi-arrow-left"></i> All orders</a>
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mt-2 mb-4">
         <div>
-            <h1 class="mz-page-title" th:text="'Order ' + ${o.orderNumber}">Order</h1>
+            <h1 class="mz-page-title" th:text="${o.kindLabel} + ' ' + ${o.orderNumber}">Order</h1>
             <p class="text-muted mb-0">
-                <span th:text="'Placed ' + ${#temporals.format(o.createdAt, 'd MMM yyyy, h:mm a')}"></span>
+                <span th:text="(${o.exchange} ? 'Confirmed ' : 'Placed ') + ${#temporals.format(o.createdAt, 'd MMM yyyy, h:mm a')}"></span>
                 <span th:if="${o.autoReorder}" class="badge mz-auto-badge ms-1">Placed by auto refill</span>
+                <span th:if="${o.exchange}" class="badge text-bg-info ms-1"><i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i>Exchange</span>
+            </p>
+            <!-- A replacement sent for an exchange: what it replaces, and when it should arrive -->
+            <p class="small mb-0 mt-1" th:if="${o.exchange and o.exchangeFor != null}">
+                <i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i><span th:text="'Replacement for exchange ' + ${o.exchangeNumber} + ' on order '"></span>
+                <a th:href="${adminView} ? @{/admin/orders/{id}(id=${o.exchangeFor.id})} : @{/orders/{id}(id=${o.exchangeFor.ref})}"
+                   th:text="${o.exchangeFor.orderNumber}"></a>
+            </p>
+            <p class="small fw-semibold text-success mb-0 mt-1"
+               th:if="${o.exchange and o.expectedBy != null and o.status.name() != 'DELIVERED' and o.status.name() != 'CANCELLED'}">
+                <i class="bi bi-truck me-1" aria-hidden="true"></i><span th:text="'Expected by ' + ${#temporals.format(o.expectedBy, 'EEEE, d MMMM')}"></span>
             </p>
             <p class="small text-muted mb-0 mt-1" th:if="${o.store != null}">
                 <i class="bi bi-shop me-1" aria-hidden="true"></i>From <span class="fw-semibold" th:text="${o.store.name}"></span>
@@ -68,10 +79,16 @@
                         </td>
                         <td class="text-nowrap" th:text="'₹' + ${i.unitPrice}"></td>
                         <td th:text="${i.quantity}"></td>
-                        <td class="text-end text-nowrap" th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></td>
+                        <td class="text-end text-nowrap" th:if="${o.exchange}"><span class="badge text-bg-light border">Exchange</span></td>
+                        <td class="text-end text-nowrap" th:unless="${o.exchange}" th:text="'₹' + ${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}"></td>
                     </tr>
                     </tbody>
-                    <tfoot>
+                    <tfoot th:if="${o.exchange}">
+                    <tr><td colspan="3" class="text-end text-muted">Delivery</td><td class="text-end">Free</td></tr>
+                    <tr><td colspan="3" class="text-end fw-bold">Total</td><td class="text-end fw-bold">₹0.00</td></tr>
+                    <tr class="small"><td colspan="4" class="text-end text-muted">Exchange: you paid for these on the original order, so there's nothing to pay.</td></tr>
+                    </tfoot>
+                    <tfoot th:unless="${o.exchange}">
                     <tr th:if="${o.discounted}" class="text-success"><td colspan="3" class="text-end" th:text="'Promo (' + ${o.couponCode} + ')'">Promo</td>
                         <td class="text-end" th:text="'− ₹' + ${o.discount}"></td></tr>
                     <tr><td colspan="3" class="text-end text-muted">Delivery</td><td class="text-end" th:text="'₹' + ${o.deliveryFee}"></td></tr>
@@ -94,20 +111,37 @@
                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
                     <div>
                         <h2 class="h6 mb-0">
-                            <a th:if="${adminView}" th:href="@{/admin/returns/{id}(id=${r.id})}" th:text="'Return ' + ${r.returnNumber}"></a>
-                            <span th:unless="${adminView}" th:text="'Return ' + ${r.returnNumber}"></span>
+                            <a th:if="${adminView}" th:href="@{/admin/returns/{id}(id=${r.id})}" th:text="${r.title}"></a>
+                            <span th:unless="${adminView}" th:text="${r.title}"></span>
                         </h2>
                         <div class="small text-muted" th:text="'Requested ' + ${#temporals.format(r.createdAt, 'd MMM yyyy')} + ' · ' + ${r.reason.label}"></div>
                     </div>
-                    <span class="badge" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span>
+                    <span class="badge" th:classappend="${r.status.badge}" th:text="${r.statusLabel}"></span>
                 </div>
                 <ol class="mz-track mz-track-sm my-3" th:unless="${r.status.closedWithoutReturn}">
                     <li th:each="s : ${r.trackSteps}" th:classappend="${r.reached(s)} ? 'done'"
                         th:text="${s.name() == 'REQUESTED'} ? 'Requested' : (${s.name() == 'APPROVED'} ? 'Approved' : ${s.label})">Step</li>
                 </ol>
                 <ul class="small mb-2 ps-3">
-                    <li th:each="ri : ${r.items}" th:text="${ri.quantity} + ' × ' + ${ri.orderItem.medicineName} + ', ₹' + ${ri.amount}"></li>
+                    <li th:each="ri : ${r.items}" th:text="${ri.quantity} + ' × ' + ${ri.orderItem.medicineName} + (${r.exchange} ? '' : ', ₹' + ${ri.amount})"></li>
                 </ul>
+                <!-- Exchange: the free replacement, which runs as its own order -->
+                <div class="mz-order-note mz-order-note-info mb-2" th:if="${r.exchange and r.replacementOrder != null}" role="status">
+                    <i class="bi bi-box-seam" aria-hidden="true"></i>
+                    <span>
+                        <span>Replacement order </span>
+                        <a th:href="${adminView} ? @{/admin/orders/{id}(id=${r.replacementOrder.id})} : @{/orders/{id}(id=${r.replacementOrder.ref})}"
+                           th:text="${r.replacementOrder.orderNumber}"></a>
+                        <span th:text="' · ' + ${r.replacementOrder.status.label}"></span>
+                        <span th:if="${r.replacementOrder.expectedBy != null and r.replacementOrder.status.name() != 'DELIVERED' and r.replacementOrder.status.name() != 'CANCELLED'}"
+                              th:text="' · expected by ' + ${#temporals.format(r.replacementOrder.expectedBy, 'EEE, d MMM')}"></span>
+                        <span th:if="${r.replacementOrder.status.name() == 'DELIVERED' and r.replacementOrder.deliveredAt != null}"
+                              th:text="' · delivered ' + ${#temporals.format(r.replacementOrder.deliveredAt, 'EEE, d MMM')}"></span>
+                        <span class="d-block small text-muted">Same medicines and packs, free of charge.</span>
+                    </span>
+                </div>
+                <p class="small text-muted mb-1" th:if="${r.exchange and r.status.name() == 'REQUESTED'}">
+                    Once approved, we send a replacement of the same packs free of charge and collect the old ones.</p>
                 <p class="small mb-1" th:if="${r.details}" th:text="${r.details}"></p>
                 <p class="small mb-1" th:if="${r.adminNote}"><strong>Pharmacist:</strong> <span th:text="${r.adminNote}"></span></p>
                 <p class="small mb-1" th:if="${r.cancelReason}"><strong>Cancelled:</strong> <span th:text="${r.cancelReason}"></span></p>
@@ -115,7 +149,7 @@
                     <i class="bi bi-person-badge me-1" aria-hidden="true"></i><span th:text="'Raised by ' + ${r.raisedBy} + ': ' + ${r.staffNote}"></span></p>
                 <p class="small mb-1" th:if="${r.pickupAddress != null and (r.status.name() == 'REQUESTED' or r.status.name() == 'APPROVED')}">
                     <strong>Pickup</strong> <span th:text="${#temporals.format(r.pickupDate, 'EEE, d MMM')} + ' from ' + ${r.pickupAddress}"></span></p>
-                <p class="small mb-0 fw-semibold" th:unless="${r.status.closedWithoutReturn}" th:text="(${r.status.name() == 'REFUNDED'} ? 'Refunded ' : 'Refund ') + '₹' + ${r.refundAmount}
+                <p class="small mb-0 fw-semibold" th:unless="${r.status.closedWithoutReturn or r.exchange}" th:text="(${r.status.name() == 'REFUNDED'} ? 'Refunded ' : 'Refund ') + '₹' + ${r.refundAmount}
                         + (${r.refundTo} != null ? ' to ' + ${r.refundTo} : '')"></p>
                 <p class="small text-muted mb-0" th:if="${r.walletRefund.signum() > 0 and r.payoutAmount.signum() > 0}"
                    th:text="'₹' + ${r.walletRefund} + ' went back to MediZon Money; ₹' + ${r.payoutAmount} + ' to ' + ${r.refundTo} + '.'"></p>
@@ -128,25 +162,33 @@
             <!-- Staff: raise a return for the customer, e.g. after a support ticket -->
             <div th:if="${adminView and canManage and o.status.name() == 'DELIVERED'}" class="mz-panel mt-4 d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
-                    <h2 class="h6 mb-0">Return for the customer</h2>
-                    <div class="small text-muted" th:if="${staffReturnBlocker == null}">Raise a return on the customer's behalf. It is approved at once and looks like an ordinary return to them.</div>
+                    <h2 class="h6 mb-0">Return or exchange for the customer</h2>
+                    <div class="small text-muted" th:if="${staffReturnBlocker == null}">Raise one on the customer's behalf. It is approved at once and looks like an ordinary return or exchange to them.</div>
                     <div class="small text-muted" th:if="${staffReturnBlocker != null}" th:text="${staffReturnBlocker}"></div>
                 </div>
-                <a th:if="${staffReturnBlocker == null}" th:href="@{/admin/returns/new(order=${o.id})}" class="btn btn-outline-primary">
-                    <i class="bi bi-arrow-return-left me-1" aria-hidden="true"></i>Raise a return</a>
+                <div th:if="${staffReturnBlocker == null}" class="mz-return-cta-actions">
+                    <a th:href="@{/admin/returns/new(order=${o.id},kind='exchange')}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i>Raise an exchange</a>
+                    <a th:href="@{/admin/returns/new(order=${o.id})}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-return-left me-1" aria-hidden="true"></i>Raise a return</a>
+                </div>
             </div>
 
-            <div th:if="${!adminView and hasReturnable and o.status.name() == 'DELIVERED'}" class="mz-panel mt-4 d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <div>
+            <div th:if="${!adminView and hasReturnable and o.status.name() == 'DELIVERED'}" class="mz-panel mt-4 mz-return-cta">
+                <div class="mz-return-cta-text">
                     <h2 class="h6 mb-0">Something wrong with your order?</h2>
                     <div class="small text-muted" th:if="${returnBlocker == null}"
-                         th:text="'Return damaged, wrong or expired medicines until ' + ${#temporals.format(returnBy, 'd MMM yyyy')} + '.'"></div>
+                         th:text="'Damaged, leaking, wrong or expired? Until ' + ${#temporals.format(returnBy, 'd MMM yyyy')} + ', exchange it for the same medicine free of charge, or return it for a refund.'"></div>
                     <div class="small text-muted" th:if="${returnBlocker != null}" th:text="${returnBlocker}"></div>
                     <div class="small text-muted" th:with="fixed=${o.items.?[!returnable]}" th:unless="${#lists.isEmpty(fixed)}"
                          th:text="'Not returnable: ' + ${#strings.listJoin(fixed.![medicineName], ', ')}"></div>
                 </div>
-                <a th:if="${returnBlocker == null}" th:href="@{/orders/{id}/return(id=${o.ref})}" class="btn btn-outline-primary">
-                    <i class="bi bi-arrow-return-left me-1"></i>Return items</a>
+                <div th:if="${returnBlocker == null}" class="mz-return-cta-actions">
+                    <a th:href="@{/orders/{id}/return(id=${o.ref},kind='exchange')}" class="btn btn-primary">
+                        <i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i>Exchange</a>
+                    <a th:href="@{/orders/{id}/return(id=${o.ref})}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-return-left me-1" aria-hidden="true"></i>Return</a>
+                </div>
             </div>
 
             <!-- Support: tickets about this order, and raising one -->
@@ -211,8 +253,8 @@
                     <a th:href="${o.shippingMapLink}" target="_blank" rel="noopener"><i class="bi bi-geo-alt me-1"></i>Directions to the exact location</a></p>
                 <p class="small text-muted mb-3" th:if="${o.contactPhone}"><i class="bi bi-telephone me-1"></i><span th:text="${o.contactPhone}"></span></p>
                 <h2 class="h6">Payment</h2>
-                <p class="small mb-0" th:text="${o.paymentLabel} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></p>
-                <p class="small text-muted mb-0" th:if="${o.gatewayPaymentId != null}" th:text="'Payment id ' + ${o.gatewayPaymentId}"></p>
+                <p class="small mb-0" th:text="${o.exchange} ? ${o.paymentLabel} : ${o.paymentLabel} + ', ' + ${#strings.toLowerCase(o.paymentStatus.name())}"></p>
+                <p class="small text-muted mb-0" th:if="${o.gatewayPaymentId != null and !o.exchange}" th:text="'Payment id ' + ${o.gatewayPaymentId}"></p>
                 <p class="small text-muted mb-0" th:if="${o.gatewayRefundId != null}" th:text="'Refund id ' + ${o.gatewayRefundId}"></p>
                 <p class="small text-success mb-0" th:if="${o.discounted}" th:text="'You saved ₹' + ${o.discount} + ' with ' + ${o.couponCode}"></p>
                 <p th:each="rx : ${o.prescriptionsUsed}" th:if="${!rx.digital and @fileStorageService.exists(rx.storedFileName)}" sec:authorize="hasAnyRole('CUSTOMER','ADMIN','PHARMACIST')" class="small mt-3 mb-0">
@@ -220,6 +262,10 @@
                     <a th:href="@{/prescriptions/{id}/file(id=${rx.id})}" target="_blank" rel="noopener"
                        th:text="'View prescription' + (${rx.doctorName != null} ? ' (Dr. ' + ${rx.doctorName} + ')' : '')">View prescription</a>
                 </p>
+                <!-- The pharmacist's note on the prescriptions this order was placed with (uploaded at checkout, or used from) -->
+                <th:block th:each="rx : ${#sets.toSet(o.awaitedPrescriptions)}" th:if="${rx.reviewerNote != null and rx.reviewerNote != ''}">
+                    <p class="small mt-2 mb-0"><strong>Pharmacist's note:</strong> <span th:text="${rx.reviewerNote}"></span></p>
+                </th:block>
             </div>
 
             <!-- Customer actions -->

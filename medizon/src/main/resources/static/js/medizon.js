@@ -1086,6 +1086,7 @@
         const submitErr = form.querySelector('[data-mz-submit-error]');
         const qtys = [...form.querySelectorAll('input[name=qty]')];
         const photos = form.querySelector('[data-mz-return-photos]');
+        const noun = form.dataset.mzKind || 'return';   // "return" or "exchange"
         let onStep2 = false;
 
         form.querySelector('[data-mz-return-steps]').hidden = false;
@@ -1106,11 +1107,11 @@
         const step1Ok = () => {
             stepErr.hidden = true;
             if (qtys.some(q => Number(q.value) < 0 || Number(q.value) > Number(q.max) || !Number.isInteger(Number(q.value)))) {
-                return fail(stepErr, 'Check the number of packs: you can return up to the amount shown for each medicine.');
+                return fail(stepErr, `Check the number of packs: you can ${noun} up to the amount shown for each medicine.`);
             }
-            if (!qtys.some(q => Number(q.value) > 0)) return fail(stepErr, 'Choose the packs you want to return.');
+            if (!qtys.some(q => Number(q.value) > 0)) return fail(stepErr, `Choose the packs you want to ${noun}.`);
             const reason = form.querySelector('input[name=reason]:checked');
-            if (!reason) return fail(stepErr, 'Choose a reason for the return.');
+            if (!reason) return fail(stepErr, `Choose a reason for the ${noun}.`);
             if (reason.value === 'OTHER' && !form.querySelector('[name=details]').value.trim()) return fail(stepErr, "Tell us what's wrong.");
             if (!photos.files.length) return fail(stepErr, 'Add at least one photo of the medicine and its packaging.');
             return true;
@@ -1119,6 +1120,7 @@
         // Refund total follows the packs chosen in step 1
         const total = form.querySelector('[data-mz-refund-total]');
         const syncTotal = () => {
+            if (!total) return;   // an exchange has no refund
             // What was paid per pack, after any promo (the server rounds the same way: down to the paisa)
             const sum = qtys.reduce((s, q) => {
                 const n = Math.max(0, Number(q.value) || 0), of = Number(q.dataset.of || 1), net = Number(q.dataset.net || 0);
@@ -2020,4 +2022,47 @@
         });
         sync();
     })();
+    // Pharmacist queue: Approve unlocks once the file has been opened (the server checks it too)
+    document.querySelectorAll('[data-mz-rx-card]').forEach(card => {
+        const open = card.querySelector('[data-mz-rx-open]');
+        if (!open) return;
+        open.addEventListener('click', () => {
+            card.querySelectorAll('[data-mz-rx-approve]').forEach(b => { b.disabled = false; });
+            card.querySelector('[data-mz-rx-open-hint]')?.remove();
+            open.classList.replace('btn-primary', 'btn-outline-primary');
+        });
+    });
+
+    // Prescription edit screen: add and remove medicine rows (blank rows are ignored by the server)
+    document.querySelectorAll('[data-mz-med-list]').forEach(list => {
+        const rows = list.querySelector('[data-mz-med-rows]');
+        const tpl = list.querySelector('[data-mz-med-template]');
+        const add = list.querySelector('[data-mz-med-add]');
+        const empty = list.querySelector('[data-mz-med-empty]');
+        const max = Number(list.dataset.max || 20);
+        let seq = 0;
+        const sync = () => {
+            const n = rows.querySelectorAll('[data-mz-med-row]').length;
+            add.disabled = n >= max;
+            if (empty) empty.hidden = n > 0;
+        };
+        rows.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-mz-med-remove]');
+            if (!btn) return;
+            btn.closest('[data-mz-med-row]').remove();
+            sync();
+        });
+        add.addEventListener('click', () => {
+            const row = tpl.content.firstElementChild.cloneNode(true);
+            row.querySelectorAll('input').forEach(input => {   // label each new field for screen readers
+                const id = 'mznew' + (seq++);
+                input.id = id;
+                input.previousElementSibling?.setAttribute('for', id);
+            });
+            rows.appendChild(row);
+            row.querySelector('input').focus();
+            sync();
+        });
+        sync();
+    });
 })();

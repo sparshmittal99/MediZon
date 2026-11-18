@@ -11,7 +11,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashSet;
 import java.util.Optional;
+import java.util.Set;
 
 @Entity
 @Getter @Setter @NoArgsConstructor
@@ -56,6 +58,32 @@ public class Prescription {
 
     /** When the AI last tried to read it; set with no reading means it failed. */
     private LocalDateTime aiReadAt;
+
+    /**
+     * The details as the customer corrected them on the edit screen (same JSON shape as {@link #aiReading}); null when
+     * they haven't changed anything. What changed is logged in {@link PrescriptionEdit}.
+     */
+    @Column(columnDefinition = "text")
+    private String customerReading;
+
+    /** Staff who have opened the file: a pharmacist can only approve a prescription after opening it. */
+    @ElementCollection
+    @CollectionTable(name = "prescription_file_opened", joinColumns = @JoinColumn(name = "prescription_id"))
+    @Column(name = "user_id")
+    private Set<Long> openedBy = new LinkedHashSet<>();
+
+    /** What the customer changed on the edit screen, oldest first: the pharmacist's edit history. */
+    @OneToMany(mappedBy = "prescription", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("editedAt asc, id asc")
+    private List<PrescriptionEdit> edits = new ArrayList<>();
+
+    /** Has this staff member opened the file? */
+    public boolean wasOpenedBy(User u) { return u != null && openedBy.contains(u.getId()); }
+
+    /** The customer can still change the details: not yet sent, or still waiting for the pharmacist. */
+    public boolean isEditable() {
+        return !digital && !removed && (status == PrescriptionStatus.DRAFT || status == PrescriptionStatus.PENDING);
+    }
 
     /** The medicines the AI read, one line, for the pharmacist's queue. */
     @Column(length = 1000)

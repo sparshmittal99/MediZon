@@ -2015,3 +2015,63 @@ html[data-theme="dark"] .mz-reading { background: rgba(15, 23, 21, .92); }
     .mz-reading.show { animation: none; }
     .mz-reading-spinner::after { animation-duration: 2.5s; }
 }
+
+/* Order page: a neutral note (an exchange's replacement order), and the Exchange / Return choice */
+.mz-order-note.mz-order-note-info { background: var(--mz-mint); color: var(--bs-body-color); font-weight: 400; }
+.mz-order-note.mz-order-note-info i { color: var(--mz-green, #0E6B57); }
+.mz-return-cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+.mz-return-cta-text { flex: 1 1 16rem; min-width: 0; }
+.mz-return-cta-actions { display: flex; gap: .5rem; flex: 0 0 auto; }
+@media (max-width: 575.98px) {
+    .mz-return-cta-actions { flex: 1 1 100%; }
+    .mz-return-cta-actions .btn { flex: 1 1 0; }
+}
+
+/* Exchange or return: two choices side by side, stacked on narrow phones */
+.mz-kind-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.mz-kind-switch a { display: flex; align-items: center; gap: .7rem; padding: .8rem 1rem; border-radius: .9rem;
+    border: 1.5px solid var(--bs-border-color); color: inherit; text-decoration: none; background: var(--bs-body-bg); min-width: 0; }
+.mz-kind-switch a i { font-size: 1.3rem; color: var(--mz-green); flex: 0 0 auto; }
+.mz-kind-switch a span { display: flex; flex-direction: column; min-width: 0; }
+.mz-kind-switch a small { color: var(--bs-secondary-color); font-size: .8rem; }
+.mz-kind-switch a.active { border-color: var(--mz-green); background: var(--mz-mint); }
+@media (max-width: 379.98px) { .mz-kind-switch { grid-template-columns: 1fr; } }
+
+/* Prescription edit screen */
+.mz-rx-edit-file { display: flex; align-items: center; gap: 1rem; }
+.mz-med-row { display: grid; gap: .5rem .75rem; align-items: end; padding: .75rem 0; border-bottom: 1px solid var(--mz-line); }
+.mz-med-row:first-child { padding-top: 0; }
+.mz-med-row .form-label { margin-bottom: .2rem; }
+@media (min-width: 768px) {
+    .mz-med-row { grid-template-columns: minmax(0, 3fr) minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, 1.4fr) auto; }
+    .mz-med-remove-text { display: none; }
+}
+@media (max-width: 767.98px) {
+    .mz-med-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .mz-med-row .mz-med-name { grid-column: 1 / -1; }
+    .mz-med-remove { grid-column: 1 / -1; justify-self: end; }
+    .mz-med-remove-text { margin-left: .35rem; }
+}
+@media (max-width: 379.98px) { .mz-med-row { grid-template-columns: 1fr 1fr; } }
+.mz-rx-edit-actions { display: flex; justify-content: flex-end; gap: .5rem; }
+/* Phones and the app: actions stay in reach at the bottom of the screen */
+@media (max-width: 575.98px) {
+    .mz-rx-edit-actions { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px; padding: .75rem 16px calc(.75rem + env(safe-area-inset-bottom));
+        background: var(--bs-body-bg); border-top: 1px solid var(--mz-line); }
+    .mz-rx-edit-actions .btn { flex: 1 1 0; }
+}
+
+/* Review page card: file, details, then Edit / Remove; the buttons drop below and share the row on phones */
+.mz-rx-card-head { display: flex; align-items: flex-start; gap: 1rem; }
+.mz-rx-card-actions { display: flex; gap: .5rem; flex: 0 0 auto; }
+@media (max-width: 575.98px) {
+    .mz-rx-card-head { flex-wrap: wrap; }
+    .mz-rx-card-actions { flex: 1 1 100%; }
+    .mz-rx-card-actions .btn { flex: 1 1 0; }
+}
+.mz-rx-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .15rem .75rem; }
+.mz-rx-facts dt { font-weight: 600; }
+.mz-rx-facts dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Pharmacist queue: a prescription uploaded for an order already placed */
+.mz-rx-onorder { padding: .7rem .9rem; border-radius: .75rem; background: var(--mz-mint); }

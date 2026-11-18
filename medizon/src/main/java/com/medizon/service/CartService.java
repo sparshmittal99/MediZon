@@ -36,8 +36,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CartService {
 
-    public static final BigDecimal FREE_DELIVERY_ABOVE = new BigDecimal("499");
-    public static final BigDecimal DELIVERY_FEE = new BigDecimal("40");
     /**
      * Most packs of one medicine in a cart. Also keeps quantities far from int overflow, which would otherwise wrap a
      * huge request to a negative number that passes the stock check.
@@ -50,11 +48,7 @@ public class CartService {
     private final MemberService memberService;
     private final CatalogService catalog;
     private final CouponService coupons;
-
-    public static BigDecimal deliveryFeeFor(BigDecimal subtotal) {
-        if (subtotal.signum() == 0 || subtotal.compareTo(FREE_DELIVERY_ABOVE) >= 0) return BigDecimal.ZERO;
-        return DELIVERY_FEE;
-    }
+    private final OrderSettingsService orderSettings;
 
     @Transactional
     public void add(User user, Long medicineId, int quantity, String pincode) {
@@ -277,7 +271,7 @@ public class CartService {
         items.forEach(i -> i.setOffer(offers.get(i.getMedicine().getId())));
         BigDecimal subtotal = items.stream().filter(CartItem::isCounted).map(CartItem::getLineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal fee = deliveryFeeFor(subtotal);
+        BigDecimal fee = orderSettings.deliveryFee(subtotal);
         boolean rx = items.stream().anyMatch(i -> i.isCounted() && i.getMedicine().isPrescriptionRequired());
         return new CartSummary(items, subtotal, fee, rx, couponCode == null ? null : coupons.evaluate(user, couponCode, subtotal));
     }

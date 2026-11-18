@@ -76,11 +76,11 @@
                         <td class="mz-body" style="padding: 30px;">
                             
                             <h1 style="margin: 0 0 12px 0; font-size: 22px; font-weight: 700; color: #17302A;">
-                                <span th:if="${status.name() == 'CONFIRMED'}">Your order is confirmed!</span>
-                                <span th:if="${status.name() == 'SHIPPED'}">Your order has been shipped!</span>
-                                <span th:if="${status.name() == 'OUT_FOR_DELIVERY'}">Your order is out for delivery!</span>
-                                <span th:if="${status.name() == 'DELIVERED'}">Your order has been delivered!</span>
-                                <span th:if="${status.name() == 'CANCELLED'}">Your order has been cancelled</span>
+                                <span th:if="${status.name() == 'CONFIRMED'}"><th:block th:text="${order.exchange} ? 'Your replacement' : 'Your order'">Your order</th:block> is confirmed!</span>
+                                <span th:if="${status.name() == 'SHIPPED'}"><th:block th:text="${order.exchange} ? 'Your replacement' : 'Your order'">Your order</th:block> has been shipped!</span>
+                                <span th:if="${status.name() == 'OUT_FOR_DELIVERY'}"><th:block th:text="${order.exchange} ? 'Your replacement' : 'Your order'">Your order</th:block> is out for delivery!</span>
+                                <span th:if="${status.name() == 'DELIVERED'}"><th:block th:text="${order.exchange} ? 'Your replacement' : 'Your order'">Your order</th:block> has been delivered!</span>
+                                <span th:if="${status.name() == 'CANCELLED'}"><th:block th:text="${order.exchange} ? 'Your replacement' : 'Your order'">Your order</th:block> has been cancelled</span>
                             </h1>
 
                             <p style="margin: 0 0 24px 0; font-size: 15px; color: #5B716A; line-height: 1.6;" th:text="${statusMessage}">
@@ -97,7 +97,7 @@
                                         </td>
                                         <td width="50%" class="text-end-sm" style="padding: 4px 0; font-size: 13px; color: #5B716A; text-align: right; vertical-align: top;">
                                             Total Amount:<br>
-                                            <strong style="font-size: 16px; color: #0E6B57;" th:text="'₹' + ${order.total}">₹120.00</strong>
+                                            <strong style="font-size: 16px; color: #0E6B57;" th:text="${order.exchange} ? 'Free (exchange)' : '₹' + ${order.total}">₹120.00</strong>
                                         </td>
                                     </tr>
                                     <tr th:if="${order.invoiceNumber != null}">
@@ -115,7 +115,7 @@
                                     <tr th:each="item : ${order.items}" style="border-bottom: 1px solid #E6F2EC;">
                                         <td style="padding: 8px 0; font-size: 14px; color: #17302A;" th:text="${item.medicineName}">Medicine Name</td>
                                         <td style="padding: 8px 12px; font-size: 13px; color: #5B716A; text-align: center;" th:text="${item.quantity} + ' pack(s)'">1</td>
-                                        <td style="padding: 8px 0; font-size: 14px; font-weight: 600; color: #17302A; text-align: right;" th:text="'₹' + ${item.lineTotal}">₹120.00</td>
+                                        <td style="padding: 8px 0; font-size: 14px; font-weight: 600; color: #17302A; text-align: right;" th:text="${order.exchange} ? 'Exchange' : '₹' + ${item.lineTotal}">₹120.00</td>
                                     </tr>
                                 </tbody>
                             </table>

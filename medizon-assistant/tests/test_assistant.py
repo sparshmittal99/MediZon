@@ -207,9 +207,10 @@ class CustomerFlowTests(unittest.TestCase):
         self.assertEqual(out["navigate"], "/checkout")
 
     def test_policy_questions_get_the_store_rules(self):
-        for question, expected in [("What is your return policy?", "7 days of delivery"),
-                                   ("How do refunds work?", "5 to 7 working days"),
-                                   ("What are the delivery charges?", "₹499"),
+        for question, expected in [("What is your return policy?", "Exchange"),
+                                   ("How do refunds work?", "MediZon Money instantly"),
+                                   ("Can I exchange a damaged strip?", "free replacement order"),
+                                   ("What are the delivery charges?", "free-delivery amount"),
                                    ("How can I pay?", "pay on delivery"),
                                    ("Can I cancel my order?", "until it ships")]:
             with self.subTest(question=question):

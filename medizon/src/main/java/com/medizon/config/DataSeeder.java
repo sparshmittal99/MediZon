@@ -58,6 +58,7 @@ public class DataSeeder implements CommandLineRunner {
     public void run(String... args) {
         dropStaleEnumChecks();
         backfillInvoicePatients();
+        markUsedUpDigitalPrescriptions();
         relaxLegacyColumns();
         unitsPerPackAsText();
         if (stores.count() == 0) {
@@ -144,6 +145,24 @@ public class DataSeeder implements CommandLineRunner {
         jdbc.execute("alter table if exists checkout_payments drop constraint if exists checkout_payments_status_check");
         jdbc.execute("alter table if exists checkout_payments drop constraint if exists checkout_payments_gateway_check");
         jdbc.execute("alter table if exists orders drop constraint if exists orders_payment_gateway_check");
+        // OrderSource.EXCHANGE (replacement orders) was added after the column was created
+        jdbc.execute("alter table if exists orders drop constraint if exists orders_source_check");
+    }
+
+    /**
+     * Digital prescriptions used to stay "Approved" after everything on them was ordered; they're marked used up like
+     * uploaded ones now. Fixes the ones from before, quietly (no alert). Only fully ordered ones match, so it runs
+     * safely every start.
+     */
+    private void markUsedUpDigitalPrescriptions() {
+        int n = jdbc.update("""
+                update prescription p set status = 'USED_UP'
+                where p.digital = true and p.status = 'APPROVED'
+                  and exists (select 1 from prescription_items i join medicine m on m.id = i.medicine_id
+                              where i.prescription_id = p.id and m.prescription_required = true)
+                  and not exists (select 1 from prescription_items i join medicine m on m.id = i.medicine_id
+                                  where i.prescription_id = p.id and m.prescription_required = true and i.packs_ordered < i.packs)""");
+        if (n > 0) log.info("Marked {} fully ordered digital prescription(s) used up", n);
     }
 
     /**

@@ -37,13 +37,16 @@ public class GlobalModelAdvice {
     private final StockAlertService stockAlerts;
     private final LiveUpdates liveUpdates;
     private final MaintenanceService maintenance;
+    private final OrderSettingsService orderSettings;
 
     @ModelAttribute
     public void common(Model model, HttpServletRequest request, HttpServletResponse response) {
         model.addAttribute("showCatbar", false);
         model.addAttribute("frontPage", false);
         model.addAttribute("seller", invoiceService.seller());
-        model.addAttribute("freeDeliveryAbove", CartService.FREE_DELIVERY_ABOVE);
+        com.medizon.domain.OrderSettings os = orderSettings.get();
+        model.addAttribute("freeDeliveryAbove", OrderSettingsService.plain(os.getFreeDeliveryAbove()));
+        model.addAttribute("deliveryAlwaysFree", os.isDeliveryAlwaysFree());
         model.addAttribute("inApp", isApp(request));
         model.addAttribute("maintenance", maintenance.current().map(MaintenanceBanner::of).orElse(null));
         Optional<User> signedIn = currentUser.find();

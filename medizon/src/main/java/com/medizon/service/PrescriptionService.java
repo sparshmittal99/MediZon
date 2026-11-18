@@ -220,9 +220,28 @@ public class PrescriptionService {
     @Transactional
     public void review(Long id, boolean approve, String note, LocalDate validUntil, Map<Long, Integer> packsByMedicine,
                        Details details) {
+        review(id, approve, note, validUntil, packsByMedicine, details, null);
+    }
+
+    /**
+     * As above, by {@code reviewer}: a pharmacist can only approve a prescription whose file they have opened (the
+     * admin can approve without). Rejecting needs no file opened.
+     */
+    @Transactional
+    public void review(Long id, boolean approve, String note, LocalDate validUntil, Map<Long, Integer> packsByMedicine,
+                       Details details, User reviewer) {
         Prescription p = prescriptions.findById(id)
                 .orElseThrow(() -> new NotFoundException("Prescription not found."));
         if (p.getStatus() != PrescriptionStatus.PENDING) throw new BusinessException("This prescription has already been reviewed.");
+        if (approve && reviewer != null && !reviewer.isAdmin() && !p.wasOpenedBy(reviewer)) {
+            throw new BusinessException("Open the prescription file and check it before approving.");
+        }
+        String quantityNote = null;
+        // Uploaded at checkout for an order already placed: the packs are the order's. Only the admin can change them
+        List<OrderedLine> onOrder = approve ? orderedLines(p) : List.of();
+        Map<Long, Integer> orderPacks = new LinkedHashMap<>();
+        onOrder.forEach(l -> orderPacks.merge(l.medicineId(), l.packs(), Integer::sum));
+        Map<Long, Integer> cover = !orderPacks.isEmpty() && reviewer != null && !reviewer.isAdmin() ? orderPacks : packsByMedicine;
         if (approve) {
             String doctor = details == null || details.doctorName() == null ? "" : details.doctorName().trim().replaceFirst("(?i)^dr\\.?\\s+", "");
             String patient = details == null || details.patientName() == null ? "" : details.patientName().trim();
@@ -235,20 +254,24 @@ public class PrescriptionService {
             p.setDoctorName(doctor);
             p.setPatientName(patient);
             p.setPrescribedOn(date);
-            if (packsByMedicine == null || packsByMedicine.isEmpty()) {
+            if (cover == null || cover.isEmpty()) {
                 throw new BusinessException("Add the medicines this prescription covers, with the packs prescribed, before approving.");
             }
             p.getItems().clear();
-            packsByMedicine.forEach((medicineId, packs) -> {
+            cover.forEach((medicineId, packs) -> {
                 Medicine m = medicines.findById(medicineId).orElseThrow(() -> new BusinessException("Choose medicines from the catalogue."));
                 if (packs == null || packs < 1 || packs > MAX_PACKS) {
                     throw new BusinessException("Enter between 1 and " + MAX_PACKS + " packs for " + m.getName() + ".");
                 }
                 p.getItems().add(new PrescriptionItem(p, m, packs));
             });
+            quantityNote = quantityNote(orderPacks.isEmpty() ? p.getRequestedPacks() : orderPacks, cover);
         }
         p.setStatus(approve ? PrescriptionStatus.APPROVED : PrescriptionStatus.REJECTED);
-        p.setReviewerNote(note);
+        // When the packs approved differ from what the customer asked for, they're told why, with the pharmacist's note
+        String typed = note == null || note.isBlank() ? null : note.trim();
+        String full = quantityNote == null ? typed : typed == null ? quantityNote : quantityNote + " " + typed;
+        p.setReviewerNote(full == null ? null : full.length() > 1000 ? full.substring(0, 999) + "…" : full);
         p.setValidUntil(approve ? (validUntil != null ? validUntil : LocalDate.now().plusMonths(6)) : null);
         p.setReviewedAt(LocalDateTime.now());
 
@@ -391,13 +414,13 @@ public class PrescriptionService {
     @Transactional
     public void finishUse(Collection<Prescription> used) {
         for (Prescription rx : used) {
-            if (rx.isDigital()) continue;     // MediZon's own: kept, with its file, like the customer's other prescriptions
             if (rx.getStatus() == PrescriptionStatus.APPROVED && rx.isFullyOrdered()) {
                 rx.setStatus(PrescriptionStatus.USED_UP);
-                deleteFileAfterCommit(rx.getStoredFileName());
+                // An uploaded file goes once it's used up; a digital prescription is MediZon's own record, so its PDF stays
+                if (!rx.isDigital()) deleteFileAfterCommit(rx.getStoredFileName());
                 notifications.notify(rx.getUser(), NotificationType.PRESCRIPTION_UPDATE, "Prescription used up",
-                        "Everything on your prescription " + describe(rx) + " has now been ordered. Upload a new prescription "
-                                + "to order prescription medicines again.", "/prescriptions");
+                        "Everything on your " + (rx.isDigital() ? "digital prescription " : "prescription ") + describe(rx)
+                                + " has now been ordered. Upload a new prescription to order prescription medicines again.", "/prescriptions");
             }
         }
     }
@@ -482,6 +505,51 @@ public class PrescriptionService {
 
     /** Owners and admins can view a file; anyone else gets "not found". */
     @Transactional(readOnly = true)
+    /**
+     * The automatic note when the pharmacist approves other packs than the customer asked for (what they had in the
+     * cart when they sent it): "Quantity adjusted according to the prescription: Dolo 650 3 → 2 packs; Azee 500 not on
+     * the prescription." Null when nothing was asked for or nothing changed.
+     */
+    String quantityNote(Map<Long, Integer> requested, Map<Long, Integer> approved) {
+        if (requested == null || requested.isEmpty()) return null;
+        List<String> changes = new ArrayList<>();
+        requested.forEach((medicineId, asked) -> {
+            int got = approved.getOrDefault(medicineId, 0);
+            if (asked == null || asked == got) return;
+            String name = medicines.findById(medicineId).map(Medicine::getName).orElse("A medicine");
+            changes.add(got == 0 ? name + " is not on the prescription"
+                    : name + " " + asked + " → " + got + (got == 1 ? " pack" : " packs"));
+        });
+        return changes.isEmpty() ? null : "Quantity adjusted according to the prescription: " + String.join("; ", changes) + ".";
+    }
+
+    /** A prescription medicine on an order placed with this prescription at checkout, still waiting for it. */
+    public record OrderedLine(Long medicineId, String name, int packs, String orderNumber) {}
+
+    /**
+     * What the orders waiting for this prescription (uploaded at checkout) need from it: each prescription medicine and
+     * the packs no approved prescription covers yet. Empty for a prescription no placed order waits for.
+     */
+    public List<OrderedLine> orderedLines(Prescription p) {
+        List<OrderedLine> out = new ArrayList<>();
+        for (Order o : orders.findAwaiting(p.getId(), OrderStatus.CANCELLED)) {
+            if (o.getRxReview() != RxReview.PENDING) continue;
+            for (OrderItem i : o.getItems()) {
+                if (!OrderService.uncoveredPacks(i)) continue;
+                int used = i.getPrescriptionUses().stream().mapToInt(PrescriptionUse::getPacks).sum();
+                out.add(new OrderedLine(i.getMedicine().getId(), i.getMedicineName(), i.getQuantity() - used, o.getOrderNumber()));
+            }
+        }
+        return out;
+    }
+
+    /** Records that a pharmacist or the admin opened the file, which a pharmacist must do before approving. */
+    @Transactional
+    public void recordOpened(Long id, User viewer) {
+        if (viewer == null || !(viewer.isAdmin() || viewer.is(Role.PHARMACIST))) return;
+        prescriptions.findById(id).ifPresent(p -> p.getOpenedBy().add(viewer.getId()));
+    }
+
     public Prescription getForViewer(Long id, User viewer) {
         Prescription p = prescriptions.findById(id).orElseThrow(() -> new NotFoundException("File not found."));
         boolean owner = p.getUser().getId().equals(viewer.getId());

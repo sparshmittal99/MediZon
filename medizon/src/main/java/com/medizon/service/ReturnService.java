@@ -78,7 +78,7 @@ public class ReturnService {
             return Optional.of("The return window closed on " + returnBy(o).format(DateTimeFormatter.ofPattern("d MMM yyyy")) + ".");
         }
         if (returns.findByOrderOrderByCreatedAtDesc(o).stream().anyMatch(ReturnRequest::isOpen)) {
-            return Optional.of("A return for this order is already in progress.");
+            return Optional.of("A return or exchange for this order is already in progress.");
         }
         if (returnable(o).values().stream().allMatch(q -> q == 0)) return Optional.of("Everything returnable in this order has been returned.");
         return Optional.empty();
@@ -137,9 +137,23 @@ public class ReturnService {
     @Transactional
     public ReturnRequest request(User user, Long orderId, List<Long> itemIds, List<Integer> quantities,
                                  ReturnReason reason, String details, List<MultipartFile> images, ReturnPickupForm pickup) {
+        return request(user, orderId, ReturnKind.RETURN, itemIds, quantities, reason, details, images, pickup);
+    }
+
+    /**
+     * A return (refund) or an exchange (the same packs again, sent as a free replacement order once approved). Both
+     * take the same packs, reason, photos and pickup; only a return asks where the refund goes.
+     */
+    @Transactional
+    public ReturnRequest request(User user, Long orderId, ReturnKind kind, List<Long> itemIds, List<Integer> quantities,
+                                 ReturnReason reason, String details, List<MultipartFile> images, ReturnPickupForm pickup) {
+        ReturnKind kd = kind == null ? ReturnKind.RETURN : kind;
         Order o = orderService.getForUser(orderId, user);
         blocker(o).ifPresent(b -> { throw new BusinessException(b); });
-        if (reason == null) throw new BusinessException("Choose a reason for the return.");
+        if (reason == null) throw new BusinessException("Choose a reason for the " + kd.getNoun() + ".");
+        if (!kd.allows(reason)) {
+            throw new BusinessException("An exchange is for damaged, wrong, expired or faulty packs. To send back something you no longer need, choose Return.");
+        }
         String d = details == null ? "" : details.trim();
         if (reason == ReturnReason.OTHER && d.isEmpty()) throw new BusinessException("Tell us what's wrong.");
         if (d.length() > 1000) throw new BusinessException("Keep the description under 1000 characters.");
@@ -149,7 +163,8 @@ public class ReturnService {
         if (photos.size() > MAX_IMAGES) throw new BusinessException("Add at most " + MAX_IMAGES + " photos.");
 
         ReturnRequest r = new ReturnRequest();
-        r.setReturnNumber(newReturnNumber());
+        r.setKind(kd);
+        r.setReturnNumber(newReturnNumber(kd));
         r.setOrder(o);
         r.setUser(user);
         r.setReason(reason);
@@ -166,7 +181,7 @@ public class ReturnService {
             if (item == null) throw new BusinessException("That item isn't part of this order.");
             if (!item.isReturnable()) throw new BusinessException(item.getMedicineName() + " can't be returned.");
             if (qty > left.getOrDefault(item.getId(), 0)) {
-                throw new BusinessException("You can return at most " + left.get(item.getId()) + " pack(s) of " + item.getMedicineName() + ".");
+                throw new BusinessException("You can " + kd.getNoun() + " at most " + left.get(item.getId()) + " pack(s) of " + item.getMedicineName() + ".");
             }
             ReturnItem ri = new ReturnItem();
             ri.setOrderItem(item);
@@ -175,22 +190,25 @@ public class ReturnService {
             r.addItem(ri);
             refund = refund.add(ri.getAmount());
         }
-        if (r.getItems().isEmpty()) throw new BusinessException("Choose the packs you want to return.");
-        r.setRefundAmount(refund);
+        if (r.getItems().isEmpty()) throw new BusinessException("Choose the packs you want to " + kd.getNoun() + ".");
+        // An exchange sends the same packs again instead of money back
+        r.setRefundAmount(kd == ReturnKind.EXCHANGE ? BigDecimal.ZERO : refund);
 
         ReturnPickupForm p = pickup == null ? new ReturnPickupForm() : pickup;
-        setRefundTo(r, o, p);
+        if (kd == ReturnKind.RETURN) setRefundTo(r, o, p);
         setPickup(r, user, o, p);   // last check: it may save a new address
 
         photos.forEach(f -> r.getImages().add(new ReturnImage(storage.storeReturnImage(f), storage.typeOf(f))));
         returns.save(r);
 
-        notifications.notify(user, NotificationType.RETURN_UPDATE, "Return requested",
-                "We got your return request " + r.getReturnNumber() + " for order " + o.getOrderNumber()
-                        + ". A pharmacist will review it, usually within a day. Pickup is planned for "
-                        + day(r.getPickupDate()) + ".", o.getCustomerPath());
-        staffAlerts.notifyStore(o.getStore(), true, NotificationType.RETURN_UPDATE, "Return to review: " + r.getReturnNumber(),
-                user.getFullName() + " wants to return " + r.getPackCount() + " pack(s) from order " + o.getOrderNumber()
+        notifications.notify(user, NotificationType.RETURN_UPDATE, kd.getLabel() + " requested",
+                "We got your " + kd.getNoun() + " request " + r.getReturnNumber() + " for order " + o.getOrderNumber()
+                        + ". We'll review it and the photos, usually within a day."
+                        + (kd == ReturnKind.EXCHANGE ? " Once it's approved we send you a replacement of the same "
+                        + r.getPackCount() + " pack(s), free of charge, and collect the old ones" : " Pickup is planned")
+                        + (kd == ReturnKind.EXCHANGE ? " on " : " for ") + day(r.getPickupDate()) + ".", o.getCustomerPath());
+        staffAlerts.notifyStore(o.getStore(), true, NotificationType.RETURN_UPDATE, kd.getLabel() + " to review: " + r.getReturnNumber(),
+                user.getFullName() + " wants to " + kd.getNoun() + " " + r.getPackCount() + " pack(s) from order " + o.getOrderNumber()
                         + " (" + reason.getLabel().toLowerCase() + ").", "/admin/returns/" + r.getId());
         return r;
     }
@@ -243,7 +261,7 @@ public class ReturnService {
         r.setPickupPhone(phone);
         r.setPickupAddress(address);
         r.setPickupDate(pickupDate(f.getPickupDate()));
-        r.setRefundDays(r.getRefundMode().days(o.getPaymentMethod(), settings.get()));
+        if (r.getRefundMode() != null) r.setRefundDays(r.getRefundMode().days(o.getPaymentMethod(), settings.get()));
     }
 
     private void requirePickupArea(String pincode) {
@@ -344,11 +362,26 @@ public class ReturnService {
     public ReturnRequest raiseForCustomer(User staff, Long orderId, List<Long> itemIds, List<Integer> quantities,
                                          ReturnReason reason, String customerNote, String staffNote, LocalDate pickupDay,
                                          ReturnPickupForm refund) {
+        return raiseForCustomer(staff, orderId, ReturnKind.RETURN, itemIds, quantities, reason, customerNote, staffNote, pickupDay, refund);
+    }
+
+    /**
+     * As above, as a return or an exchange. A staff exchange is approved at once like a staff return: its free
+     * replacement order is created straight away (from the store's stock) and nothing is refunded.
+     */
+    @Transactional
+    public ReturnRequest raiseForCustomer(User staff, Long orderId, ReturnKind kind, List<Long> itemIds, List<Integer> quantities,
+                                         ReturnReason reason, String customerNote, String staffNote, LocalDate pickupDay,
+                                         ReturnPickupForm refund) {
+        ReturnKind kd = kind == null ? ReturnKind.RETURN : kind;
         Order o = orderService.get(orderId);
         staffBlocker(o).ifPresent(b -> { throw new BusinessException(b); });
-        if (reason == null) throw new BusinessException("Choose a reason for the return.");
+        if (reason == null) throw new BusinessException("Choose a reason for the " + kd.getNoun() + ".");
+        if (!kd.allows(reason)) {
+            throw new BusinessException("An exchange is for damaged, wrong, expired or faulty packs. For packs no longer needed, raise a return.");
+        }
         String why = clean(staffNote);
-        if (why == null) throw new BusinessException("Say why you're raising this return, e.g. the support ticket it settles. Only staff see this.");
+        if (why == null) throw new BusinessException("Say why you're raising this " + kd.getNoun() + ", e.g. the support ticket it settles. Only staff see this.");
         String note = clean(customerNote);
         if (why.length() > 1000 || (note != null && note.length() > 1000)) throw new BusinessException("Keep each note under 1000 characters.");
         LocalDate day = pickupDay == null ? pickupDate() : pickupDay;
@@ -356,7 +389,8 @@ public class ReturnService {
         if (day.isAfter(LocalDate.now().plusDays(30))) throw new BusinessException("Choose a pickup day within the next 30 days.");
 
         ReturnRequest r = new ReturnRequest();
-        r.setReturnNumber(newReturnNumber());
+        r.setKind(kd);
+        r.setReturnNumber(newReturnNumber(kd));
         r.setOrder(o);
         r.setUser(o.getUser());
         r.setReason(reason);
@@ -381,14 +415,18 @@ public class ReturnService {
             total = total.add(ri.getAmount());
         }
         if (r.getItems().isEmpty()) throw new BusinessException("Choose the packs to take back.");
-        r.setRefundAmount(total);
-        setRefundTo(r, o, refund == null ? new ReturnPickupForm() : refund);
+        if (kd == ReturnKind.EXCHANGE) {
+            r.setRefundAmount(BigDecimal.ZERO);          // the same packs go out again instead
+        } else {
+            r.setRefundAmount(total);
+            setRefundTo(r, o, refund == null ? new ReturnPickupForm() : refund);
+        }
 
         r.setPickupName(o.getDeliverTo());
         r.setPickupPhone(o.getContactPhone());
         r.setPickupAddress(o.getShippingAddress());
         r.setPickupDate(day);
-        r.setRefundDays(r.getRefundMode().days(o.getPaymentMethod(), settings.get()));
+        if (r.getRefundMode() != null) r.setRefundDays(r.getRefundMode().days(o.getPaymentMethod(), settings.get()));
 
         r.setRaisedBy(staffName(staff));
         r.setStaffNote(why);
@@ -396,6 +434,24 @@ public class ReturnService {
         r.setDecidedAt(LocalDateTime.now());
         r.setAdminNote(note);
         returns.save(r);
+
+        if (kd == ReturnKind.EXCHANGE) {
+            // Stops here, rolling everything back, when the store hasn't the packs to send
+            Order replacement = orderService.createReplacement(r);
+            r.setReplacementOrder(replacement);
+            notifyCustomer(r, "Exchange approved", "Exchange " + r.getReturnNumber() + " for order " + o.getOrderNumber()
+                    + " is approved. Your replacement order " + replacement.getOrderNumber() + " (" + r.getPackCount()
+                    + " pack(s), free of charge) is confirmed and expected by " + day(replacement.getExpectedBy())
+                    + ". Keep the old packs ready; our delivery partner will collect them on " + day(day) + "."
+                    + (note == null ? "" : " Note: " + note));
+            if (!staff.isStoreStaff()) {
+                staffAlerts.notifyStore(o.getStore(), false, NotificationType.RETURN_UPDATE, "Exchange raised: " + r.getReturnNumber(),
+                        staffName(staff) + " raised an exchange of " + r.getPackCount() + " pack(s) from order " + o.getOrderNumber()
+                                + ". Replacement order " + replacement.getOrderNumber() + " is confirmed; pickup " + day(day) + ".",
+                        "/admin/returns/" + r.getId());
+            }
+            return r;
+        }
 
         notifyCustomer(r, "Return approved", "Return " + r.getReturnNumber() + " for order " + o.getOrderNumber()
                 + " is approved. Keep the packs ready; our delivery partner will pick them up on " + day(day) + "."
@@ -423,12 +479,22 @@ public class ReturnService {
             throw new BusinessException("A return that is " + r.getStatus().getLabel().toLowerCase()
                     + " can't be cancelled; only one whose packs haven't been collected can.");
         }
+        // An exchange's replacement is called off with it, unless it's already on its way
+        Order replacement = r.getReplacementOrder();
+        if (replacement != null && replacement.getStatus() != OrderStatus.CANCELLED) {
+            if (replacement.getStatus() != OrderStatus.CONFIRMED) {
+                throw new BusinessException("Replacement order " + replacement.getOrderNumber() + " is already "
+                        + replacement.getStatus().getLabel().toLowerCase() + ", so this exchange can't be cancelled. Mark the old packs picked up instead.");
+            }
+            replacement.setCancelReason("Exchange " + r.getReturnNumber() + " was cancelled.");
+            orderService.updateStatus(replacement.getId(), OrderStatus.CANCELLED);
+        }
         r.setStatus(ReturnStatus.CANCELLED);
         r.setCancelledAt(LocalDateTime.now());
         r.setCancelledBy(staffName(staff));
         r.setCancelReason(why);
-        notifyCustomer(r, "Return cancelled", "Return " + r.getReturnNumber() + " for order " + r.getOrder().getOrderNumber()
-                + " is cancelled, so nothing will be picked up. Reason: " + why);
+        notifyCustomer(r, r.getKind().getLabel() + " cancelled", r.getTitle() + " for order " + r.getOrder().getOrderNumber()
+                + " is cancelled, so nothing will be picked up" + (r.isExchange() ? " or sent" : "") + ". Reason: " + why);
         return r;
     }
 
@@ -506,18 +572,29 @@ public class ReturnService {
     public ReturnRequest decide(Long id, boolean approve, String note) {
         ReturnRequest r = move(id, approve ? ReturnStatus.APPROVED : ReturnStatus.REJECTED);
         String n = note == null || note.isBlank() ? null : note.trim();
-        if (!approve && n == null) throw new BusinessException("Say why the return is rejected; the customer sees this.");
+        if (!approve && n == null) throw new BusinessException("Say why the " + r.getKind().getNoun() + " is rejected; the customer sees this.");
         r.setAdminNote(n);
         r.setDecidedAt(LocalDateTime.now());
         // Approved on or after the planned day: book the next one
         if (approve && r.getPickupDate() != null && r.getPickupDate().isBefore(LocalDate.now().plusDays(Math.max(1, settings.get().getPickupMinDays())))) {
             r.setPickupDate(pickupDate());
         }
-        notifyCustomer(r, approve ? "Return approved" : "Return not approved", approve
+        if (approve && r.isExchange()) {
+            // The replacement ships as its own order, already confirmed and free; the old packs are collected meanwhile
+            Order replacement = orderService.createReplacement(r);
+            r.setReplacementOrder(replacement);
+            notifyCustomer(r, "Exchange approved", "Exchange " + r.getReturnNumber() + " is approved. Your replacement order "
+                    + replacement.getOrderNumber() + " (" + r.getPackCount() + " pack(s), free of charge) is confirmed and expected by "
+                    + day(replacement.getExpectedBy()) + ". Keep the old packs ready; our delivery partner will collect them"
+                    + (r.getPickupDate() == null ? "." : " on " + day(r.getPickupDate()) + ".")
+                    + (n == null ? "" : " Note: " + n));
+            return r;
+        }
+        notifyCustomer(r, approve ? r.getKind().getLabel() + " approved" : r.getKind().getLabel() + " not approved", approve
                 ? "Return " + r.getReturnNumber() + " is approved. Keep the packs ready; our delivery partner will pick them up"
                 + (r.getPickupDate() == null ? "." : " on " + day(r.getPickupDate()) + ".")
                 + (n == null ? "" : " Note: " + n)
-                : "Return " + r.getReturnNumber() + " couldn't be approved: " + n);
+                : r.getTitle() + " couldn't be approved: " + n);
         return r;
     }
 
@@ -530,6 +607,18 @@ public class ReturnService {
             if (restock) orderService.restock(r.getOrder(), ri.getOrderItem().getMedicine(), ri.getQuantity());
         }
         r.setRestocked(restock);
+
+        // An exchange is done once the old packs are back: the replacement order carries on by itself
+        if (r.isExchange()) {
+            r.setStatus(ReturnStatus.EXCHANGED);
+            Order replacement = r.getReplacementOrder();
+            notifyCustomer(r, "Exchange picked up", "We've collected the old packs for exchange " + r.getReturnNumber() + "."
+                    + (replacement == null ? ""
+                    : replacement.getStatus() == OrderStatus.DELIVERED ? " Your replacement order " + replacement.getOrderNumber() + " was delivered, so this exchange is complete."
+                    : " Your replacement order " + replacement.getOrderNumber() + " is " + replacement.getStatus().getLabel().toLowerCase()
+                    + (replacement.getExpectedBy() == null ? "." : ", expected by " + day(replacement.getExpectedBy()) + ".")));
+            return r;
+        }
 
         // MediZon Money is paid at once: all of it when chosen, else whatever of the order it paid for
         Order o = r.getOrder();
@@ -613,7 +702,7 @@ public class ReturnService {
         if (day.isAfter(LocalDate.now().plusDays(30))) throw new BusinessException("Choose a pickup day within the next 30 days.");
         if (day.equals(r.getPickupDate())) return r;
         r.setPickupDate(day);
-        notifyCustomer(r, "Pickup moved", "The pickup for return " + r.getReturnNumber() + " is now on " + day(day) + ".");
+        notifyCustomer(r, "Pickup moved", "The pickup for " + r.getKind().getNoun() + " " + r.getReturnNumber() + " is now on " + day(day) + ".");
         return r;
     }
 
@@ -635,8 +724,8 @@ public class ReturnService {
         return d.format(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH));
     }
 
-    private String newReturnNumber() {
-        return "RT" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyMMdd"))
+    private String newReturnNumber(ReturnKind kind) {
+        return kind.getPrefix() + LocalDate.now().format(DateTimeFormatter.ofPattern("yyMMdd"))
                 + String.format("%05d", new Random().nextInt(100_000));
     }
 }

@@ -28,6 +28,32 @@
         <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save settings</button>
     </form>
 
+    <form th:action="@{/admin/order-settings/delivery}" method="post" class="mt-4"
+          th:with="P=${T(com.medizon.service.OrderSettingsService)}">
+        <section class="mz-panel mb-4">
+            <h2 class="h6 mb-1"><i class="bi bi-truck me-1 text-success"></i>Delivery charges</h2>
+            <p class="small text-muted mb-3">Carts whose medicines (before promos) reach the free-delivery value ship free; smaller carts pay
+                the delivery charge, once per checkout. The home page, cart, checkout and help centre show these values as soon as you save.</p>
+            <div class="row g-3">
+                <div class="col-sm-6 col-lg-4">
+                    <label class="form-label small" for="freeDeliveryAbove">Free delivery on orders of</label>
+                    <div class="input-group"><span class="input-group-text">₹</span>
+                        <input class="form-control" id="freeDeliveryAbove" name="freeDeliveryAbove" type="number" step="0.01" min="0"
+                               th:max="${maxFreeDelivery}" th:value="${P.plain(settings.freeDeliveryAbove)}" required>
+                        <span class="input-group-text">or more</span></div>
+                </div>
+                <div class="col-sm-6 col-lg-4">
+                    <label class="form-label small" for="deliveryFee">Delivery charge below it</label>
+                    <div class="input-group"><span class="input-group-text">₹</span>
+                        <input class="form-control" id="deliveryFee" name="deliveryFee" type="number" step="0.01" min="0"
+                               th:max="${maxDeliveryFee}" th:value="${P.plain(settings.deliveryFee)}" required></div>
+                </div>
+            </div>
+            <div class="form-text mt-2">Set either to 0 to make every delivery free. Exchange replacements always ship free.</div>
+        </section>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save delivery charges</button>
+    </form>
+
     <form th:action="@{/admin/order-settings/payment-fees}" method="post" class="mt-4"
           th:with="P=${T(com.medizon.service.OrderSettingsService)}">
         <section class="mz-panel mb-4">

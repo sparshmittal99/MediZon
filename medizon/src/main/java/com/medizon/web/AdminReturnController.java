@@ -1,6 +1,7 @@
 package com.medizon.web;
 
 import com.medizon.domain.Order;
+import com.medizon.domain.ReturnKind;
 import com.medizon.domain.ReturnReason;
 import com.medizon.domain.ReturnRequest;
 import com.medizon.domain.ReturnSettings;
@@ -97,7 +98,10 @@ public class AdminReturnController {
     // ------------------------------------------------------------------ raised by staff, e.g. after a support ticket
 
     @GetMapping("/new")
-    public String raiseForm(@RequestParam("order") Long orderId, Model model, RedirectAttributes ra) {
+    public String raiseForm(@RequestParam("order") Long orderId, @RequestParam(required = false) String kind, Model model,
+                            RedirectAttributes ra) {
+        ReturnKind k = ReturnKind.of(kind);
+        model.addAttribute("kind", k);
         Order o = orderService.get(orderId);
         storeService.checkAccess(currentUser.get(), o);
         String blocker = returnService.staffBlocker(o).orElse(null);
@@ -107,7 +111,7 @@ public class AdminReturnController {
         }
         model.addAttribute("o", o);
         model.addAttribute("left", returnService.staffReturnable(o));
-        model.addAttribute("reasons", ReturnReason.values());
+        model.addAttribute("reasons", java.util.Arrays.stream(ReturnReason.values()).filter(k::allows).toList());
         model.addAttribute("pickupDay", returnService.pickupDate());
         model.addAttribute("previous", returnService.forOrder(o));
         model.addAttribute("active", "returns");
@@ -117,15 +121,16 @@ public class AdminReturnController {
     @PostMapping("/new")
     public String raise(@RequestParam("order") Long orderId,
                         @RequestParam(required = false) List<Long> itemId, @RequestParam(required = false) List<Integer> qty,
-                        @RequestParam(required = false) ReturnReason reason,
+                        @RequestParam(required = false) ReturnReason reason, @RequestParam(required = false) String kind,
                         @RequestParam(required = false) String customerNote, @RequestParam(required = false) String staffNote,
                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate pickupDay,
                         @ModelAttribute ReturnPickupForm refund, RedirectAttributes ra) {
         Order o = orderService.get(orderId);
         storeService.checkAccess(currentUser.get(), o);
-        ReturnRequest r = returnService.raiseForCustomer(currentUser.get(), orderId, itemId, qty, reason, customerNote,
-                staffNote, pickupDay, refund);
-        ra.addFlashAttribute("success", "Return " + r.getReturnNumber() + " raised and approved. "
+        ReturnRequest r = returnService.raiseForCustomer(currentUser.get(), orderId, ReturnKind.of(kind), itemId, qty, reason,
+                customerNote, staffNote, pickupDay, refund);
+        ra.addFlashAttribute("success", r.getTitle() + " raised and approved. " + (r.isExchange()
+                ? "Replacement order " + r.getReplacementOrder().getOrderNumber() + " is confirmed; " : "")
                 + r.getUser().getFullName() + " has been told about the pickup.");
         return "redirect:/admin/returns/" + r.getId();
     }

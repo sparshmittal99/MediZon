@@ -120,7 +120,7 @@ public class NotificationService {
                 case DOSE_REMINDER -> "Dose Reminder";
                 case REORDER_ALERT, AUTO_REORDER -> "Refill Alert";
                 case PRESCRIPTION_UPDATE -> "Prescription";
-                case RETURN_UPDATE -> "Return & Refund";
+                case RETURN_UPDATE -> title != null && title.toLowerCase().contains("exchange") ? "Exchange" : "Return & Refund";
                 case EXPIRY_ALERT -> "Medicine Expiry";
                 case BACK_IN_STOCK -> "Back in Stock";
                 case SUPPORT_UPDATE, SUPPORT_TICKET -> "Support Desk";

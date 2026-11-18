@@ -716,17 +716,23 @@ def pharmacist(ctx: Ctx, slots, step, answer) -> Reply:
 # Checked in order: "cancel and refund" is about cancelling, "refund for my return" about refunds.
 POLICIES = [
     (r"\bcancel", "**Cancelling an order:** you can cancel until it ships, while it's *Placed* or *Confirmed*. Open the "
-                  "order and tap **Cancel order**. Once it has shipped, you can return eligible items after delivery instead.",
+                  "order and tap **Cancel order**. Once it has shipped, you can exchange or return eligible items after delivery instead.",
      [chip("Your orders", href="/orders")]),
-    (r"\brefund|money back", "**Refunds:** after a returned item is picked up, the refund goes back to how you paid "
-                             "(UPI or card). It can take **5 to 7 working days** to show up. You'll get a notification "
-                             "at each step.", [chip("Your returns", href="/orders?tab=returns")]),
-    (r"\breturn|send (it )?back|exchange|damaged|expired|wrong (medicine|item)",
-     "**Returns:** damaged, wrong or expired medicines can be returned within **7 days of delivery**. Open the order, "
-     "tap **Return items**, choose the packs and add a photo. A pharmacist reviews it, usually within a day. Some "
-     "medicines can't be returned for safety reasons; the product page says so.", [chip("Your orders", href="/orders")]),
-    (r"\bdeliver|shipping|ship\b", "**Delivery:** free on orders of **₹499 or more**, otherwise ₹40. When it arrives "
-                                   "depends on your PIN code; the cart and checkout show the expected date.",
+    (r"\brefund|money back", "**Refunds:** after a returned item is picked up, the refund goes where you chose: "
+                             "**MediZon Money instantly**, or back to your UPI, card or bank account **a few days after pickup** "
+                             "(the return shows the expected date). You'll get a notification at each step.",
+     [chip("Your returns", href="/orders?tab=returns")]),
+    (r"\bexchange|replace(ment)?\b",
+     "**Exchanges:** if a pack arrived damaged, leaking, wrong or expired, open the delivered order and tap **Exchange**. "
+     "Once we approve it, a **free replacement order** of the same packs is confirmed with its expected delivery date, "
+     "and our delivery partner collects the old packs. Nothing to pay.", [chip("Your orders", href="/orders")]),
+    (r"\breturn|send (it )?back|damaged|expired|wrong (medicine|item)",
+     "**Returns:** open the delivered order within the return window and tap **Return** for a refund, or **Exchange** "
+     "for the same medicine again. Choose the packs, give a reason and add a photo; we review it, usually within a day. "
+     "Some medicines can't be returned for safety reasons; the product page says so.", [chip("Your orders", href="/orders")]),
+    (r"\bdeliver|shipping|ship\b", "**Delivery:** free once your cart reaches the free-delivery amount, otherwise a small "
+                                   "delivery charge; the cart shows both the current charge and how much more gets free "
+                                   "delivery. When it arrives depends on your PIN code.",
      [chip("Track my order", "where is my order")]),
     (r"\bpay|upi|card|cash|cod\b", "**Payment:** pay by **UPI**, **debit or credit card**, **net banking**, MediZon Money, or **pay on delivery** (cash, UPI and more). "
                                   "You choose at checkout.", [chip("Go to cart", href="/cart")]),

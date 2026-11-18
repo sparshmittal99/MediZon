@@ -34,18 +34,19 @@
     <div th:unless="${#lists.isEmpty(returns)}" class="mz-panel-flush">
         <div class="table-responsive">
             <table class="table align-middle mb-0">
-                <thead><tr><th>Return</th><th>Order</th><th>Customer</th><th>Requested</th><th>Reason</th><th>Packs</th><th>Refund</th><th>Status</th></tr></thead>
+                <thead><tr><th>Return / exchange</th><th>Order</th><th>Customer</th><th>Requested</th><th>Reason</th><th>Packs</th><th>Refund</th><th>Status</th></tr></thead>
                 <tbody>
                 <tr th:each="r : ${returns}">
                     <td><a class="fw-semibold" th:href="@{/admin/returns/{id}(id=${r.id})}" th:text="${r.returnNumber}"></a>
+                        <span th:if="${r.exchange}" class="badge text-bg-info d-block mt-1 fw-normal">Exchange</span>
                         <span th:if="${r.raisedByStaff}" class="badge text-bg-light border d-block mt-1 fw-normal" th:title="${r.raisedBy}">Raised by staff</span></td>
                     <td><a th:href="@{/admin/orders/{id}(id=${r.order.id})}" th:text="${r.order.orderNumber}"></a></td>
                     <td th:text="${r.user.fullName}"></td>
                     <td class="text-nowrap" th:text="${#temporals.format(r.createdAt, 'd MMM, h:mm a')}"></td>
                     <td class="small" th:text="${r.reason.label}"></td>
                     <td th:text="${r.packCount}"></td>
-                    <td th:text="'₹' + ${r.refundAmount}"></td>
-                    <td><span class="badge" th:classappend="${r.status.badge}" th:text="${r.status.label}"></span></td>
+                    <td th:text="${r.exchange} ? 'Replacement' : '₹' + ${r.refundAmount}"></td>
+                    <td><span class="badge" th:classappend="${r.status.badge}" th:text="${r.statusLabel}"></span></td>
                 </tr>
                 </tbody>
             </table>

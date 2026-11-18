@@ -1,33 +1,45 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/layout :: head('Return items')}"></head>
+<head th:replace="~{fragments/layout :: head(${kind.name() == 'EXCHANGE'} ? 'Exchange items' : 'Return items')}"></head>
 <body>
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: flash}"></div>
 
 <main class="container mz-page mz-w-page">
     <a th:href="@{/orders/{id}(id=${o.ref})}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> <span th:text="'Order ' + ${o.orderNumber}"></span></a>
-    <h1 class="mz-page-title mt-2">Return items</h1>
-    <p class="text-muted mb-3" th:text="'Return by ' + ${#temporals.format(returnBy, 'd MMMM yyyy')}"></p>
+    <h1 class="mz-page-title mt-2" th:text="${kind.name() == 'EXCHANGE'} ? 'Exchange items' : 'Return items'">Return items</h1>
+    <p class="text-muted mb-3" th:text="(${kind.name() == 'EXCHANGE'} ? 'Exchange' : 'Return') + ' by ' + ${#temporals.format(returnBy, 'd MMMM yyyy')}"></p>
+
+    <!-- Exchange (the same packs again, free) or return (money back): like other shops, two ways to send packs back -->
+    <div class="mz-kind-switch mb-4" role="tablist" aria-label="Exchange or return">
+        <a th:href="@{/orders/{id}/return(id=${o.ref},kind='exchange')}" role="tab"
+           th:classappend="${kind.name() == 'EXCHANGE'} ? 'active'" th:aria-selected="${kind.name() == 'EXCHANGE'}">
+            <i class="bi bi-arrow-left-right" aria-hidden="true"></i><span><strong>Exchange</strong><small>Same medicine, free replacement</small></span></a>
+        <a th:href="@{/orders/{id}/return(id=${o.ref})}" role="tab"
+           th:classappend="${kind.name() == 'RETURN'} ? 'active'" th:aria-selected="${kind.name() == 'RETURN'}">
+            <i class="bi bi-arrow-return-left" aria-hidden="true"></i><span><strong>Return</strong><small>Get a refund</small></span></a>
+    </div>
 
     <!-- Two steps on one form, so the photos chosen in step 1 are still there when it's sent. Without script both show. -->
-    <form th:action="@{/orders/{id}/return(id=${o.ref})}" method="post" enctype="multipart/form-data" novalidate data-mz-return-form>
+    <form th:action="@{/orders/{id}/return(id=${o.ref})}" method="post" enctype="multipart/form-data" novalidate data-mz-return-form
+          th:attr="data-mz-kind=${kind.noun}">
+        <input type="hidden" name="kind" th:value="${kind.name()}">
         <ol class="mz-track mz-track-sm mb-4" data-mz-return-steps hidden>
             <li class="done">Items &amp; reason</li>
-            <li data-mz-step-mark="2">Pickup &amp; refund</li>
+            <li data-mz-step-mark="2" th:text="${kind.name() == 'EXCHANGE'} ? 'Pickup &amp; replacement' : 'Pickup &amp; refund'">Pickup &amp; refund</li>
         </ol>
 
         <div data-mz-return-step="1">
             <section class="mz-panel-flush mb-4">
                 <div class="table-responsive">
                     <table class="table align-middle mb-0">
-                        <thead><tr><th>Medicine</th><th>Price paid</th><th style="width: 9rem">Packs to return</th></tr></thead>
+                        <thead><tr><th>Medicine</th><th>Price paid</th><th style="width: 9rem" th:text="'Packs to ' + ${kind.noun}">Packs to return</th></tr></thead>
                         <tbody>
                         <tr th:each="i : ${o.items}" th:if="${i.returnable}" th:with="left=${returnable.get(i.id)}">
                             <td>
                                 <span class="fw-semibold" th:text="${i.medicineName}"></span>
                                 <div class="small text-muted" th:if="${!#lists.isEmpty(i.sortedMembers)}" th:text="'For ' + ${i.membersLabel}"></div>
-                                <div class="small text-muted" th:text="${left} + ' of ' + ${i.quantity} + ' pack(s) can be returned'"></div>
+                                <div class="small text-muted" th:text="${left} + ' of ' + ${i.quantity} + ' pack(s) can be ' + (${kind.name() == 'EXCHANGE'} ? 'exchanged' : 'returned')"></div>
                             </td>
                             <td th:text="'₹' + ${i.unitPrice} + ' / pack'"></td>
                             <td>
@@ -36,9 +48,9 @@
                                     <input type="hidden" name="itemId" th:value="${i.id}">
                                     <input class="form-control" type="number" name="qty" min="0" th:max="${left}" value="0"
                                            th:attr="data-net=${i.netTotal}, data-of=${i.quantity}"
-                                           th:aria-label="'Packs of ' + ${i.medicineName} + ' to return'">
+                                           th:aria-label="'Packs of ' + ${i.medicineName} + ' to ' + ${kind.noun}">
                                 </th:block>
-                                <span th:if="${left == 0}" class="small text-muted">Already returned</span>
+                                <span th:if="${left == 0}" class="small text-muted">Already sent back</span>
                             </td>
                         </tr>
                         </tbody>
@@ -170,11 +182,21 @@
                 <input type="hidden" name="pickupDate" th:value="${pickup.pickupDate}">
                 <p class="mb-1 fw-semibold"><i class="bi bi-calendar-event me-1 text-success" aria-hidden="true"></i>
                     <span th:text="${#temporals.format(pickup.pickupDate, 'EEEE, d MMMM')}"></span></p>
-                <p class="small text-muted mb-0">Once a pharmacist approves the return, our delivery partner collects the packs on this day.
-                    Keep them in their original strip or bottle.</p>
+                <p class="small text-muted mb-0" th:text="'Once we approve the ' + ${kind.noun} + ', our delivery partner collects the packs on this day. Keep them in their original strip or bottle.'"></p>
             </section>
 
-            <section class="mz-panel mb-4">
+            <!-- Exchange: a free replacement instead of a refund -->
+            <section class="mz-panel mb-4" th:if="${kind.name() == 'EXCHANGE'}">
+                <h2 class="h5 mb-1">Replacement</h2>
+                <ul class="small mb-0 ps-3">
+                    <li>We send the same medicine and the same number of packs from <strong th:text="${o.store != null} ? ${o.store.name} : 'the same store'"></strong>, free of charge.</li>
+                    <li>It ships as a replacement order, already confirmed, to the address this order went to. You'll see its expected delivery date as soon as the exchange is approved.</li>
+                    <li>There's nothing to pay and no refund: you paid for these packs on this order.</li>
+                    <li>If the medicine is out of stock we'll let you know, and you can return it for a refund instead.</li>
+                </ul>
+            </section>
+
+            <section class="mz-panel mb-4" th:unless="${kind.name() == 'EXCHANGE'}">
                 <h2 class="h5 mb-1">Refund</h2>
                 <p class="small text-muted mb-3">Refund amount: <strong class="text-body" data-mz-refund-total>₹0</strong>
                     <span th:if="${o.discounted}">(what you paid after the promo)</span>, paid once the packs are picked up.</p>
@@ -252,7 +274,7 @@
             <div class="alert alert-danger small" data-mz-submit-error data-mz-popup role="alert" hidden></div>
             <div class="d-flex gap-2">
                 <button class="btn btn-outline-secondary" type="button" data-mz-step-back hidden><i class="bi bi-arrow-left me-1"></i>Back</button>
-                <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Request return</button>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i><span th:text="'Request ' + ${kind.noun}">Request return</span></button>
                 <a th:href="@{/orders/{id}(id=${o.ref})}" class="btn btn-outline-secondary" data-mz-step-cancel>Cancel</a>
             </div>
         </div>

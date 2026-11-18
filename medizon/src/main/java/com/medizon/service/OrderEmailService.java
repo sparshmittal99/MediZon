@@ -92,7 +92,14 @@ public class OrderEmailService {
         String orderUrl = baseUrl.replaceAll("/+$", "") + order.getCustomerPath();
         String invoiceUrl = baseUrl.replaceAll("/+$", "") + order.getCustomerPath() + "/invoice";
 
-        String subject = switch (nextStatus) {
+        String kind = order.isExchange() ? "Replacement Order" : "Order";
+        String subject = order.isExchange() ? switch (nextStatus) {
+            case SHIPPED -> kind + " #" + order.getOrderNumber() + " Shipped | MediZon";
+            case OUT_FOR_DELIVERY -> kind + " #" + order.getOrderNumber() + " is Out for Delivery! 🚚 | MediZon";
+            case DELIVERED -> kind + " #" + order.getOrderNumber() + " Delivered | MediZon";
+            case CANCELLED -> kind + " #" + order.getOrderNumber() + " Cancelled | MediZon";
+            default -> "Update on " + kind + " #" + order.getOrderNumber() + " | MediZon";
+        } : switch (nextStatus) {
             case CONFIRMED -> "Order #" + order.getOrderNumber() + " Confirmed | MediZon";
             case SHIPPED -> "Order #" + order.getOrderNumber() + " Shipped | MediZon";
             case OUT_FOR_DELIVERY -> "Order #" + order.getOrderNumber() + " is Out for Delivery! 🚚 | MediZon";
@@ -101,7 +108,18 @@ public class OrderEmailService {
             default -> "Update on Order #" + order.getOrderNumber() + " | MediZon";
         };
 
-        String message = switch (nextStatus) {
+        String message = order.isExchange() ? switch (nextStatus) {
+            case SHIPPED -> "Your replacement order #" + order.getOrderNumber() + " for exchange " + order.getExchangeNumber()
+                    + " has been packed and shipped" + (order.getExpectedBy() == null ? "." : ". Expected by "
+                    + order.getExpectedBy().format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", java.util.Locale.ENGLISH)) + ".");
+            case OUT_FOR_DELIVERY -> "Our delivery partner is out for delivery with your replacement and will reach your address shortly."
+                    + " Please keep the old packs ready if they haven't been collected yet.";
+            case DELIVERED -> "Your replacement order #" + order.getOrderNumber() + " for exchange " + order.getExchangeNumber()
+                    + " has been delivered. There was nothing to pay.";
+            case CANCELLED -> "Your replacement order #" + order.getOrderNumber() + " has been cancelled."
+                    + (order.getCancelReason() != null ? " " + order.getCancelReason() : "");
+            default -> "Your replacement order #" + order.getOrderNumber() + " is now " + nextStatus.getLabel() + ".";
+        } : switch (nextStatus) {
             case CONFIRMED -> "Your order #" + order.getOrderNumber() + " has been confirmed by "
                     + (order.getStore() != null ? order.getStore().getName() : "the store") + " and is being prepared.";
             case SHIPPED -> "Great news! Your order #" + order.getOrderNumber() + " has been packed and shipped. Your tax invoice is now ready.";

@@ -52,6 +52,7 @@ public class OrderService {
     private final OrderSettingsService orderSettings;
     private final PaymentGateways gateways;
     private final StockHoldService stockHolds;
+    private final com.medizon.repository.StoreAreaRepository storeAreas;
 
     /** One order line: packs of a medicine and how many packs each person gets. */
     /** @param othersPatient who the "Others" share is for, when known (from a prescription) */
@@ -281,8 +282,10 @@ public class OrderService {
     }
 
     private void alertStore(Order o) {
-        staffAlerts.notifyStore(o.getStore(), false, NotificationType.ORDER_UPDATE, "New order " + o.getOrderNumber(),
-                o.getItemCount() + " pack(s), ₹" + o.getTotal() + (o.isAutoReorder() ? " (automatic refill)." : ".")
+        staffAlerts.notifyStore(o.getStore(), false, NotificationType.ORDER_UPDATE,
+                (o.isExchange() ? "Replacement to send: " : "New order ") + o.getOrderNumber(),
+                o.getItemCount() + " pack(s)" + (o.isExchange() ? " for exchange " + o.getExchangeNumber() + ", already confirmed and free of charge."
+                        : ", ₹" + o.getTotal() + (o.isAutoReorder() ? " (automatic refill)." : "."))
                         + (o.isAwaitingPrescription() ? " Its prescription is with the pharmacist; confirm it once approved." : ""),
                 "/admin/orders/" + o.getId());
     }
@@ -456,7 +459,7 @@ public class OrderService {
         // One delivery fee for the whole cart, on the biggest order
         BigDecimal cartSubtotal = placed.stream().map(Order::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
         placed.sort(Comparator.comparing(Order::getSubtotal).reversed());
-        BigDecimal fee = CartService.deliveryFeeFor(cartSubtotal);
+        BigDecimal fee = orderSettings.deliveryFee(cartSubtotal);
         for (int k = 0; k < placed.size(); k++) {
             Order o = placed.get(k);
             o.setDeliveryFee(k == 0 ? fee : BigDecimal.ZERO);
@@ -465,6 +468,121 @@ public class OrderService {
             o.setTotal(exact.add(o.getRoundOff()));
         }
         return orders.saveAll(placed);
+    }
+
+    // ------------------------------------------------------------------ exchange replacements
+
+    /**
+     * The free replacement for an approved exchange: the same packs of the same medicines, from the store that sold
+     * them, to the address the original went to. It starts confirmed (nothing to place or pay for) and then runs
+     * like any order. Lines keep what was paid for them on the original, so a later return of a replacement refunds
+     * that; the order itself totals nothing and gets no tax invoice.
+     *
+     * @throws BusinessException when the store hasn't enough packs left to send
+     */
+    @Transactional
+    public Order createReplacement(ReturnRequest exchange) {
+        Order original = exchange.getOrder();
+        Store store = original.getStore();
+        if (store == null) throw new BusinessException("The original order has no store to send a replacement from.");
+
+        Order o = new Order();
+        o.setOrderNumber(newOrderNumber());
+        o.setUser(original.getUser());
+        o.setStore(store);
+        o.setSource(OrderSource.EXCHANGE);
+        o.setStatus(OrderStatus.CONFIRMED);
+        o.setExchangeFor(original);
+        o.setExchangeNumber(exchange.getReturnNumber());
+        // Same payment details as the original, so a later refund on a replacement goes back where the money came from
+        o.setPaymentMethod(original.getPaymentMethod());
+        o.setPaymentGateway(original.getPaymentGateway());
+        o.setGatewayOrderId(original.getGatewayOrderId());
+        o.setGatewayPaymentId(original.getGatewayPaymentId());
+        o.setPaymentStatus(PaymentStatus.PAID);
+        o.setShippingAddress(original.getShippingAddress());
+        o.setContactPhone(original.getContactPhone());
+        o.setShippingState(original.getShippingState());
+        o.setShippingLatitude(original.getShippingLatitude());
+        o.setShippingLongitude(original.getShippingLongitude());
+        o.setReceiverName(original.getReceiverName());
+        o.setAddressLabel(original.getAddressLabel());
+        o.setBillingName(original.getBillingName());
+        o.setBillingAddress(original.getBillingAddress());
+        o.setBillingGstin(original.getBillingGstin());
+        o.setPrescription(original.getPrescription());
+        o.setDoctorName(original.getDoctorName());
+        o.setPrescriptionDate(original.getPrescriptionDate());
+
+        // The store's shelf row for each medicine, locked lowest id first like checkout, so the packs can't be sold twice
+        Map<Long, Long> rowFor = new HashMap<>();   // medicine id -> store item id
+        for (ReturnItem ri : exchange.getItems()) {
+            Medicine m = ri.getOrderItem().getMedicine();
+            StoreItem si = storeItems.findByStoreAndMedicine(store, m)
+                    .orElseThrow(() -> new BusinessException(store.getName() + " no longer stocks " + m.getName()
+                            + ", so it can't be exchanged. Reject the exchange so the customer can return it instead."));
+            rowFor.put(m.getId(), si.getId());
+        }
+        List<Long> rowIds = rowFor.values().stream().distinct().sorted().toList();
+        Map<Long, StoreItem> locked = stockHolds.lock(rowIds);
+        Map<Long, Integer> heldForOthers = stockHolds.heldByOthers(rowIds, original.getUser().getId());
+        for (ReturnItem ri : exchange.getItems()) {
+            OrderItem was = ri.getOrderItem();
+            StoreItem si = locked.get(rowFor.get(was.getMedicine().getId()));
+            int qty = ri.getQuantity();
+            si.setHeld(heldForOthers.getOrDefault(si.getId(), 0));
+            if (si.getAvailable() < qty) {
+                throw new BusinessException("Only " + Math.max(0, si.getAvailable()) + " pack(s) of " + was.getMedicineName()
+                        + " are in stock at " + store.getName() + " for this exchange of " + qty
+                        + ". Restock first, or reject the exchange so the customer can return it instead.");
+            }
+            si.setStock(si.getStock() - qty);
+            events.publishEvent(new StockChanged(si.getMedicine().getId()));
+
+            OrderItem item = new OrderItem();
+            item.setMedicine(was.getMedicine());
+            item.setMedicineName(was.getMedicineName());
+            item.setUnitPrice(was.getUnitPrice());
+            item.setQuantity(qty);
+            BigDecimal promo = discountShare(was, qty);
+            item.setDiscount(promo);
+            item.setLineTotal(ReturnService.paidFor(was, qty).add(promo));
+            item.setHsnCode(was.getHsnCode());
+            item.setGstRate(was.getGstRate());
+            item.setExpiryDate(si.getExpiryDate());
+            item.setReturnableAtOrder(was.isReturnable());
+            item.setPatientName(was.getPatientName());
+            item.setPrescribedBy(was.getPrescribedBy());
+            List<Member> who = was.getSortedMembers();
+            int[] share = was.shareOf(who, qty);
+            for (int k = 0; k < who.size(); k++) {
+                item.getMembers().add(who.get(k));
+                if (!was.getPacks().isEmpty()) item.getPacks().put(who.get(k).getId(), share[k]);
+            }
+            o.addItem(item);
+        }
+        o.setSubtotal(BigDecimal.ZERO);
+        o.setDiscount(BigDecimal.ZERO);
+        o.setDeliveryFee(BigDecimal.ZERO);
+        o.setTotal(BigDecimal.ZERO);
+        o.setExpectedBy(expectedBy(store, ReturnService.orderPincode(original)));
+        orders.save(o);
+        alertStore(o);
+        return o;
+    }
+
+    /** This line's promo share for {@code qty} of its packs, rounded down like refunds are. */
+    private static BigDecimal discountShare(OrderItem item, int qty) {
+        BigDecimal d = item.getDiscount() == null ? BigDecimal.ZERO : item.getDiscount();
+        if (qty >= item.getQuantity()) return d;
+        return d.multiply(BigDecimal.valueOf(qty)).divide(BigDecimal.valueOf(item.getQuantity()), 2, java.math.RoundingMode.DOWN);
+    }
+
+    /** The last day the store's delivery time to {@code pincode} promises; three days out when it has none. */
+    LocalDate expectedBy(Store store, String pincode) {
+        Optional<StoreArea> area = pincode == null ? Optional.empty() : storeAreas.findByStoreAndPincode(store, pincode);
+        return area.map(a -> DeliveryTimeService.estimate(a.getMinDays(), a.getMaxDays()).getTo())
+                .orElse(LocalDate.now().plusDays(3));
     }
 
     private Order newOrder(User user, PaymentMethod paymentMethod, OrderSource source, Address ship) {
@@ -520,7 +638,7 @@ public class OrderService {
             throw new BusinessException("An order that is " + o.getStatus().getLabel().toLowerCase()
                     + " can't be marked " + next.getLabel().toLowerCase() + ".");
         }
-        Refund refund = next == OrderStatus.CANCELLED ? cancellationRefund(o) : Refund.NONE;
+        Refund refund = next == OrderStatus.CANCELLED && !o.isExchange() ? cancellationRefund(o) : Refund.NONE;
         BigDecimal onlineBack = refund.online();
         // Paid online: the money goes back through the gateway first, so a refund that fails leaves the order as it was
         if (onlineBack.signum() > 0) {
@@ -531,9 +649,10 @@ public class OrderService {
         o.setStatus(next);
         o.setUpdatedAt(LocalDateTime.now());
 
-        if (next == OrderStatus.SHIPPED || next == OrderStatus.OUT_FOR_DELIVERY) invoiceService.issue(o);
+        // A replacement has no invoice of its own: the sale was invoiced on the original order
+        if ((next == OrderStatus.SHIPPED || next == OrderStatus.OUT_FOR_DELIVERY) && !o.isExchange()) invoiceService.issue(o);
         if (next == OrderStatus.DELIVERED) {
-            invoiceService.issue(o);   // no-op unless it skipped "shipped" before invoices existed
+            if (!o.isExchange()) invoiceService.issue(o);   // no-op unless it skipped "shipped" before invoices existed
             o.setDeliveredAt(LocalDateTime.now());
             if (o.getPaymentStatus() == PaymentStatus.PENDING) o.setPaymentStatus(PaymentStatus.PAID);
             planService.onOrderDelivered(o);   // tops up supply at home
@@ -541,7 +660,7 @@ public class OrderService {
         if (next == OrderStatus.CANCELLED) {
             o.getItems().forEach(i -> restock(o, i.getMedicine(), i.getQuantity()));
             prescriptionService.releaseUse(o);      // the packs can be ordered again on its prescription
-            if (o.getPaymentStatus() == PaymentStatus.PAID) o.setPaymentStatus(PaymentStatus.REFUNDED);
+            if (o.getPaymentStatus() == PaymentStatus.PAID && !o.isExchange()) o.setPaymentStatus(PaymentStatus.REFUNDED);
         }
         // MediZon Money spent on a cancelled order goes straight back, less any of the payment charge it paid
         BigDecimal walletBack = refund.wallet();
@@ -557,8 +676,9 @@ public class OrderService {
                 (next == OrderStatus.CANCELLED
                         ? "Order " + o.getOrderNumber() + " for ₹" + o.getTotal() + " is cancelled."
                                 + (o.getCancelReason() != null ? " " + o.getCancelReason() : "")
-                        : "Order " + o.getOrderNumber() + " is now " + next.getLabel().toLowerCase() + ".")
-                        + (next == OrderStatus.SHIPPED ? " Your tax invoice " + o.getInvoiceNumber() + " is ready on the order page." : "")
+                        : o.getKindLabel() + " " + o.getOrderNumber() + (o.isExchange() ? " for exchange " + o.getExchangeNumber() : "")
+                                + " is now " + next.getLabel().toLowerCase() + ".")
+                        + (next == OrderStatus.SHIPPED && !o.isExchange() ? " Your tax invoice " + o.getInvoiceNumber() + " is ready on the order page." : "")
                         + (next == OrderStatus.OUT_FOR_DELIVERY ? " Our delivery partner is out for delivery with your package." : "")
                         + (next == OrderStatus.DELIVERED ? " Tell us how it went with a quick review." : ""),
                 o.getCustomerPath());

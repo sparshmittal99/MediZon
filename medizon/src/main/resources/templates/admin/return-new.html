@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/layout :: head('Raise a return')}"></head>
+<head th:replace="~{fragments/layout :: head(${kind.name() == 'EXCHANGE'} ? 'Raise an exchange' : 'Raise a return')}"></head>
 <body>
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 <div th:replace="~{fragments/layout :: adminNav}"></div>
@@ -8,20 +8,31 @@
 
 <main class="container mz-page">
     <a th:href="@{/admin/orders/{id}(id=${o.id})}" class="mz-back-link small"><i class="bi bi-arrow-left"></i> Order <span th:text="${o.orderNumber}"></span></a>
-    <h1 class="mz-page-title mt-2 mb-1">Raise a return</h1>
-    <p class="text-muted mb-4">
+    <h1 class="mz-page-title mt-2 mb-1" th:text="${kind.name() == 'EXCHANGE'} ? 'Raise an exchange' : 'Raise a return'">Raise a return</h1>
+    <p class="text-muted mb-3">
         For <strong th:text="${o.user.fullName}"></strong> on order <strong th:text="${o.orderNumber}"></strong>,
-        e.g. after a support ticket about a rejected return. It is approved at once and the customer sees an ordinary
-        return; who raised it and why stay in the back office.
+        e.g. after a support ticket. It is approved at once and the customer sees an ordinary
+        <span th:text="${kind.noun}">return</span>; who raised it and why stay in the back office.
     </p>
+
+    <!-- Return (refund) or exchange (a free replacement of the same packs) -->
+    <div class="mz-kind-switch mb-4" role="tablist" aria-label="Return or exchange">
+        <a th:href="@{/admin/returns/new(order=${o.id})}" role="tab"
+           th:classappend="${kind.name() == 'RETURN'} ? 'active'" th:aria-selected="${kind.name() == 'RETURN'}">
+            <i class="bi bi-arrow-return-left" aria-hidden="true"></i><span><strong>Return</strong><small>Refund the customer</small></span></a>
+        <a th:href="@{/admin/returns/new(order=${o.id},kind='exchange')}" role="tab"
+           th:classappend="${kind.name() == 'EXCHANGE'} ? 'active'" th:aria-selected="${kind.name() == 'EXCHANGE'}">
+            <i class="bi bi-arrow-left-right" aria-hidden="true"></i><span><strong>Exchange</strong><small>Send the same packs again, free</small></span></a>
+    </div>
 
     <div class="row g-4">
         <form class="col-lg-8" th:action="@{/admin/returns/new}" method="post">
             <input type="hidden" name="order" th:value="${o.id}">
+            <input type="hidden" name="kind" th:value="${kind.name()}">
 
             <section class="mz-panel-flush table-responsive mb-4">
                 <table class="table align-middle mb-0">
-                    <thead><tr><th>Medicine</th><th>Ordered</th><th>Can return</th><th style="width: 8rem">Take back</th></tr></thead>
+                    <thead><tr><th>Medicine</th><th>Ordered</th><th>Can return</th><th style="width: 8rem" th:text="${kind.name() == 'EXCHANGE'} ? 'Exchange' : 'Take back'">Take back</th></tr></thead>
                     <tbody>
                     <tr th:each="i : ${o.items}" th:with="n=${left.get(i.id) != null ? left.get(i.id) : 0}">
                         <td>
@@ -61,7 +72,16 @@
                        th:max="${#temporals.format(#temporals.createToday().plusDays(30), 'yyyy-MM-dd')}">
             </section>
 
-            <section class="mz-panel mb-4">
+            <!-- Exchange: a replacement instead of a refund -->
+            <section class="mz-panel mb-4" th:if="${kind.name() == 'EXCHANGE'}">
+                <h2 class="h6">Replacement</h2>
+                <p class="small mb-0">A confirmed, free replacement order of the same packs is created from
+                    <strong th:text="${o.store != null} ? ${o.store.name} : 'the store'"></strong>'s stock as soon as you raise this,
+                    to the address the order went to. Nothing is refunded. If the packs aren't in stock, nothing is raised: restock
+                    first, or raise a return instead.</p>
+            </section>
+
+            <section class="mz-panel mb-4" th:unless="${kind.name() == 'EXCHANGE'}">
                 <h2 class="h6">Refund to</h2>
                 <p class="small text-muted" th:text="'Paid by ' + ${o.paymentLabel} + '.'"></p>
 
@@ -134,7 +154,8 @@
             </section>
 
             <div class="d-flex gap-2">
-                <button class="btn btn-primary" type="submit"><i class="bi bi-check2 me-1" aria-hidden="true"></i>Raise and approve return</button>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-check2 me-1" aria-hidden="true"></i><span
+                        th:text="'Raise and approve ' + ${kind.noun}">Raise and approve return</span></button>
                 <a th:href="@{/admin/orders/{id}(id=${o.id})}" class="btn btn-outline-secondary">Cancel</a>
             </div>
         </form>

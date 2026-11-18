@@ -495,14 +495,23 @@ public class AdminController {
         Map<Long, PrescriptionScore> scores = new HashMap<>();
         Map<Long, PrescriptionReading> readings = new HashMap<>();
         Map<Long, List<PrescriptionScanService.CoverRow>> covers = new HashMap<>();
+        Map<Long, PrescriptionReading> corrected = new HashMap<>();
+        // Uploaded at checkout for a placed order: the order's packs, fixed for pharmacists (the admin can change them)
+        Map<Long, List<PrescriptionService.OrderedLine>> onOrder = new HashMap<>();
         pending.forEach(p -> {
+            List<PrescriptionService.OrderedLine> lines = prescriptionService.orderedLines(p);
+            if (!lines.isEmpty()) onOrder.put(p.getId(), lines);
             scanService.score(p).ifPresent(sc -> scores.put(p.getId(), sc));
             scanService.reading(p).ifPresent(r -> readings.put(p.getId(), r));
-            covers.put(p.getId(), scanService.suggestedCover(p));     // pre-filled from the AI reading
+            scanService.current(p).filter(r -> p.getCustomerReading() != null).ifPresent(r -> corrected.put(p.getId(), r));
+            covers.put(p.getId(), lines.isEmpty() ? scanService.suggestedCover(p)   // pre-filled from the reading and the cart
+                    : lines.stream().map(l -> new PrescriptionScanService.CoverRow(l.medicineId(), l.packs(), false, false)).toList());
         });
         model.addAttribute("scores", scores);
         model.addAttribute("readings", readings);
         model.addAttribute("covers", covers);
+        model.addAttribute("corrected", corrected);
+        model.addAttribute("onOrder", onOrder);
         model.addAttribute("catalogue", medicineRepository.findByActiveTrueOrderByNameAsc());
         model.addAttribute("maxPacks", PrescriptionService.MAX_PACKS);
         model.addAttribute("reviewed", prescriptionService.recentlyReviewed());
@@ -522,7 +531,7 @@ public class AdminController {
                          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate prescribedOn,
                          RedirectAttributes ra) {
         prescriptionService.review(id, approve, note, validUntil, coverFromForm(itemMedicine, itemPacks),
-                new PrescriptionService.Details(doctorName, patientName, prescribedOn));
+                new PrescriptionService.Details(doctorName, patientName, prescribedOn), currentUser.get());
         ra.addFlashAttribute("success", approve ? "Prescription approved." : "Prescription rejected.");
         return "redirect:/admin/prescriptions";
     }

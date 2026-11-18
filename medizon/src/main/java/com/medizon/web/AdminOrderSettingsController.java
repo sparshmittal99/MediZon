@@ -32,6 +32,8 @@ public class AdminOrderSettingsController {
         model.addAttribute("maxMinOrder", OrderSettingsService.MAX_MIN_ORDER_VALUE);
         model.addAttribute("maxPaymentFee", OrderSettingsService.MAX_PAYMENT_FEE);
         model.addAttribute("maxGstRate", OrderSettingsService.MAX_GST_RATE);
+        model.addAttribute("maxFreeDelivery", OrderSettingsService.MAX_FREE_DELIVERY_ABOVE);
+        model.addAttribute("maxDeliveryFee", OrderSettingsService.MAX_DELIVERY_FEE);
         model.addAttribute("active", "orders");
         return "admin/order-settings";
     }
@@ -43,6 +45,21 @@ public class AdminOrderSettingsController {
             ra.addFlashAttribute("success", saved.signum() == 0
                     ? "Minimum order value removed: carts of any amount can be checked out."
                     : "Minimum order value set to ₹" + OrderSettingsService.plain(saved) + ". Carts below it can't be checked out.");
+        } catch (BusinessException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/admin/order-settings";
+    }
+
+    /** The order value for free delivery and the charge below it. */
+    @PostMapping("/delivery")
+    public String saveDelivery(@RequestParam(required = false) BigDecimal freeDeliveryAbove,
+                               @RequestParam(required = false) BigDecimal deliveryFee, RedirectAttributes ra) {
+        try {
+            var s = orderSettings.saveDelivery(freeDeliveryAbove, deliveryFee, currentUser.get().getEmail());
+            ra.addFlashAttribute("success", s.isDeliveryAlwaysFree() ? "Delivery is now free on every order."
+                    : "Delivery is free on orders of ₹" + OrderSettingsService.plain(s.getFreeDeliveryAbove()) + " or more; smaller orders pay ₹"
+                    + OrderSettingsService.plain(s.getDeliveryFee()) + ".");
         } catch (BusinessException e) {
             ra.addFlashAttribute("error", e.getMessage());
         }

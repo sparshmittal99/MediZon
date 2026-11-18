@@ -9,6 +9,7 @@ import com.medizon.service.BusinessException;
 import com.medizon.service.CurrentUser;
 import com.medizon.service.MemberService;
 import com.medizon.service.PrescriptionCartFiller;
+import com.medizon.service.PrescriptionEditService;
 import com.medizon.service.NotFoundException;
 import com.medizon.service.PrescriptionScanService;
 import com.medizon.service.PrescriptionService;
@@ -41,6 +42,7 @@ public class PrescriptionController {
     private final CurrentUser currentUser;
     private final DeliveryLocations deliveryLocations;
     private final MemberService memberService;
+    private final PrescriptionEditService editService;
 
     @GetMapping
     public String list(Model model) {
@@ -78,7 +80,7 @@ public class PrescriptionController {
         Map<Long, PrescriptionReading> readings = new HashMap<>();
         Map<Long, String> goesTo = new HashMap<>();
         drafts.forEach(p -> {
-            scanService.reading(p).ifPresent(r -> readings.put(p.getId(), r));
+            scanService.current(p).ifPresent(r -> readings.put(p.getId(), r));   // with the customer's corrections
             if (p.getPatientName() != null && !p.getPatientName().isBlank()) {
                 goesTo.put(p.getId(), memberService.byPatientName(user, p.getPatientName()).map(Member::getLabel)
                         .orElse("Others (not in your family members)"));
@@ -132,7 +134,7 @@ public class PrescriptionController {
     public String view(@PathVariable Long id, HttpServletRequest request, Model model) {
         Prescription p = own(id);
         if (p.getStatus() == PrescriptionStatus.DRAFT) return "redirect:/prescriptions/review";
-        Optional<PrescriptionReading> reading = scanService.reading(p);
+        Optional<PrescriptionReading> reading = scanService.current(p);
         model.addAttribute("p", p);
         model.addAttribute("aiEnabled", scanService.isEnabled());
         model.addAttribute("reading", reading.orElse(null));
@@ -142,6 +144,57 @@ public class PrescriptionController {
             model.addAttribute("addable", s.stream().filter(PrescriptionScanService.Suggestion::canAdd).count());
         });
         return "prescriptions/detail";
+    }
+
+    // ---------------------------------------------------------------- edit screen
+
+    /**
+     * Every detail of an uploaded prescription, editable until the pharmacist reviews it: patient, doctor, date, the
+     * medicines read on it and a note. {@code returnTo} is where Save and Back go: the review page (default), checkout's
+     * review page, or the prescription's own page.
+     */
+    @GetMapping("/{id}/edit")
+    public String editForm(@PathVariable Long id, @RequestParam(required = false) String returnTo, Model model) {
+        Prescription p = editService.editable(currentUser.get(), id);
+        model.addAttribute("p", p);
+        model.addAttribute("form", editService.formFor(p));
+        model.addAttribute("ai", editService.aiReading(p).orElse(null));
+        model.addAttribute("maxMedicines", PrescriptionEditService.MAX_MEDICINES);
+        model.addAttribute("returnTo", returnTo(returnTo));
+        model.addAttribute("backTo", backTo(p, returnTo(returnTo)));
+        return "prescriptions/edit";
+    }
+
+    @PostMapping("/{id}/edit")
+    public String edit(@PathVariable Long id, @RequestParam(required = false) String returnTo,
+                       @RequestParam(required = false) String patientName, @RequestParam(required = false) String doctorName,
+                       @RequestParam(required = false) String prescribedOn, @RequestParam(required = false) String notes,
+                       @RequestParam(name = "medName", required = false) List<String> names,
+                       @RequestParam(name = "medStrength", required = false) List<String> strengths,
+                       @RequestParam(name = "medDosage", required = false) List<String> dosages,
+                       @RequestParam(name = "medDuration", required = false) List<String> durations,
+                       RedirectAttributes ra) {
+        List<PrescriptionEditService.Med> meds = new java.util.ArrayList<>();
+        int n = names == null ? 0 : names.size();
+        for (int k = 0; k < n; k++) {
+            meds.add(new PrescriptionEditService.Med(names.get(k), at(strengths, k), at(dosages, k), at(durations, k)));
+        }
+        int changed = editService.save(currentUser.get(), id,
+                new PrescriptionEditService.Form(patientName, doctorName, PrescriptionEditService.date(prescribedOn), notes, meds));
+        ra.addFlashAttribute("success", changed == 0 ? "Nothing changed."
+                : "Saved your changes. The pharmacist sees what you changed alongside the file.");
+        return "redirect:" + backTo(editService.editable(currentUser.get(), id), returnTo(returnTo));
+    }
+
+    private static String at(List<String> list, int k) { return list != null && k < list.size() ? list.get(k) : null; }
+
+    private static String returnTo(String s) {
+        return "checkout".equals(s) || "detail".equals(s) ? s : "review";
+    }
+
+    private static String backTo(Prescription p, String returnTo) {
+        if (p.getStatus() != PrescriptionStatus.DRAFT || "detail".equals(returnTo)) return "/prescriptions/" + p.getId();
+        return "/prescriptions/review" + ("checkout".equals(returnTo) ? "?returnTo=checkout" : "");
     }
 
     @PostMapping("/{id}/scan")
@@ -165,7 +218,9 @@ public class PrescriptionController {
     /** Streams the file to its owner or an admin only. */
     @GetMapping("/{id}/file")
     public ResponseEntity<Resource> file(@PathVariable Long id) {
-        Prescription p = prescriptionService.getForViewer(id, currentUser.get());
+        User viewer = currentUser.get();
+        Prescription p = prescriptionService.getForViewer(id, viewer);
+        if (!p.getUser().getId().equals(viewer.getId())) prescriptionService.recordOpened(id, viewer);   // staff checked the file
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(p.getContentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"prescription-" + p.getId() + "\"")
