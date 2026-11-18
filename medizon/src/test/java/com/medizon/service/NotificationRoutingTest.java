@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -103,7 +103,49 @@ class NotificationRoutingTest {
         // Both phones stop ringing and show "Dose taken" (on Mummy's it replaces the one it showed, quietly)
         for (String token : List.of("token-21", "token-22")) {
             verify(push).send(eq(token), argThat(d -> "DOSE_DONE".equals(d.get("type"))
-                    && "Dose taken · Metformin".equals(d.get("title"))));
+                    && "Dose taken · Metformin".equals(d.get("title"))), isNull());
         }
+    }
+
+    @Test
+    void theDoseTimeBackupGoesOnlyToPhonesThatRingForThatPerson() {
+        PushService push = mock(PushService.class);
+        when(push.isEnabled()).thenReturn(true);
+        NotificationDeviceRepository devices = mock(NotificationDeviceRepository.class);
+        User user = new User();
+        user.setId(1L);
+        NotificationDevice mummysPhone = following(21, mummy);
+        mummysPhone.setAppVersion(NotificationDevice.DOSE_BACKUP_VERSION);
+        NotificationDevice myPhone = following(22, me);            // doesn't ring for Mummy
+        myPhone.setAppVersion(NotificationDevice.DOSE_BACKUP_VERSION);
+        NotificationDevice oldApp = following(23, mummy);          // rings for Mummy, but an app from before the backup
+        when(devices.findByUserAndPushTokenIsNotNull(user)).thenReturn(List.of(mummysPhone, myPhone, oldApp));
+
+        MedicationPlan plan = new MedicationPlan();
+        plan.setId(7L);
+        plan.setUser(user);
+        plan.setCustomName("Metformin");
+        plan.setMember(mummy);
+        plan.getReminderTimes().add(java.time.LocalTime.of(8, 0));
+        LocalDateTime at = LocalDateTime.of(2026, 11, 19, 8, 0);
+        new AppSyncSignal(push, devices).doseDue(plan, at);
+
+        // Same id as the alarm on the phone's schedule, so the phone rings it only if its own alarm didn't
+        verify(push).send(eq("token-21"), argThat(d -> "DOSE_DUE".equals(d.get("type"))
+                && AppScheduleService.doseAlarmId(plan, at).equals(d.get("id")) && "7".equals(d.get("planId"))), eq("1800s"));
+        verify(push, never()).send(eq("token-22"), anyMap(), any());
+        verify(push, never()).send(eq("token-23"), anyMap(), any());   // it would show it as a plain notification
+    }
+
+    @Test
+    void noBackupForMedicinesThatDontRing() {
+        PushService push = mock(PushService.class);
+        when(push.isEnabled()).thenReturn(true);
+        NotificationDeviceRepository devices = mock(NotificationDeviceRepository.class);
+        MedicationPlan plan = new MedicationPlan();
+        plan.setId(8L);
+        plan.setCustomName("Antacid");                // no dose times: nothing rings on phones
+        new AppSyncSignal(push, devices).doseDue(plan, LocalDateTime.now());
+        verifyNoInteractions(devices);
     }
 }

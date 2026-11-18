@@ -73,6 +73,27 @@ Sign in on the site inside the app. The page shows a banner if anything below is
   - Model-specific steps: <https://dontkillmyapp.com>
 - Keep the phone's **alarm volume** up. Alarms use the alarm stream, not the ringer.
 
+### One phone rings and another doesn't?
+
+Open **App settings > Sync > Alarm check** on the phone that stayed quiet. Each phone keeps its own log (`AlarmHealth.kt`) of:
+
+- alarms that never rang;
+- alarms that rang late;
+- times Android had removed the alarms;
+- doses that rang from the backup push because the phone's own alarm didn't go off.
+
+Each entry says what Android reported at the time: the app was force-stopped (which deletes all its alarms, usually a battery saver or cleaner), the phone was off or restarting, battery not Unrestricted, or the app put in a restricted group.
+
+The app now puts removed alarms back whenever it wakes for any reason: a push, the 3-hourly sync, or opening it.
+
+**Backup push at dose time.** At each dose time the server also sends a high-priority `DOSE_DUE` push to the phones that ring for that family member. It has the same id as the alarm on the phone's schedule, and it expires after 30 minutes.
+
+- If the phone's own alarm already rang, the push is ignored: each alarm id is claimed once (`AlarmHealth.claim`), so a dose never rings twice.
+- If the alarm didn't ring, the push rings it, cancels the local alarm in case that one is only late, and syncs.
+- It needs internet at dose time; the local alarm doesn't.
+
+**What nothing can fix.** Android delivers no pushes to a force-stopped app ("stopped" state, kept across a restart) until it's opened. On Xiaomi, swiping the app away from Recents force-stops it. On phones that force-stop apps, the settings above (Battery: No restrictions / Unrestricted, Autostart, lock in Recents, not in "Sleeping apps") are what fixes it.
+
 ## App settings
 
 Open them from the site's "App settings" entry (`MediZonApp.openSettings()`).

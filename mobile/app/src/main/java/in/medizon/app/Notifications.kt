@@ -11,9 +11,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.app.Person
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.IconCompat
 
 object Notifications {
     const val CHANNEL_CALLS = "medicine_calls"
@@ -83,16 +81,13 @@ object Notifications {
     private fun titleFor(items: List<AlarmItem>): String =
         if (items.size == 1) items[0].title else "${items[0].title} (+${items.size - 1} more)"
 
-    /** The ongoing incoming-call notification while AlarmService rings. */
+    /**
+     * The ongoing alarm notification while AlarmService rings, with Taken / Skip / Snooze on every Android version.
+     * Not Android's incoming-call style (CallStyle): on Android 12+ that always labels its two buttons
+     * "Answer" / "Decline", whatever the app asks for.
+     */
     fun ringing(c: Context, items: List<AlarmItem>): Notification {
         val first = items.first()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            try {
-                return callStyle(c, items)
-            } catch (e: Exception) {
-                Log.w("MediZonNotif", "CallStyle failed, using plain alarm notification", e)
-            }
-        }
         val fullScreen = alarmActivityIntent(c)
         val b = NotificationCompat.Builder(c, CHANNEL_CALLS)
             .setSmallIcon(R.drawable.ic_stat_capsule)
@@ -114,41 +109,6 @@ object Notifications {
             .setFullScreenIntent(fullScreen, true)
         addAnswerActions(c, b, first)
         return b.build()
-    }
-
-    private fun callStyle(c: Context, items: List<AlarmItem>): Notification {
-        val first = items.first()
-        val person = Person.Builder()
-            .setName(titleFor(items))
-            .setIcon(IconCompat.createWithBitmap(logo(c)))
-            .setImportant(true)
-            .build()
-        val answer = action(c, if (first.isDose) AlarmActions.TAKEN else AlarmActions.DISMISS, first)
-        val decline = action(c, if (first.isDose) AlarmActions.SKIP else AlarmActions.DISMISS, first)
-        val fullScreen = alarmActivityIntent(c)
-        return NotificationCompat.Builder(c, CHANNEL_CALLS)
-            .setSmallIcon(R.drawable.ic_stat_capsule)
-            .setColor(ContextCompat.getColor(c, R.color.mz_green))
-            .setContentTitle(titleFor(items))
-            .setContentText(first.body.ifBlank { "Medicine reminder" })
-            .setStyle(
-                NotificationCompat.CallStyle.forIncomingCall(person, decline, answer)
-                    .setAnswerButtonColorHint(0xFF1FAA59.toInt())
-                    .setDeclineButtonColorHint(ContextCompat.getColor(c, R.color.mz_red))
-            )
-            .addAction(0, AppSettings.snoozeLabel(c), action(c, AlarmActions.SNOOZE, first))
-            .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setOngoing(true)
-            // Not setSilent(): that marks it a silent group alert, and Android then blocks both the heads-up and the
-            // full-screen popup. The "Medicine calls" channel has no sound; AlarmService plays the ringtone.
-            .setOnlyAlertOnce(true)
-            .setWhen(first.atMillis)
-            .setShowWhen(true)
-            .setContentIntent(fullScreen)
-            .setFullScreenIntent(fullScreen, true)
-            .build()
     }
 
     private fun addAnswerActions(c: Context, b: NotificationCompat.Builder, item: AlarmItem) {

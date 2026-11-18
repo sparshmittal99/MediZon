@@ -76,7 +76,8 @@ object AlarmScheduler {
         }
     }
 
-    private fun isScheduled(c: Context, id: String): Boolean {
+    /** Is this alarm still set with Android? False once the app was force-stopped (which deletes its alarms). */
+    fun isScheduled(c: Context, id: String): Boolean {
         val intent = Intent(c, AlarmReceiver::class.java)
             .setAction(ACTION_FIRE)
             .setData(Uri.parse("medizon-alarm://alarm/" + Uri.encode(id)))

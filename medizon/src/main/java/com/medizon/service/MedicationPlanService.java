@@ -518,6 +518,8 @@ public class MedicationPlanService {
                         + ". Tap to mark it taken or skipped.";
                 notifications.notify(p.getUser(), NotificationType.DOSE_REMINDER,
                         "Time for " + p.getTitle(), capitalize(msg), planLink(p), who);
+                // Backup for the phones' own alarms: rings on any phone whose alarm didn't (sent once, as this dose's log is new)
+                appSync.doseDue(p, at);
 
                 if (before > 0 && p.getUnitsRemaining() == 0) {
                     notifications.notify(p.getUser(), NotificationType.REORDER_ALERT,

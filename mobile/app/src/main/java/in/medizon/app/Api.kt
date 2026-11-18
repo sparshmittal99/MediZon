@@ -64,6 +64,8 @@ object Api {
             conn.setRequestProperty("Authorization", "Bearer $token")
             conn.setRequestProperty("Accept", "application/json")
             conn.setRequestProperty("User-Agent", userAgent(c))
+            // Lets the server send only what this version understands (e.g. the dose-time backup push, from 3)
+            conn.setRequestProperty("X-MediZon-App-Version", BuildConfig.VERSION_CODE.toString())
             if (json != null) {
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")

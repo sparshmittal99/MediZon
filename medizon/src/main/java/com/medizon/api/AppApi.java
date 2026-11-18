@@ -52,9 +52,11 @@ public class AppApi {
     }
 
     @GetMapping("/schedule")
-    public ResponseEntity<?> schedule(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth) {
+    public ResponseEntity<?> schedule(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth,
+                                      @RequestHeader(value = "X-MediZon-App-Version", required = false) String appVersion) {
         Optional<NotificationDevice> device = app.device(bearer(auth));
         if (device.isEmpty()) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Not linked."));
+        app.appVersion(device.get(), appVersion);
         return ResponseEntity.ok(app.schedule(device.get(), LocalDateTime.now().withNano(0)));
     }
 

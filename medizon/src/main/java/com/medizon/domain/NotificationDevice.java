@@ -57,6 +57,15 @@ public class NotificationDevice {
     private String pushToken;
     private LocalDateTime lastSeenAt = LocalDateTime.now();
 
+    /** The Android app's version code, sent with each schedule fetch; null for versions from before it was sent. */
+    private Integer appVersion;
+
+    /** First app version that handles the dose-time backup push (DOSE_DUE); older ones would show it as a notification. */
+    public static final int DOSE_BACKUP_VERSION = 3;
+
+    /** Runs an app version that rings from the dose-time backup push (and ignores it when its own alarm rang). */
+    public boolean handlesDoseBackup() { return appVersion != null && appVersion >= DOSE_BACKUP_VERSION; }
+
     /** Whether this device rings and shows dose reminders for {@code member} (its member choice). */
     public boolean allows(Member member) {
         return member == null || allMembers || getMemberIds().contains(member.getId());

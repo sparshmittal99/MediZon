@@ -102,24 +102,39 @@ class AlarmReceiver : BroadcastReceiver() {
         if (intent.action != AlarmScheduler.ACTION_FIRE) return
         val item = AlarmItem.fromIntent(intent) ?: return
         Store.removeOneOff(context, item.id)
-        // Way overdue (e.g. device was off): don't ring, just tell the user.
-        if (System.currentTimeMillis() - item.atMillis > 30 * 60 * 1000L) {
-            Notifications.missed(context, item)
-            return
-        }
-        // Not answered 30 min from now -> "Missed dose" notification (phone only).
-        if (item.isDose) AlarmScheduler.scheduleFollowUp(context, item)
-        // "Ring phone" on or off, the alarm works the same way: full-screen popup, and a notification that can't be
-        // cleared until 2 minutes after the alert ends. Off only means no ringtone (AlarmService.startRinging).
-        try {
-            AlarmService.fire(context, item)
-        } catch (e: Exception) {
-            // e.g. ForegroundServiceStartNotAllowedException if the OS refuses; at least leave a notification.
-            Notifications.missed(context, item)
-        }
+        ring(context, item, viaPush = false)
     }
 
     companion object {
+        /** Older than this, a dose doesn't ring any more: the phone shows "Missed: …" instead. */
+        private const val TOO_LATE_MS = 30 * 60 * 1000L
+
+        /**
+         * Rings [item], from the phone's own alarm or the server's dose-time backup push (DOSE_DUE). Whichever comes
+         * first rings; the other finds the alarm already claimed and does nothing ([AlarmHealth.claim]), so a dose
+         * rings once. A push that rings cancels the phone's own alarm for it, in case that one is only late.
+         */
+        fun ring(c: Context, item: AlarmItem, viaPush: Boolean) {
+            if (AlarmService.isDismissed(item)) return                 // answered here or on another device
+            if (!AlarmHealth.claim(c, item, viaPush)) return            // already rang from the other path
+            if (viaPush) AlarmScheduler.cancel(c, item.id)
+            // Way overdue (e.g. device was off): don't ring, just tell the user.
+            if (System.currentTimeMillis() - item.atMillis > TOO_LATE_MS) {
+                Notifications.missed(c, item)
+                return
+            }
+            // Not answered 30 min from now -> "Missed dose" notification (phone only).
+            if (item.isDose) AlarmScheduler.scheduleFollowUp(c, item)
+            // "Ring phone" on or off, the alarm works the same way: full-screen popup, and a notification that can't be
+            // cleared until 2 minutes after the alert ends. Off only means no ringtone (AlarmService.startRinging).
+            try {
+                AlarmService.fire(c, item)
+            } catch (e: Exception) {
+                // e.g. ForegroundServiceStartNotAllowedException if the OS refuses; at least leave a notification.
+                Notifications.missed(c, item)
+            }
+        }
+
         /**
          * 30 min after a dose alarm rang (its local alarm, or the server's DOSE_CHECK push, whichever is first).
          * Answers cancel this check, so getting here means the dose is still unmarked as far as this phone knows.

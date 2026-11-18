@@ -148,6 +148,22 @@ class PushService : FirebaseMessagingService() {
             return
         }
         // A medicine or reminder changed (on any device): fetch the schedule now so the alarms are right
+        // A dose is due now: the server's backup for this phone's own alarm. Rings only if that alarm hasn't already
+        // (AlarmReceiver.ring claims each alarm once), then syncs so every later alarm is set again too.
+        if (d["type"] == "DOSE_DUE") {
+            if (!Store.isLinked(this)) return
+            val item = doseDue(d) ?: return
+            val app = applicationContext
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                // Answered on this phone but not sent yet (offline): nothing to ring
+                val answered = Store.doseQueue(app).any {
+                    it.optLong("planId") == item.planId && it.optString("at") == item.at
+                }
+                if (!answered) AlarmReceiver.ring(app, item, viaPush = true)
+                Sync.syncNow(app)
+            }
+            return
+        }
         if (d["type"] == "SYNC") {
             Sync.syncNow(applicationContext)
             return
@@ -155,5 +171,17 @@ class PushService : FirebaseMessagingService() {
         // Shown on the phone whether MediZon is open or closed, like the in-app notification.
         val nid = d["nid"]?.takeIf { it.isNotBlank() } ?: (d["type"] + ":" + d["title"] + ":" + d["body"])
         Notifications.push(this, nid, d["title"] ?: "", d["body"] ?: "", d["link"] ?: "")
+    }
+
+    /** The DOSE_DUE push as the alarm it backs up: same id, time and text as that alarm on the schedule. */
+    private fun doseDue(d: Map<String, String>): AlarmItem? {
+        val id = d["id"]?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val planId = d["planId"]?.trim()?.toLongOrNull() ?: return null
+        val at = d["at"]?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val atMillis = try { java.time.OffsetDateTime.parse(at).toInstant().toEpochMilli() } catch (e: Exception) { return null }
+        return AlarmItem(
+            id = id, kind = "DOSE", planId = planId, reminderId = null, at = at, atMillis = atMillis,
+            title = d["title"] ?: "MediZon", body = d["body"] ?: "", path = d["path"] ?: "/",
+        )
     }
 }

@@ -65,12 +65,17 @@ public class PushService {
     /** One data message to one phone; the app builds the notification. Never throws. */
     @Async
     public void send(String token, Map<String, String> data) {
+        send(token, data, null);
+    }
+
+    /** As above, dropped by Firebase if the phone can't be reached within {@code ttl} ("1800s"); null for a day. */
+    public void send(String token, Map<String, String> data, String ttl) {
         if (!isEnabled() || token == null || token.isBlank()) return;
         try {
             Map<String, Object> body = Map.of("message", Map.of(
                     "token", token,
                     "data", data,
-                    "android", Map.of("priority", "HIGH", "ttl", "86400s")));
+                    "android", Map.of("priority", "HIGH", "ttl", ttl == null ? "86400s" : ttl)));
             http.post().uri("https://fcm.googleapis.com/v1/projects/" + projectId + "/messages:send")
                     .header("Authorization", "Bearer " + accessToken())
                     .contentType(MediaType.APPLICATION_JSON)

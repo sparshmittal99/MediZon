@@ -57,6 +57,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var lastSyncRow: Row
     private lateinit var alarmsRow: Row
     private lateinit var syncRow: Row
+    private lateinit var alarmCheckRow: Row
 
     private val ringtonePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         val data = res.data ?: return@registerForActivityResult
@@ -198,6 +199,7 @@ class SettingsActivity : AppCompatActivity() {
         lastSyncRow = row("Last synced", clickable = false)
         alarmsRow = row("Alarms set", clickable = false)
         syncRow = row("Sync now", "Fetch the latest dose schedule") { syncNow() }
+        alarmCheckRow = row("Alarm check") { showAlarmCheck() }
 
         section("App")
         row("Clear cache", "Frees space. You stay signed in.") {
@@ -331,6 +333,11 @@ class SettingsActivity : AppCompatActivity() {
             this, last, DateUtils.MINUTE_IN_MILLIS, DateUtils.WEEK_IN_MILLIS, 0
         ).toString())
         setSummary(alarmsRow, AlarmScheduler.countScheduled(this).toString())
+        val problems = AlarmHealth.events(this)
+        if (problems.isEmpty()) setSummary(alarmCheckRow, "No missed or late alarms recorded", ContextCompat.getColor(this, R.color.mz_accent))
+        else setSummary(alarmCheckRow, problems.size.toString() + (if (problems.size == 1) " problem" else " problems")
+                + " · last " + AlarmHealth.time(problems.first().atMillis) + " · tap to see why",
+            ContextCompat.getColor(this, R.color.mz_amber), bold = true)
         setEnabled(syncRow, linked)
     }
 
@@ -373,6 +380,31 @@ class SettingsActivity : AppCompatActivity() {
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private val NEW_LINE = "\u000A"
+    private val BLANK_LINE = NEW_LINE + NEW_LINE
+
+    /** Missed, late and wiped alarms on this phone, newest first, with what Android said happened. */
+    private fun showAlarmCheck() {
+        val events = AlarmHealth.events(this)
+        val text = if (events.isEmpty()) "Every alarm since this check was added rang on time on this phone."
+        else events.joinToString(BLANK_LINE) { e ->
+            val what = when (e.type) {
+                "MISSED" -> "Missed"
+                "LATE" -> "Late"
+                "WIPED" -> "Alarms removed by Android"
+                "BACKUP" -> "Rang from the backup push"
+                else -> e.type
+            }
+            listOf("$what · ${AlarmHealth.time(e.atMillis)}", e.title, e.detail).joinToString(NEW_LINE)
+        }
+        val d = AlertDialog.Builder(this)
+            .setTitle("Alarm check")
+            .setMessage(text)
+            .setPositiveButton(android.R.string.ok, null)
+        if (events.isNotEmpty()) d.setNeutralButton("Clear") { _, _ -> AlarmHealth.clear(this); refresh() }
+        d.show()
     }
 
     private fun openRingtonePicker() {

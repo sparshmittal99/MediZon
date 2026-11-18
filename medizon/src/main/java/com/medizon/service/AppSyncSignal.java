@@ -58,6 +58,29 @@ public class AppSyncSignal {
                 "at", at.atZone(ZoneId.systemDefault()).format(AT)));
     }
 
+    /** A backup ring is pointless once the dose is half an hour old: the phone shows "missed" instead by then. */
+    static final String DOSE_DUE_TTL = "1800s";
+
+    /**
+     * A dose is due now: a backup for the phone's own alarm, which Android can delete (after a restart the app
+     * wasn't allowed to start on, or a battery saver). Sent only to phones that ring for this member, with the same
+     * id and text as the alarm on their schedule; a phone that already rang it from its own alarm ignores it, one
+     * that didn't rings now. Its ring is a visible alarm, so Firebase keeps these high priority.
+     */
+    public void doseDue(MedicationPlan plan, LocalDateTime at) {
+        if (!AppScheduleService.ringsOnPhones(plan)) return;
+        Map<String, String> data = Map.of(
+                "type", "DOSE_DUE",
+                "id", AppScheduleService.doseAlarmId(plan, at),
+                "planId", String.valueOf(plan.getId()),
+                "at", at.atZone(ZoneId.systemDefault()).format(AT),
+                "title", plan.getTitle(),
+                "body", AppScheduleService.doseBody(plan),
+                "path", MedicationPlanService.planLink(plan));
+        // Only app versions that handle it: an older one would show it as a plain notification on top of its alarm
+        sendAfterCommit(plan.getUser(), d -> d.handlesDoseBackup() && d.allows(plan.getMember()) ? data : null, DOSE_DUE_TTL);
+    }
+
     private static final DateTimeFormatter TIME =DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
     private static final DateTimeFormatter DAY_TIME = DateTimeFormatter.ofPattern("d MMM, h:mm a", Locale.ENGLISH);
 
@@ -80,17 +103,19 @@ public class AppSyncSignal {
     }
 
     private void sendAfterCommit(User user, Map<String, String> data) {
-        sendAfterCommit(user, d -> data);
+        sendAfterCommit(user, d -> data, null);
     }
 
-    /** {@code dataFor} gives each phone its message. */
-    private void sendAfterCommit(User user, java.util.function.Function<NotificationDevice, Map<String, String>> dataFor) {
+    /** {@code dataFor} gives each phone its message, or null to skip that phone; {@code ttl} null for the default. */
+    private void sendAfterCommit(User user, java.util.function.Function<NotificationDevice, Map<String, String>> dataFor, String ttl) {
         if (user == null || user.getId() == null || !push.isEnabled()) return;
         List<NotificationDevice> phones = devices.findByUserAndPushTokenIsNotNull(user);
         if (phones.isEmpty()) return;
         List<Map.Entry<String, Map<String, String>>> sends = phones.stream()
+                .filter(d -> dataFor.apply(d) != null)
                 .map(d -> Map.entry(d.getPushToken(), dataFor.apply(d))).toList();
-        Runnable send = () -> sends.forEach(e -> push.send(e.getKey(), e.getValue()));
+        if (sends.isEmpty()) return;
+        Runnable send = () -> sends.forEach(e -> push.send(e.getKey(), e.getValue(), ttl));
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override

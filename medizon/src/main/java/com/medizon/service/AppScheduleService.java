@@ -93,6 +93,20 @@ public class AppScheduleService {
                 .filter(d -> d.getUser().isEnabled() && !d.getUser().isDeleted());
     }
 
+    /** Remembers which app version this phone runs (sent with each schedule fetch); a no-op when unchanged. */
+    @Transactional
+    public void appVersion(NotificationDevice device, String header) {
+        Integer v;
+        try {
+            v = header == null || header.isBlank() ? null : Integer.valueOf(header.trim());
+        } catch (NumberFormatException e) {
+            return;
+        }
+        if (v == null || v.equals(device.getAppVersion())) return;
+        device.setAppVersion(v);
+        devices.save(device);
+    }
+
     /** Doses and one-off reminders from now to a week ahead, for the members this device follows. */
     @Transactional(readOnly = true)
     public Schedule schedule(NotificationDevice device, LocalDateTime now) {
@@ -109,17 +123,16 @@ public class AppScheduleService {
         List<Alarm> out = new ArrayList<>();
         List<Alarm> checks = new ArrayList<>();
         for (MedicationPlan p : plans.findByUserAndActiveTrue(user)) {
-            if (p.isSetupRequired() || p.isOnCommonShelf() || p.getReminderTimes().isEmpty()) continue;
+            if (!ringsOnPhones(p)) continue;
             // The member choice only decides whose alarms ring here; the rest only get the 30-minute check
             List<Alarm> into = device.allows(p.getMember()) ? out : checks;
-            String body = "Take " + p.getDoseLabel()
-                    + (p.getInstructions() != null && !p.getInstructions().isBlank() ? " · " + p.getInstructions().trim() : "");
+            String body = doseBody(p);
             for (LocalDate day = today; day.isBefore(until.toLocalDate()); day = day.plusDays(1)) {
                 if (!p.isScheduledOn(day)) continue;
                 for (LocalTime t : p.getReminderTimes()) {
                     LocalDateTime at = day.atTime(t);
                     if (!at.isAfter(now) || answered.contains(p.getId() + "@" + at)) continue;
-                    into.add(new Alarm("dose-" + p.getId() + "-" + at.format(ID_TIME), "DOSE", p.getId(), null,
+                    into.add(new Alarm(doseAlarmId(p, at), "DOSE", p.getId(), null,
                             at.atZone(zone).format(AT), p.getTitle(), body,
                             MedicationPlanService.planLink(p)));
                 }
@@ -135,6 +148,22 @@ public class AppScheduleService {
         // Phones that get push notifications already had the downtime notices pushed
         boolean pushed = push.isEnabled() && device.getPushToken() != null;
         return new Schedule(now.atZone(zone).format(AT), out, pushed ? List.of() : notices(), checks);
+    }
+
+    /** A dose alarm's id, "dose-12-202611190800": the same on the schedule and on the dose-time backup push. */
+    static String doseAlarmId(MedicationPlan p, LocalDateTime at) {
+        return "dose-" + p.getId() + "-" + at.format(ID_TIME);
+    }
+
+    /** "Take 1 tablet · After food": the text a dose alarm shows. */
+    static String doseBody(MedicationPlan p) {
+        return "Take " + p.getDoseLabel()
+                + (p.getInstructions() != null && !p.getInstructions().isBlank() ? " · " + p.getInstructions().trim() : "");
+    }
+
+    /** Doses that ring as alarms on phones: set up, not on the household shelf. */
+    static boolean ringsOnPhones(MedicationPlan p) {
+        return !p.isSetupRequired() && !p.isOnCommonShelf() && !p.getReminderTimes().isEmpty();
     }
 
     private List<Notice> notices() {

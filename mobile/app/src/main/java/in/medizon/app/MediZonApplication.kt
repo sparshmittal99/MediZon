@@ -12,6 +12,11 @@ class MediZonApplication : Application() {
         AppSettings.applyTheme(AppSettings.theme(this))
         Push.init(this)
         createChannels()
+        // Any wake-up (a push, the periodic sync, a widget, opening the app) first puts back alarms Android removed,
+        // e.g. after a battery saver force-stopped the app; off the main thread
+        val app = this
+        Thread({ try { AlarmHealth.checkAndRepair(app) } catch (e: Exception) { android.util.Log.w("MediZon", "alarm check failed", e) } },
+            "alarm-check").start()
     }
 
     private fun createChannels() {

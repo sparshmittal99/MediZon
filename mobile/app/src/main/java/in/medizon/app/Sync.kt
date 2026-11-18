@@ -139,6 +139,9 @@ object Sync {
         }
         // Token may have been unlinked while we were waiting on the network.
         if (Store.token(c) != token) return Result.OK
+        // Before the stored schedule is replaced: were alarms wiped since the last look, and did any not ring?
+        AlarmHealth.checkAndRepair(c)
+        AlarmHealth.auditMissed(c, Store.schedule(c))
         AlarmScheduler.applySchedule(c, items.distinctBy { it.id })
         AlarmScheduler.applyChecks(c, checks.distinctBy { it.id })
         Store.setLastSync(c, System.currentTimeMillis())
