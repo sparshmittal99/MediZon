@@ -908,12 +908,11 @@ html[data-motion="reduce"] .mz-zoomable img, html[data-motion="reduce"] .mz-zoom
     .mz-auth-main { padding: 2rem 2.25rem; }
     .mz-auth-main .mz-or { margin: .9rem 0; }
     .mz-auth-main .mz-or + .mz-google-btn + p { margin-top: 1rem !important; }
-    .mz-auth-aside { display: flex; flex-direction: column; gap: 1.5rem; padding: 2.25rem 1.9rem; color: #EAF5F0;
+    .mz-auth-aside { display: flex; flex-direction: column; gap: 1.5rem; padding: 2rem 1.9rem 2.25rem; color: #EAF5F0;
         background: radial-gradient(120% 70% at 0% 0%, rgba(126, 221, 182, .28), transparent 60%),
                     linear-gradient(160deg, var(--mz-green) 0%, var(--mz-green-ink) 100%); }
-    .mz-auth-badge { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: .8rem;
-        background: rgba(255, 255, 255, .14); font-size: 1.35rem; color: #fff; }
-    .mz-auth-aside-title { color: #fff; font-size: 1.55rem; line-height: 1.25; margin: 0; }
+    /* The headline sits at the top, level with "Create your account"; the perks fill the bottom */
+    .mz-auth-aside-title { color: #fff; font-size: 1.55rem; line-height: 1.25; margin: .15rem 0 0; }
     .mz-auth-perks { list-style: none; margin: auto 0 0; padding: 0; display: grid; gap: 1rem; }
     .mz-auth-perks li { display: flex; gap: .75rem; align-items: flex-start; font-size: .85rem; line-height: 1.35; color: rgba(234, 245, 240, .8); }
     .mz-auth-perks i { flex-shrink: 0; display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .6rem;
@@ -929,7 +928,7 @@ html[data-motion="reduce"] .mz-zoomable img, html[data-motion="reduce"] .mz-zoom
     .mz-auth-main h1 + p { margin-bottom: 1rem !important; }
     .mz-auth-main .form-control { padding-top: .45rem; padding-bottom: .45rem; }
     .mz-auth-main .form-label { margin-bottom: .3rem; }
-    .mz-auth-aside { padding: 1.75rem 1.6rem; }
+    .mz-auth-aside { padding: 1.5rem 1.6rem 1.75rem; }
 }
 
 @media (max-width: 575.98px) {
