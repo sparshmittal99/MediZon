@@ -146,6 +146,7 @@ html[data-theme="dark"] .mz-shelf-note { border: 1px solid color-mix(in srgb, #F
 html[data-theme="dark"] .mz-setup { border: 1px solid color-mix(in srgb, #F3CF96 30%, #0F1715); }
 html[data-theme="dark"] .mz-setup-icon { color: color-mix(in srgb, #8A5300 40%, #EAF2EE); }
 html[data-theme="dark"] .mz-setup-row { background-color: var(--mz-surface); border: 1px solid color-mix(in srgb, #F3DDB8 30%, #0F1715); }
+html[data-theme="dark"] .mz-setup-count { background: color-mix(in srgb, #8A5300 70%, #EAF2EE); color: #0F1715; }
 html[data-theme="dark"] .mz-pick > span { background-color: var(--mz-surface); }
 html[data-theme="dark"] .mz-pick:hover > span { border-color: color-mix(in srgb, #A9C9BB 30%, #0F1715); }
 html[data-theme="dark"] .mz-pick-common input:checked + span::before { color: color-mix(in srgb, #8A5300 40%, #EAF2EE); }

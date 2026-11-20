@@ -50,7 +50,7 @@ class PhoneNotificationTest {
     @Test
     void otherNotificationsAreEmailedAndPushed() {
         service.notify(customer, NotificationType.PRESCRIPTION_UPDATE, "Prescription approved", "Its medicines are in your cart.", "/cart");
-        verify(email).sendTemplate(eq(EmailService.Sender.NOREPLY), eq("a@b.c"), contains("Prescription approved"), eq("emails/notification"), any(), any());
+        verify(email).sendTemplate(eq(EmailService.Sender.PHARMACIST), eq("a@b.c"), contains("Prescription approved"), eq("emails/notification"), any(), any());
         verify(phones).send(eq("token-1"), eq(Map.of("nid", "42", "type", "PRESCRIPTION_UPDATE",
                 "title", "Prescription approved", "body", "Its medicines are in your cart.", "link", "/cart")));
     }

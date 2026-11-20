@@ -685,9 +685,24 @@ html[data-motion="reduce"] .mz-zoomable img, html[data-motion="reduce"] .mz-zoom
 .mz-take-common { background: var(--mz-mint); border-radius: .7rem; padding: .7rem .9rem; }
 
 /* Delivered medicines waiting for a schedule */
-.mz-setup { background: var(--mz-amber-soft); border: 1px solid #F3CF96; border-radius: .9rem; padding: 1rem 1.25rem; }
-.mz-setup-icon { font-size: 1.6rem; color: #8A5300; }
-.mz-setup-row { display: flex; align-items: center; gap: .6rem; background: #fff; border: 1px solid #F3DDB8; border-radius: .7rem; padding: .5rem .6rem .5rem .75rem; }
+/* Delivered medicines waiting for a schedule: a compact banner, one line per medicine */
+.mz-setup { background: var(--mz-amber-soft); border: 1px solid #F3CF96; border-radius: .9rem; padding: .6rem .7rem; }
+.mz-setup-head { display: flex; align-items: center; gap: .45rem; margin: 0 0 .45rem; font-size: .95rem; font-weight: 600; min-width: 0; }
+.mz-setup-icon { font-size: 1.05rem; color: #8A5300; flex-shrink: 0; }
+.mz-setup-title { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mz-setup-count { flex-shrink: 0; min-width: 1.4rem; padding: 0 .4rem; border-radius: 1rem; background: #8A5300; color: #fff;
+    font-size: .72rem; line-height: 1.4rem; text-align: center; }
+.mz-setup-hint { display: none; font-size: .82rem; margin: -.2rem 0 .5rem; color: var(--mz-ink); opacity: .8; }
+@media (min-width: 768px) { .mz-setup { padding: .75rem 1rem; } .mz-setup-hint { display: block; } }
+.mz-setup-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
+/* More than three: the list scrolls inside the banner instead of filling the screen */
+.mz-setup-list.is-scroll { max-height: 8.6rem; overflow-y: auto; overscroll-behavior: contain; padding-right: .15rem; }
+.mz-setup-row { display: flex; align-items: center; gap: .4rem; min-width: 0; background: #fff; border: 1px solid #F3DDB8;
+    border-radius: .6rem; padding: .3rem .35rem .3rem .45rem; }
+.mz-setup-row .mz-avatar { flex-shrink: 0; }
+.mz-setup-text { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .88rem; line-height: 1.3; }
+.mz-setup-meta { color: var(--mz-muted, #6c757d); font-size: .78rem; margin-left: .25rem; }
+.mz-setup-btn { flex-shrink: 0; white-space: nowrap; font-size: .78rem; padding: .22rem .5rem; line-height: 1.3; }
 
 /* Checkbox chips: who a medicine is for, which members a device follows */
 .mz-member-picks { display: flex; flex-wrap: wrap; gap: .4rem; }

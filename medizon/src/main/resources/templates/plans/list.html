@@ -33,23 +33,28 @@
 
     <!-- Delivered medicines that still need a schedule -->
     <section th:unless="${#lists.isEmpty(needSetup)}" class="mz-setup mb-4" id="setup">
-        <div class="d-flex align-items-start gap-3">
+        <h2 class="mz-setup-head">
             <i class="bi bi-alarm mz-setup-icon" aria-hidden="true"></i>
-            <div class="flex-grow-1">
-                <h2 class="h5 mb-1">Set reminders for delivered medicines</h2>
-                <p class="small mb-3">These arrived and are counted in the supply at home. Choose dose times and days to start reminders and refill alerts.</p>
-                <ul class="list-unstyled mb-0 d-grid gap-2">
-                    <li th:each="p : ${needSetup}" class="mz-setup-row">
-                        <span class="mz-avatar mz-avatar-sm" th:classappend="${p.member.common} ? 'is-common'" th:text="${p.member.initial}" aria-hidden="true"></span>
-                        <span class="flex-grow-1">
-                            <strong th:text="${p.medicineName}">Medicine</strong>
-                            <span class="small text-muted" th:text="'for ' + ${p.member.label} + ' · ' + ${p.unitsRemaining} + ' ' + ${p.unitLabel} + ' at home'"></span>
-                        </span>
-                        <a th:href="@{/plans/{id}/edit(id=${p.id})}" class="btn btn-sm btn-amber">Set reminders</a>
-                    </li>
-                </ul>
-            </div>
-        </div>
+            <span class="mz-setup-title">Set reminders for delivered medicines</span>
+            <span class="mz-setup-count" th:text="${needSetup.size()}">1</span>
+        </h2>
+        <p class="mz-setup-hint">Already counted in the supply at home. Set dose times to start reminders and refill alerts, or tap OK to do it later.</p>
+        <ul class="mz-setup-list" th:classappend="${needSetup.size() > 3} ? 'is-scroll'">
+            <li th:each="p : ${needSetup}" class="mz-setup-row">
+                <span class="mz-avatar mz-avatar-sm" th:classappend="${p.member.common} ? 'is-common'" th:text="${p.member.initial}"
+                      th:title="${p.member.label}" aria-hidden="true"></span>
+                <span class="mz-setup-text" th:title="${p.medicineName} + ' for ' + ${p.member.label} + ' · ' + ${p.unitsRemaining} + ' ' + ${p.unitLabel} + ' at home'">
+                    <strong th:text="${p.medicineName}">Medicine</strong>
+                    <span class="mz-setup-meta" th:text="${p.member.label} + ' · ' + ${p.unitsRemaining} + ' ' + ${p.unitLabel}"></span>
+                </span>
+                <a th:href="@{/plans/{id}/edit(id=${p.id})}" class="btn btn-sm btn-amber mz-setup-btn"
+                   th:aria-label="'Set reminders for ' + ${p.medicineName}">Set reminders</a>
+                <form th:action="@{/plans/{id}/setup-later(id=${p.id})}" method="post" class="m-0">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary mz-setup-btn"
+                            th:aria-label="'Set reminders for ' + ${p.medicineName} + ' later'" title="Set later">OK</button>
+                </form>
+            </li>
+        </ul>
     </section>
 
     <!-- Today -->

@@ -21,6 +21,9 @@ class EmailSenderTest {
         assertThat(NotificationService.senderFor(NotificationType.RETURN_UPDATE, "Refund added to MediZon Money")).isEqualTo(REFUNDS);
         assertThat(NotificationService.senderFor(NotificationType.SUPPORT_UPDATE, "New reply on T1")).isEqualTo(SUPPORT);
         assertThat(NotificationService.senderFor(NotificationType.PRESCRIPTION_UPDATE, "Prescription used up")).isEqualTo(NOREPLY);
+        assertThat(NotificationService.senderFor(NotificationType.PRESCRIPTION_UPDATE, "Your digital prescription is ready")).isEqualTo(PHARMACIST);
+        assertThat(NotificationService.senderFor(NotificationType.PRESCRIPTION_UPDATE, "Prescription needs attention")).isEqualTo(PHARMACIST);
+        assertThat(NotificationService.senderFor(NotificationType.ORDER_UPDATE, "Prescription approved")).isEqualTo(PHARMACIST);
         assertThat(NotificationService.senderFor(NotificationType.INFO, null)).isEqualTo(NOREPLY);
     }
 

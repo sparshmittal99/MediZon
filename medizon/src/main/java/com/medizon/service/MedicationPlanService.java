@@ -302,6 +302,13 @@ public class MedicationPlanService {
         return out;
     }
 
+    /** OK on the "set reminders" banner: set it up later, from the medicine's card. */
+    @Transactional
+    public void dismissSetup(Long id, User user) {
+        MedicationPlan p = get(id, user);
+        if (p.isSetupRequired()) p.setSetupDismissed(true);
+    }
+
     @Transactional
     public MedicationPlan toggleActive(Long id, User user) {
         appSync.scheduleChanged(user);

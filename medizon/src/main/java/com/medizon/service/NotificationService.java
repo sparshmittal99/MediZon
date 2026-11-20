@@ -92,6 +92,17 @@ public class NotificationService {
     @Transactional
     public Notification notify(User user, NotificationType type, String title, String message, String link, Member member,
                                boolean emailIt) {
+        return notify(user, type, title, message, link, member, emailIt, null);
+    }
+
+    /** {@link #notify(User, NotificationType, String, String, String)} emailed from {@code from}, whatever the type. */
+    @Transactional
+    public Notification notifyAs(EmailService.Sender from, User user, NotificationType type, String title, String message, String link) {
+        return notify(user, type, title, message, link, null, true, from);
+    }
+
+    private Notification notify(User user, NotificationType type, String title, String message, String link, Member member,
+                                boolean emailIt, EmailService.Sender from) {
         Notification n = new Notification();
         n.setUser(user);
         n.setMember(member);
@@ -146,23 +157,26 @@ public class NotificationService {
                     + (actionUrl != null ? "\n\nOpen MediZon: " + actionUrl : "")
                     + "\n\n- MediZon";
 
-            email.sendTemplate(senderFor(type, title), user.getEmail(), "MediZon: " + title, "emails/notification", variables, fallback);
+            email.sendTemplate(from != null ? from : senderFor(type, title), user.getEmail(), "MediZon: " + title, "emails/notification", variables, fallback);
         }
         return n;
     }
 
     /**
      * Which address an emailed alert comes from: support@ for the support desk, refund@ for anything refunded,
-     * return@ for returns, payments@ for money received, store@ for other order news, noreply@ for the rest.
+     * return@ for returns, payments@ for money received, pharmacist@ for prescription news (except "used up", which
+     * stays noreply@), store@ for other order news, noreply@ for the rest.
      */
     static EmailService.Sender senderFor(NotificationType type, String title) {
         String t = title == null ? "" : title.toLowerCase(java.util.Locale.ROOT);
         return switch (type) {
             case SUPPORT_UPDATE, SUPPORT_TICKET -> EmailService.Sender.SUPPORT;
-            case RETURN_UPDATE -> t.contains("refund") ? EmailService.Sender.REFUNDS : EmailService.Sender.RETURNS;
-            case ORDER_UPDATE -> t.contains("refund") ? EmailService.Sender.REFUNDS
+            case PRESCRIPTION_UPDATE -> t.contains("used up") ? EmailService.Sender.NOREPLY : EmailService.Sender.PHARMACIST;
+            case ORDER_UPDATE -> t.startsWith("prescription") ? EmailService.Sender.PHARMACIST
+                    : t.contains("refund") ? EmailService.Sender.REFUNDS
                     : t.startsWith("payment") || t.startsWith("paid") ? EmailService.Sender.PAYMENTS
                     : EmailService.Sender.STORE;
+            case RETURN_UPDATE -> t.contains("refund") ? EmailService.Sender.REFUNDS : EmailService.Sender.RETURNS;
             default -> EmailService.Sender.NOREPLY;
         };
     }

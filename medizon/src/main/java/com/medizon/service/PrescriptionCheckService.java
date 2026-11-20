@@ -217,7 +217,7 @@ public class PrescriptionCheckService {
         m.setBody(body.length() > SupportService.MAX_BODY ? body.substring(0, SupportService.MAX_BODY - 1) + "…" : body);
         t.addMessage(m);
         t.setChatStartedAt(LocalDateTime.now());
-        notifications.notify(t.getUser(), NotificationType.SUPPORT_UPDATE, "MediZon pharmacist",
+        notifications.notifyAs(EmailService.Sender.PHARMACIST, t.getUser(), NotificationType.SUPPORT_UPDATE, "MediZon pharmacist",
                 "Our pharmacist has started a chat about your order " + numbers(open) + ".", "/support/tickets/" + t.getId());
     }
 

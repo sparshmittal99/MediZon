@@ -37,6 +37,8 @@ public class EmailService {
         REFUNDS("MediZon Refunds", "refund"),
         PAYMENTS("MediZon Payments", "payments"),
         SUPPORT("MediZon Support", "support"),
+        /** Prescription reviews, digital prescriptions and the pharmacist's consultation chat. */
+        PHARMACIST("MediZon Pharmacist", "pharmacist"),
         NOREPLY("MediZon", "noreply");
 
         private final String label;

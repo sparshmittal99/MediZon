@@ -95,6 +95,16 @@ public class MedicationPlan {
     @Column(columnDefinition = "boolean not null default false")
     private boolean setupRequired;
 
+    /**
+     * The customer tapped OK on the "set reminders" banner to set it up later: the medicine leaves the banner and
+     * sits in its member's list, still waiting for a schedule.
+     */
+    @Column(columnDefinition = "boolean not null default false")
+    private boolean setupDismissed;
+
+    /** Waiting for a schedule and still shown in the "set reminders" banner. */
+    public boolean isSetupPending() { return setupRequired && !setupDismissed; }
+
     // ---- supply at home ----
     private int unitsRemaining;
 

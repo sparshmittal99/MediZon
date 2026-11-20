@@ -256,7 +256,9 @@ public class SupportService {
         boolean asPharmacist = t.isConsult() && staff.isAdmin();
         if (asPharmacist) m.setAuthorRole(Role.PHARMACIST);
         if (!internal) {
-            notifications.notify(t.getUser(), NotificationType.SUPPORT_UPDATE, "New reply on " + t.getNumber(),
+            // A prescription consultation's replies come from the pharmacist's address, not support's
+            notifications.notifyAs(t.isConsult() ? EmailService.Sender.PHARMACIST : EmailService.Sender.SUPPORT,
+                    t.getUser(), NotificationType.SUPPORT_UPDATE, "New reply on " + t.getNumber(),
                     (asPharmacist ? "MediZon pharmacist" : staff.getFirstName() + " (" + SupportTicket.teamLabel(staff.getRole()) + ")")
                             + ": " + preview(b), link(t));
         }

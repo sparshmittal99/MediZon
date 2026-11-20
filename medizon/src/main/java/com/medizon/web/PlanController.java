@@ -50,9 +50,9 @@ public class PlanController {
         Member selected = member == null ? null : memberService.get(member, user);
 
         List<MedicationPlan> plans = planService.forUser(user);
-        Map<Long, List<MedicationPlan>> byMember = plans.stream().filter(p -> !p.isSetupRequired())
+        Map<Long, List<MedicationPlan>> byMember = plans.stream().filter(p -> !p.isSetupPending())
                 .collect(Collectors.groupingBy(p -> p.getMember().getId(), LinkedHashMap::new, Collectors.toList()));
-        List<MedicationPlan> needSetup = plans.stream().filter(MedicationPlan::isSetupRequired)
+        List<MedicationPlan> needSetup = plans.stream().filter(MedicationPlan::isSetupPending)
                 .filter(p -> selected == null || p.getMember().getId().equals(selected.getId())).toList();
         List<DoseSlot> doses = planService.todaysDoses(user).stream()
                 .filter(d -> selected == null || d.getPlan().getMember().getId().equals(selected.getId())).toList();
@@ -148,6 +148,13 @@ public class PlanController {
         ra.addFlashAttribute("success", (p.isOnCommonShelf() ? p.getMedicineName() + " saved on the common shelf."
                 : "Reminders saved for " + p.getTitle() + ".") + moved);
         return "redirect:/plans?member=" + p.getMember().getId();
+    }
+
+    /** OK on the "set reminders" banner: the medicine moves to its member's list to be set up later. */
+    @PostMapping("/{id}/setup-later")
+    public String setupLater(@PathVariable Long id, @RequestHeader(value = "Referer", required = false) String referer) {
+        planService.dismissSetup(id, currentUser.get());
+        return "redirect:" + (referer != null ? referer : "/plans");
     }
 
     @PostMapping("/{id}/toggle")
