@@ -5,35 +5,51 @@
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
 
 <main class="container">
-    <div class="mz-auth mz-panel">
-        <h1 class="h3 mb-1">Create your account</h1>
-        <p class="text-muted mb-4">Order medicines and set dose reminders.</p>
-        <form th:action="@{/register}" th:object="${form}" method="post" novalidate>
-            <div class="mb-3">
-                <label class="form-label" for="fullName">Full name</label>
-                <input class="form-control" th:field="*{fullName}" th:errorclass="is-invalid" autocomplete="name">
-                <div class="invalid-feedback" th:errors="*{fullName}"></div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label" for="email">Email</label>
-                <input class="form-control" type="email" th:field="*{email}" th:errorclass="is-invalid" autocomplete="email">
-                <div class="invalid-feedback" th:errors="*{email}"></div>
-            </div>
-            <div class="mb-3">
-                <label class="form-label" for="phone">Mobile number</label>
-                <input class="form-control" type="tel" th:field="*{phone}" th:errorclass="is-invalid" autocomplete="tel"
-                       inputmode="tel" maxlength="15" placeholder="10 digit mobile number" required>
-                <div class="invalid-feedback" th:errors="*{phone}"></div>
-            </div>
-            <div class="mb-4">
-                <label class="form-label" for="password">Password</label>
-                <input class="form-control" type="password" th:field="*{password}" th:errorclass="is-invalid" autocomplete="new-password">
-                <div class="invalid-feedback" th:errors="*{password}"></div>
-            </div>
-            <button class="btn btn-primary w-100" type="submit">Create account</button>
-        </form>
-        <th:block th:replace="~{fragments/google :: button('Sign up with Google')}"></th:block>
-        <p class="small text-center mt-4 mb-0">Already have an account? <a th:href="@{/login}">Sign in</a></p>
+    <!-- Phones: the form alone, as before. Laptops and up: a welcome panel beside a shorter form, all on one screen. -->
+    <div class="mz-auth mz-auth-split mz-panel">
+        <aside class="mz-auth-aside" aria-hidden="true">
+            <span class="mz-auth-badge"><i class="bi bi-capsule"></i></span>
+            <h2 class="mz-auth-aside-title">Your family's medicines, sorted.</h2>
+            <ul class="mz-auth-perks">
+                <li><i class="bi bi-truck"></i><span><strong>Delivered to your door</strong>Genuine medicines from licensed stores</span></li>
+                <li><i class="bi bi-alarm"></i><span><strong>Dose reminders</strong>For you and everyone you care for</span></li>
+                <li><i class="bi bi-arrow-repeat"></i><span><strong>Refills on time</strong>A heads-up before anything runs out</span></li>
+                <li><i class="bi bi-shield-check"></i><span><strong>Pharmacist checked</strong>Every prescription is verified</span></li>
+            </ul>
+        </aside>
+
+        <div class="mz-auth-main">
+            <h1 class="h3 mb-1">Create your account</h1>
+            <p class="text-muted mb-4">Order medicines and set dose reminders.</p>
+            <form th:action="@{/register}" th:object="${form}" method="post" novalidate>
+                <div class="mb-3">
+                    <label class="form-label" for="fullName">Full name</label>
+                    <input class="form-control" th:field="*{fullName}" th:errorclass="is-invalid" autocomplete="name">
+                    <div class="invalid-feedback" th:errors="*{fullName}"></div>
+                </div>
+                <div class="row gx-3">
+                    <div class="col-12 col-lg-6 mb-3">
+                        <label class="form-label" for="email">Email</label>
+                        <input class="form-control" type="email" th:field="*{email}" th:errorclass="is-invalid" autocomplete="email">
+                        <div class="invalid-feedback" th:errors="*{email}"></div>
+                    </div>
+                    <div class="col-12 col-lg-6 mb-3">
+                        <label class="form-label" for="phone">Mobile number</label>
+                        <input class="form-control" type="tel" th:field="*{phone}" th:errorclass="is-invalid" autocomplete="tel"
+                               inputmode="tel" maxlength="15" placeholder="10 digit mobile number" required>
+                        <div class="invalid-feedback" th:errors="*{phone}"></div>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label" for="password">Password</label>
+                    <input class="form-control" type="password" th:field="*{password}" th:errorclass="is-invalid" autocomplete="new-password">
+                    <div class="invalid-feedback" th:errors="*{password}"></div>
+                </div>
+                <button class="btn btn-primary w-100" type="submit">Create account</button>
+            </form>
+            <th:block th:replace="~{fragments/google :: button('Sign up with Google')}"></th:block>
+            <p class="small text-center mt-4 mb-0">Already have an account? <a th:href="@{/login}">Sign in</a></p>
+        </div>
     </div>
 </main>
 <footer th:replace="~{fragments/layout :: footer}"></footer>

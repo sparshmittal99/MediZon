@@ -38,6 +38,7 @@ public class TwoFactorLoginController {
         SignInFlow.Pending p = flow.pending(request);
         if (p == null) return "redirect:/login?expired";
         model.addAttribute("email", p.email());
+        model.addAttribute("takeover", p.takeover());
         return "auth/two-factor";
     }
 
@@ -58,6 +59,7 @@ public class TwoFactorLoginController {
             if (left == 0) return "redirect:/login?codeLocked";
             model.addAttribute("email", p.email());
             model.addAttribute("trust", trust);
+            model.addAttribute("takeover", p.takeover());
             model.addAttribute("error", "That code isn't right. " + left + (left == 1 ? " try" : " tries") + " left.");
             return "auth/two-factor";
         }

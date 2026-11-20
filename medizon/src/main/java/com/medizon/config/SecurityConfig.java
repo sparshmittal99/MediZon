@@ -207,7 +207,7 @@ public class SecurityConfig {
                 .usernameParameter("email")
                 // A 2FA code next when the account has it on and this device isn't trusted (SignInFlow)
                 .successHandler((request, response, authentication) -> signInFlow.afterPassword(request, response, authentication))
-                .failureHandler(failureHandler(loginThrottle))
+                .failureHandler(failureHandler(loginThrottle, signInFlow))
                 .permitAll())
             .logout(logout -> logout
                 .logoutSuccessUrl("/?signedOut")
@@ -291,11 +291,12 @@ public class SecurityConfig {
         };
     }
 
-    private AuthenticationFailureHandler failureHandler(LoginThrottle loginThrottle) {
+    private AuthenticationFailureHandler failureHandler(LoginThrottle loginThrottle, SignInFlow signInFlow) {
         return (request, response, exception) -> {
             if (exception instanceof AdminInUseException) {
-                // The password was right: not a failed attempt for the lockout
-                response.sendRedirect(request.getContextPath() + "/login?inUse");
+                // The password was right: not a failed attempt for the lockout. With 2FA set up, the code takes the
+                // account over from the other device; without it, refused as before.
+                signInFlow.afterAdminInUse(request, response, request.getParameter("email"));
                 return;
             }
             loginThrottle.failed(request.getParameter("email"), request.getRemoteAddr());

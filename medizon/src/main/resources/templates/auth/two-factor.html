@@ -6,9 +6,14 @@
 
 <main class="container">
     <div class="mz-auth mz-panel">
-        <span class="mz-2fa-icon mb-3" aria-hidden="true"><i class="bi bi-shield-lock"></i></span>
-        <h1 class="h3 mb-1">Two-step verification</h1>
-        <p class="text-muted mb-4">
+        <span class="mz-2fa-icon mb-3" aria-hidden="true"><i class="bi" th:classappend="${takeover} ? 'bi-pc-display' : 'bi-shield-lock'"></i></span>
+        <h1 class="h3 mb-1" th:text="${takeover} ? 'Signed in on another device' : 'Two-step verification'">Two-step verification</h1>
+        <p class="text-muted mb-4" th:if="${takeover}">
+            The admin account is still signed in somewhere else, perhaps a private window you closed. Enter the 6-digit
+            code from your authenticator app for <span class="fw-semibold text-body" th:text="${email}">you@example.com</span>
+            to sign that device out and continue here.
+        </p>
+        <p class="text-muted mb-4" th:unless="${takeover}">
             Enter the 6-digit code from your authenticator app for
             <span class="fw-semibold text-body" th:text="${email}">you@example.com</span>.
         </p>
@@ -24,12 +29,14 @@
                 <div class="form-text" id="codeHelp">Lost your phone? Enter one of your backup codes instead.</div>
             </div>
 
-            <div class="form-check mb-4">
+            <div class="form-check mb-4" th:unless="${takeover}">
                 <input class="form-check-input" type="checkbox" id="trust" name="trust" value="true" th:checked="${trust}">
                 <label class="form-check-label" for="trust">Don't ask again on this device</label>
             </div>
+            <div class="mb-4" th:if="${takeover}"></div>
 
-            <button class="btn btn-primary w-100" type="submit">Verify and sign in</button>
+            <button class="btn btn-primary w-100" type="submit"
+                    th:text="${takeover} ? 'Sign out the other device and continue' : 'Verify and sign in'">Verify and sign in</button>
         </form>
 
         <p class="small text-center mt-4 mb-0">

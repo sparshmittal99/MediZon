@@ -139,14 +139,20 @@
                 </div>
 
                 <th:block th:unless="${me.twoFactorEnabled}">
-                    <p class="small text-muted mb-3">Keep your account safe even if someone learns your password. After your
+                    <p class="small text-muted mb-3" th:if="${me.admin}">The admin account signs in on one device at a time.
+                        Set up an authenticator app (Google Authenticator or Microsoft Authenticator) so that, if it's still
+                        signed in somewhere else (say a private window you closed), a 6-digit code signs that device out and
+                        lets you in straight away. Normal sign-ins won't ask for the code.</p>
+                    <p class="small text-muted mb-3" th:unless="${me.admin}">Keep your account safe even if someone learns your password. After your
                         password or Google sign-in, MediZon asks for a 6-digit code from an authenticator app on your phone,
                         such as Google Authenticator or Microsoft Authenticator.</p>
                     <a th:href="@{/account/two-factor/setup}" class="btn btn-primary"><i class="bi bi-shield-lock me-1"></i>Enable 2FA</a>
                 </th:block>
 
                 <th:block th:if="${me.twoFactorEnabled}">
-                    <p class="small text-muted mb-1">Signing in asks for a code from your authenticator app, except on devices
+                    <p class="small text-muted mb-1" th:if="${me.admin}">Normal sign-ins only ask for your password. The code is
+                        asked only when the admin account is still signed in on another device: it signs that device out and you in.</p>
+                    <p class="small text-muted mb-1" th:unless="${me.admin}">Signing in asks for a code from your authenticator app, except on devices
                         where you ticked "Don't ask again on this device".</p>
                     <p class="small text-muted mb-3">
                         On since <span th:text="${#temporals.format(me.twoFactorEnabledAt, 'd MMM yyyy')}"></span> ·

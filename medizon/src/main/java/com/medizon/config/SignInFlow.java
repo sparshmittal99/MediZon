@@ -50,9 +50,13 @@ public class SignInFlow {
     static final Duration PENDING_FOR = Duration.ofMinutes(10);
     public static final int MAX_TRIES = 5;
 
-    /** Someone who got past the password or Google, waiting to enter a 2FA code. */
-    public record Pending(String email, boolean remember, boolean newAccount, Instant at, int tries) implements Serializable {
-        Pending tried() { return new Pending(email, remember, newAccount, at, tries + 1); }
+    /**
+     * Someone who got past the password or Google, waiting to enter a 2FA code. {@code takeover}: the admin account is
+     * signed in on another device, and the right code signs that device out and this one in.
+     */
+    public record Pending(String email, boolean remember, boolean newAccount, Instant at, int tries, boolean takeover)
+            implements Serializable {
+        Pending tried() { return new Pending(email, remember, newAccount, at, tries + 1, takeover); }
         boolean expired() { return at.plus(PENDING_FOR).isBefore(Instant.now()); }
     }
 
@@ -84,18 +88,36 @@ public class SignInFlow {
         this.newDeviceAlerts = newDeviceAlerts;
     }
 
-    /** Whether signing in to this account on this device takes a 2FA code now. */
+    /**
+     * Whether signing in to this account on this device takes a 2FA code now. Never for an admin: their code is only
+     * asked to take the account over from another device ({@link #afterAdminInUse}).
+     */
     public boolean needsCode(String email, HttpServletRequest request) {
         return users.findByEmailIgnoreCase(email)
-                .map(u -> u.isTwoFactorEnabled() && !trustedDevices.isTrusted(u, request))
+                .map(u -> u.isTwoFactorEnabled() && !u.isAdmin() && !trustedDevices.isTrusted(u, request))
                 .orElse(false);
+    }
+
+    /**
+     * The admin's password was right but the account is signed in on another device (a closed private window counts
+     * until its session times out). With 2FA set up, the authenticator or a backup code takes it over; without it,
+     * the sign-in is refused as before.
+     */
+    public void afterAdminInUse(HttpServletRequest request, HttpServletResponse response, String email) throws IOException {
+        boolean canTakeOver = users.findByEmailIgnoreCase(email).map(User::isTwoFactorEnabled).orElse(false);
+        if (!canTakeOver) {
+            response.sendRedirect(request.getContextPath() + "/login?inUse");
+            return;
+        }
+        boolean remember = GlobalModelAdvice.isApp(request) || isTicked(request.getParameter("remember-me"));
+        awaitCode(request, response, email, remember, false, true);
     }
 
     /** The sign-in form's password was right (SecurityConfig's success handler). */
     public void afterPassword(HttpServletRequest request, HttpServletResponse response, Authentication auth) throws IOException {
         if (request.getAttribute(NEEDS_CODE) != null) {
             boolean remember = GlobalModelAdvice.isApp(request) || isTicked(request.getParameter("remember-me"));
-            awaitCode(request, response, auth.getName(), remember, false);
+            awaitCode(request, response, auth.getName(), remember, false, false);
             return;
         }
         finish(request, auth.getName(), false, response);
@@ -106,7 +128,7 @@ public class SignInFlow {
     public void afterGoogle(HttpServletRequest request, HttpServletResponse response, User user, boolean remember,
                             boolean newAccount) throws IOException {
         if (needsCode(user.getEmail(), request)) {
-            awaitCode(request, response, user.getEmail(), remember, newAccount);
+            awaitCode(request, response, user.getEmail(), remember, newAccount, false);
             return;
         }
         signIn(request, response, user.getEmail(), remember, newAccount);
@@ -144,7 +166,15 @@ public class SignInFlow {
     public void codeAccepted(HttpServletRequest request, HttpServletResponse response, Pending p, boolean trustDevice)
             throws IOException {
         request.getSession().removeAttribute(PENDING);
-        if (trustDevice) users.findByEmailIgnoreCase(p.email()).ifPresent(u -> trustedDevices.trust(u, request, response));
+        if (p.takeover()) {
+            // Signs the admin account out on the other device (its session and any "Keep me signed in"), then in here
+            users.findByEmailIgnoreCase(p.email()).ifPresent(u -> {
+                int ended = signIns.endOthers(u, request);
+                log.info("Admin account {} taken over with 2FA; {} other sign-in(s) ended", u.getId(), ended);
+            });
+        } else if (trustDevice) {
+            users.findByEmailIgnoreCase(p.email()).ifPresent(u -> trustedDevices.trust(u, request, response));
+        }
         signIn(request, response, p.email(), p.remember(), p.newAccount());
     }
 
@@ -157,13 +187,13 @@ public class SignInFlow {
     // ------------------------------------------------------------------------------------------------
 
     private void awaitCode(HttpServletRequest request, HttpServletResponse response, String email, boolean remember,
-                           boolean newAccount) throws IOException {
+                           boolean newAccount, boolean takeover) throws IOException {
         // Not signed in until the code is right: drop what the password or Google sign-in set up
         SecurityContextHolder.clearContext();
         contexts.saveContext(SecurityContextHolder.createEmptyContext(), request, response);
         HttpSession session = request.getSession();
         sessionRegistry.removeSessionInformation(session.getId());
-        session.setAttribute(PENDING, new Pending(email, remember, newAccount, Instant.now(), 0));
+        session.setAttribute(PENDING, new Pending(email, remember, newAccount, Instant.now(), 0, takeover));
         response.sendRedirect(request.getContextPath() + "/login/verify");
     }
 
