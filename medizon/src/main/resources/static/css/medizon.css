@@ -913,7 +913,23 @@ html[data-motion="reduce"] .mz-zoomable img, html[data-motion="reduce"] .mz-zoom
                     linear-gradient(160deg, var(--mz-green) 0%, var(--mz-green-ink) 100%); }
     /* The headline sits at the top, level with "Create your account"; the perks fill the bottom */
     .mz-auth-aside-title { color: #fff; font-size: 1.55rem; line-height: 1.25; margin: .15rem 0 0; }
-    .mz-auth-perks { list-style: none; margin: auto 0 0; padding: 0; display: grid; gap: 1rem; }
+    .mz-auth-perks { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+    /* Medicine art in the space between the headline and the perks: the homepage banner's style, its own layout */
+    .mz-auth-art { position: relative; flex: 1 1 auto; min-height: 8.5rem; max-height: 12rem; }
+    .mz-auth-art > i { position: absolute; display: flex; align-items: center; justify-content: center; color: #fff; }
+    .mz-auth-art-a { left: 50%; top: 50%; width: 6rem; height: 6rem; margin: -3rem 0 0 -3.6rem; border-radius: 1.6rem;
+        background: rgba(255, 255, 255, .15); font-size: 2.8rem; transform: rotate(-12deg); }
+    .mz-auth-art-b { left: 50%; top: 50%; width: 3.4rem; height: 3.4rem; margin: -4.1rem 0 0 2rem; border-radius: 1rem;
+        background: #fff; color: var(--mz-green) !important; font-size: 1.5rem; transform: rotate(10deg);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, .18); }
+    .mz-auth-art-b::before { transform: rotate(-45deg); }
+    .mz-auth-art-c { left: 50%; top: 50%; width: 3rem; height: 3rem; margin: 1.1rem 0 0 2.6rem; border-radius: 50%;
+        background: rgba(126, 221, 182, .35); font-size: 1.3rem; }
+    .mz-auth-art-d { left: 50%; top: 50%; width: 2.4rem; height: 2.4rem; margin: .6rem 0 0 -6.6rem; border-radius: 50%;
+        background: rgba(255, 255, 255, .12); font-size: 1.05rem; }
+    .mz-auth-art-dot { position: absolute; left: 50%; top: 50%; border-radius: 50%; background: rgba(255, 255, 255, .22); }
+    .mz-auth-art-dot.is-1 { width: .6rem; height: .6rem; margin: -3.6rem 0 0 -6rem; }
+    .mz-auth-art-dot.is-2 { width: .45rem; height: .45rem; margin: 3.3rem 0 0 -.4rem; background: rgba(126, 221, 182, .55); }
     .mz-auth-perks li { display: flex; gap: .75rem; align-items: flex-start; font-size: .85rem; line-height: 1.35; color: rgba(234, 245, 240, .8); }
     .mz-auth-perks i { flex-shrink: 0; display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .6rem;
         background: rgba(255, 255, 255, .12); color: #fff; font-size: 1rem; }
@@ -928,7 +944,9 @@ html[data-motion="reduce"] .mz-zoomable img, html[data-motion="reduce"] .mz-zoom
     .mz-auth-main h1 + p { margin-bottom: 1rem !important; }
     .mz-auth-main .form-control { padding-top: .45rem; padding-bottom: .45rem; }
     .mz-auth-main .form-label { margin-bottom: .3rem; }
-    .mz-auth-aside { padding: 1.5rem 1.6rem 1.75rem; }
+    .mz-auth-aside { padding: 1.5rem 1.6rem 1.75rem; gap: 1rem; }
+    .mz-auth-art { min-height: 6rem; transform: scale(.78); }
+    .mz-auth-perks { gap: .75rem; }
 }
 
 @media (max-width: 575.98px) {
